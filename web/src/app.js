@@ -137,7 +137,7 @@ async function loadFirmwareFileToMemFS(variant) {
 
     var files = ['spl.bin', 'uboot.bin'];
     for (var i = 0; i < files.length; i++) {
-        var url = 'public/firmware/' + dir + '/' + files[i];
+        var url = 'firmware/' + dir + '/' + files[i];
         var memPath = basePath + '/' + files[i];
 
         console.log('Fetching ' + url + '...');
@@ -576,6 +576,9 @@ async function doRead() {
 /* ------------------------------------------------------------------ */
 /*  Init                                                               */
 /* ------------------------------------------------------------------ */
+
+// Expose handlers referenced by HTML onclick/onchange attributes
+Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSelected, doRead });
 
 (function() {
     if (!navigator.usb) {

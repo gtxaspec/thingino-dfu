@@ -10,7 +10,7 @@ PREFIX        ?= /usr/local
 BINDIR        ?= $(PREFIX)/bin
 DATADIR       ?= $(PREFIX)/share/thingino-cloner
 
-.PHONY: all arm64 win64 install uninstall clean help
+.PHONY: all arm64 win64 web install uninstall clean help
 
 all:
 	@mkdir -p $(BUILD_DIR) && cd $(BUILD_DIR) && cmake .. -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) && make -j$(JOBS)
@@ -21,6 +21,9 @@ arm64:
 win64:
 	@./scripts/fetch-libusb-win.sh
 	@mkdir -p $(BUILD_WIN64) && cd $(BUILD_WIN64) && cmake .. -DCMAKE_TOOLCHAIN_FILE=../$(TOOLCHAIN_WIN) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) && make -j$(JOBS)
+
+web:
+	@./web/build.sh
 
 install: all
 	install -d $(DESTDIR)$(BINDIR)
@@ -35,12 +38,13 @@ uninstall:
 	rm -rf $(DESTDIR)$(DATADIR)
 
 clean:
-	rm -rf $(BUILD_DIR) $(BUILD_ARM64) $(BUILD_WIN64) build-arm64
+	rm -rf $(BUILD_DIR) $(BUILD_ARM64) $(BUILD_WIN64) build-arm64 web/build web/dist web/public/wasm
 
 help:
 	@echo "make          - build native (Linux/macOS)"
 	@echo "make arm64    - cross-compile for aarch64 Linux"
 	@echo "make win64    - cross-compile for Windows x64 (requires mingw-w64)"
+	@echo "make web      - build WebAssembly (requires emsdk)"
 	@echo "make install  - install to PREFIX (default: /usr/local)"
 	@echo "make uninstall - remove installed files"
 	@echo "make clean    - remove build directories"

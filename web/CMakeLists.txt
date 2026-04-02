@@ -114,9 +114,9 @@ target_link_options(cloner_web PRIVATE
     "SHELL:--js-library ${CMAKE_CURRENT_SOURCE_DIR}/src/libusb-webusb.js"
 )
 
-# Output to web/dist/
+# Output to web/public/wasm/ so Vite treats it as a static asset
 set_target_properties(cloner_web PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/public/wasm"
     OUTPUT_NAME "cloner"
     SUFFIX ".js"
 )

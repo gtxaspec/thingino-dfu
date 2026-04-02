@@ -17,4 +17,5 @@ android/.gradle/
 android/local.properties
 android/thingino-release.jks
 web/dist/
-web/public/firmware/
+web/public/wasm/
+web/node_modules/
