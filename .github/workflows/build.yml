@@ -151,20 +151,25 @@ jobs:
           /tmp/emsdk/emsdk install latest
           /tmp/emsdk/emsdk activate latest
 
-      - name: Build WASM
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build WASM + Vite
         run: |
           source /tmp/emsdk/emsdk_env.sh
           mkdir -p web/build && cd web/build
           emcmake cmake .. -DCMAKE_BUILD_TYPE=Release
           emmake make -j$(nproc)
+          cd ../../web
+          npm ci
+          npm run build
 
       - name: Package
         run: |
-          mkdir -p dist/thingino-cloner-web/dist dist/thingino-cloner-web/src dist/thingino-cloner-web/public/firmware
-          cp web/dist/cloner.js web/dist/cloner.wasm dist/thingino-cloner-web/dist/
-          cp web/index.html dist/thingino-cloner-web/
-          cp web/src/app.js dist/thingino-cloner-web/src/
-          cp -r firmwares/* dist/thingino-cloner-web/public/firmware/
+          mkdir -p dist
+          cp -r web/dist dist/thingino-cloner-web
           cd dist && tar czf thingino-cloner-web.tar.gz thingino-cloner-web
 
       - uses: actions/upload-artifact@v7
