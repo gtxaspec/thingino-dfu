@@ -109,7 +109,7 @@ The SoC is auto-detected by reading hardware ID registers from the bootrom. Use 
 | T10 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
 | T20 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
 | T21 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
-| T23 | xburst1 | DDR2 | Untested | Untested | Untested | Yes |
+| T23 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
 | T30 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
 | T31 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
 | T31A | xburst1 | DDR3 | Tested | Tested | Tested | Yes |

@@ -249,8 +249,8 @@ async function initModule() {
         // Display version
         var verPtr = Module.ccall('cloner_get_version', 'number', [], []);
         var version = verPtr ? Module.UTF8ToString(verPtr) : 'dev';
-        var verEl = document.getElementById('version-text');
-        if (verEl) verEl.textContent = 'thingino-cloner v' + version;
+        var verEl = document.getElementById('version-num');
+        if (verEl) verEl.textContent = 'v' + version;
 
         log('Ready — click Connect Device to begin');
     } catch (e) {
