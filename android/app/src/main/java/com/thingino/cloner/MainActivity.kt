@@ -85,6 +85,12 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, ClonerBridge
 
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
 
+        // Display version
+        try {
+            val versionName = packageManager.getPackageInfo(packageName, 0).versionName
+            findViewById<android.widget.TextView>(R.id.versionText)?.text = "v$versionName"
+        } catch (_: Exception) {}
+
         // Initialize UI
         statusText = findViewById(R.id.statusText)
         socText = findViewById(R.id.socText)

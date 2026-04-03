@@ -5,7 +5,20 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 # Version
-add_definitions(-DVERSION="web-dev" -DGIT_HASH="wasm")
+# Version from git tag
+execute_process(
+    COMMAND git describe --tags --abbrev=0
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/..
+    OUTPUT_VARIABLE GIT_TAG
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(GIT_TAG)
+    string(REGEX REPLACE "^v" "" WEB_VERSION "${GIT_TAG}")
+else()
+    set(WEB_VERSION "dev")
+endif()
+add_definitions(-DVERSION="${WEB_VERSION}" -DGIT_HASH="wasm")
 
 # Global debug flag (defined in our web glue)
 # The library references g_debug_enabled; we define it in web_main.c
@@ -91,6 +104,7 @@ set(EXPORTED_FUNCTIONS
     "_cloner_read_firmware"
     "_cloner_generate_ddr"
     "_cloner_set_device_variant"
+    "_cloner_get_version"
     "_cloner_variant_to_string"
     "_cloner_variant_from_string"
     "_malloc"

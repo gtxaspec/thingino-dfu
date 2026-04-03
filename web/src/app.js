@@ -245,6 +245,13 @@ async function initModule() {
         try { Module.FS.mkdir('/tmp'); } catch (e) { /* exists */ }
 
         clonerReady = true;
+
+        // Display version
+        var verPtr = Module.ccall('cloner_get_version', 'number', [], []);
+        var version = verPtr ? Module.UTF8ToString(verPtr) : 'dev';
+        var verEl = document.getElementById('version-text');
+        if (verEl) verEl.textContent = 'thingino-cloner v' + version;
+
         log('Ready — click Connect Device to begin');
     } catch (e) {
         log('Failed to initialize — check console for details', 'error');
