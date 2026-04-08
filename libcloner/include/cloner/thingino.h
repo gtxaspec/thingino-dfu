@@ -15,16 +15,29 @@
 
 extern bool g_debug_enabled;
 
-// Logging macros
-#define LOG_DEBUG(fmt, ...)                                 \
-    do {                                                    \
-        if (g_debug_enabled)                                \
-            fprintf(stderr, "[DEBUG] " fmt, ##__VA_ARGS__); \
+// ============================================================================
+// LOG HOOK - allows redirecting log output (e.g. daemon → TCP client)
+// ============================================================================
+
+typedef void (*cloner_log_fn)(const char *msg, size_t len);
+extern cloner_log_fn g_cloner_log_hook;
+
+#ifdef __GNUC__
+void cloner_log_output(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+#else
+void cloner_log_output(const char *fmt, ...);
+#endif
+
+// Logging macros — route through hook when set, else stderr
+#define LOG_DEBUG(fmt, ...)                                          \
+    do {                                                             \
+        if (g_debug_enabled)                                         \
+            cloner_log_output("[DEBUG] " fmt, ##__VA_ARGS__);        \
     } while (0)
 
-#define LOG_INFO(fmt, ...)  fprintf(stderr, fmt, ##__VA_ARGS__)
-#define LOG_WARN(fmt, ...)  fprintf(stderr, "[WARN] " fmt, ##__VA_ARGS__)
-#define LOG_ERROR(fmt, ...) fprintf(stderr, "[ERROR] " fmt, ##__VA_ARGS__)
+#define LOG_INFO(fmt, ...)  cloner_log_output(fmt, ##__VA_ARGS__)
+#define LOG_WARN(fmt, ...)  cloner_log_output("[WARN] " fmt, ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...) cloner_log_output("[ERROR] " fmt, ##__VA_ARGS__)
 
 // Legacy alias
 #define DEBUG_PRINT LOG_DEBUG

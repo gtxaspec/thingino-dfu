@@ -210,7 +210,7 @@ thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firm
         LOG_INFO("Waiting for chip erase (~%d seconds)...\n", secs);
         for (int i = 0; i < secs; i++) {
             LOG_INFO("\r  Erase progress: %d/%d seconds...", i + 1, secs);
-            fflush(stdout);
+            fflush(stderr);
             platform_sleep_ms(1000);
         }
         LOG_INFO("\n");
@@ -219,7 +219,7 @@ thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firm
         LOG_INFO("Waiting for %s flash erase (~%d seconds)...\n", profile->name, secs);
         for (int i = 0; i < secs; i++) {
             LOG_INFO("\r  Erase progress: %d/%d seconds...", i + 1, secs);
-            fflush(stdout);
+            fflush(stderr);
             platform_sleep_ms(1000);
         }
         LOG_INFO("\n");

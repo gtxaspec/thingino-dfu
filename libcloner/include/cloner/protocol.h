@@ -38,6 +38,7 @@ enum {
     RESP_OK = 0x00,
     RESP_ERROR = 0x01,
     RESP_PROGRESS = 0x02, /* async progress update during long ops */
+    RESP_LOG = 0x03,      /* raw log output from library (same as local stderr) */
 };
 
 /* Wire format - all fields big-endian */

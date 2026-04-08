@@ -1,6 +1,29 @@
 #include "thingino.h"
 #include <ctype.h>
+#include <stdarg.h>
 #include <string.h>
+
+// ============================================================================
+// LOG HOOK
+// ============================================================================
+
+cloner_log_fn g_cloner_log_hook = NULL;
+
+void cloner_log_output(const char *fmt, ...) {
+    char buf[2048];
+    va_list args;
+    va_start(args, fmt);
+    int n = vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    if (n <= 0)
+        return;
+    size_t len = (size_t)n < sizeof(buf) ? (size_t)n : sizeof(buf) - 1;
+    if (g_cloner_log_hook) {
+        g_cloner_log_hook(buf, len);
+    } else {
+        fwrite(buf, 1, len, stderr);
+    }
+}
 
 // ============================================================================
 // UTILITY FUNCTIONS

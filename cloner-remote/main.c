@@ -60,6 +60,7 @@ static const char *g_state = "idle";
 static const char *g_auth_token = NULL; /* NULL = no auth required */
 
 static int g_server_fd = -1;
+static int g_log_client_fd = -1; /* client fd for log forwarding */
 
 static void signal_handler(int sig) {
     (void)sig;
@@ -116,29 +117,22 @@ static int send_response(int fd, uint8_t status, const void *payload, uint32_t l
     return 0;
 }
 
-static int send_progress(int fd, uint8_t percent, const char *msg) {
-    size_t msg_len = msg ? strlen(msg) : 0;
-    size_t payload_len = 4 + msg_len;
-    uint8_t *payload = malloc(payload_len);
-    if (!payload)
-        return -1;
-    payload[0] = percent;
-    payload[1] = 0; /* stage */
-    payload[2] = (msg_len >> 8) & 0xFF;
-    payload[3] = msg_len & 0xFF;
-    if (msg_len > 0)
-        memcpy(payload + 4, msg, msg_len);
-    int rc = send_response(fd, RESP_PROGRESS, payload, payload_len);
-    free(payload);
-    return rc;
-}
-
 static int send_error(int fd, const char *msg) {
     return send_response(fd, RESP_ERROR, msg, strlen(msg));
 }
 
 static int send_ok(int fd, const void *payload, uint32_t len) {
     return send_response(fd, RESP_OK, payload, len);
+}
+
+/* Forward library log output to the connected client as RESP_LOG */
+static void daemon_log_hook(const char *msg, size_t len) {
+    /* Always print locally on daemon stderr */
+    fwrite(msg, 1, len, stderr);
+    /* Forward to client if connected */
+    if (g_log_client_fd >= 0) {
+        send_response(g_log_client_fd, RESP_LOG, msg, (uint32_t)len);
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -229,10 +223,10 @@ static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len,
     if (usb_manager_init(&manager) != THINGINO_SUCCESS)
         return send_error(client_fd, "USB init failed");
 
-    send_progress(client_fd, 10, "Bootstrapping device...");
+    g_log_client_fd = client_fd;
     thingino_error_t result = cloner_op_bootstrap(&manager, device_index, variant_str, g_debug_enabled, false, NULL,
                                                   NULL, NULL, firmware_dir);
-    send_progress(client_fd, 100, "Bootstrap complete");
+    g_log_client_fd = -1;
 
     usb_manager_cleanup(&manager);
 
@@ -320,11 +314,11 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len, con
         return send_error(client_fd, "USB init failed");
     }
 
-    send_progress(client_fd, 30, "Writing firmware to device...");
+    g_log_client_fd = client_fd;
     thingino_error_t result =
         cloner_op_write_firmware(&manager, device_index, tmpfile, variant_str, NULL, false, false, false,
                                  g_debug_enabled, false, NULL, NULL, NULL, firmware_dir, 0);
-    send_progress(client_fd, 100, "Write complete");
+    g_log_client_fd = -1;
 
     remove(tmpfile);
     usb_manager_cleanup(&manager);
@@ -386,8 +380,9 @@ static int handle_read(int client_fd, const uint8_t *payload, uint32_t len) {
 
     g_state = "reading";
     g_cancel = 0;
-    send_progress(client_fd, 10, "Reading firmware from device...");
+    g_log_client_fd = client_fd;
     thingino_error_t result = cloner_op_read_firmware(&manager, device_index, tmpfile, force_cpu, NULL);
+    g_log_client_fd = -1;
     usb_manager_cleanup(&manager);
 
     if (result != THINGINO_SUCCESS) {
@@ -434,7 +429,6 @@ static int handle_read(int client_fd, const uint8_t *payload, uint32_t len) {
     remove(tmpfile);
 
     printf("Read complete: %ld bytes\n", file_size);
-    send_progress(client_fd, 100, "Read complete");
 
     /* Send data + CRC32 back */
     uint32_t data_crc = remote_crc32(read_data, file_size);
@@ -473,6 +467,7 @@ static int handle_cancel(int client_fd) {
 
 static void handle_client(int client_fd, const char *firmware_dir) {
     printf("Client connected\n");
+    g_cloner_log_hook = daemon_log_hook;
 
     /* Authentication handshake if token is configured */
     if (g_auth_token) {
@@ -576,6 +571,8 @@ static void handle_client(int client_fd, const char *firmware_dir) {
             break;
     }
 
+    g_cloner_log_hook = NULL;
+    g_log_client_fd = -1;
     printf("Client disconnected\n");
 }
 

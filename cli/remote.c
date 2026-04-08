@@ -201,22 +201,26 @@ static int recv_response(uint8_t *status, uint8_t **payload, uint32_t *payload_l
 
         uint32_t plen = cloner_ntohl(hdr.payload_len);
 
-        if (hdr.status == RESP_PROGRESS) {
-            /* Read and display progress, then keep reading */
-            if (plen > 0 && plen < 4096) {
-                uint8_t *prog = malloc(plen + 1);
-                if (prog && net_recv_all(remote_fd, prog, plen) == 0) {
-                    /* Progress payload: [1:percent][1:stage][2:msg_len][msg] */
-                    if (plen >= 4) {
-                        uint8_t percent = prog[0];
-                        uint16_t msg_len = ((uint16_t)prog[2] << 8) | prog[3];
+        if (hdr.status == RESP_PROGRESS || hdr.status == RESP_LOG) {
+            /* Intermediate message — display and keep reading */
+            if (plen > 0 && plen < 65536) {
+                uint8_t *data = malloc(plen + 1);
+                if (data && net_recv_all(remote_fd, data, plen) == 0) {
+                    if (hdr.status == RESP_LOG) {
+                        /* Raw log output — print directly like local mode */
+                        data[plen] = '\0';
+                        fprintf(stderr, "%s", (char *)data);
+                    } else if (plen >= 4) {
+                        /* Legacy progress: [1:percent][1:stage][2:msg_len][msg] */
+                        uint8_t percent = data[0];
+                        uint16_t msg_len = ((uint16_t)data[2] << 8) | data[3];
                         if (4u + msg_len <= plen) {
-                            prog[4 + msg_len] = '\0';
-                            fprintf(stderr, "\r[%3d%%] %s", percent, (char *)(prog + 4));
+                            data[4 + msg_len] = '\0';
+                            fprintf(stderr, "\r[%3d%%] %s", percent, (char *)(data + 4));
                         }
                     }
                 }
-                free(prog);
+                free(data);
             } else if (plen > 0) {
                 /* Drain oversized payload to keep stream in sync */
                 uint8_t drain[1024];
@@ -249,7 +253,6 @@ static int recv_response(uint8_t *status, uint8_t **payload, uint32_t *payload_l
             *payload = NULL;
         }
 
-        fprintf(stderr, "\n"); /* newline after progress output */
         return 0;
     } /* for(;;) */
 }
