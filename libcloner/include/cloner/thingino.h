@@ -29,10 +29,10 @@ void cloner_log_output(const char *fmt, ...);
 #endif
 
 // Logging macros — route through hook when set, else stderr
-#define LOG_DEBUG(fmt, ...)                                          \
-    do {                                                             \
-        if (g_debug_enabled)                                         \
-            cloner_log_output("[DEBUG] " fmt, ##__VA_ARGS__);        \
+#define LOG_DEBUG(fmt, ...)                                   \
+    do {                                                      \
+        if (g_debug_enabled)                                  \
+            cloner_log_output("[DEBUG] " fmt, ##__VA_ARGS__); \
     } while (0)
 
 #define LOG_INFO(fmt, ...)  cloner_log_output(fmt, ##__VA_ARGS__)
@@ -107,8 +107,8 @@ typedef struct {
 #define CRC32_INITIAL              0xFFFFFFFF
 
 // Endpoints
-#define ENDPOINT_IN      0x81 // Bulk IN
-#define ENDPOINT_OUT     0x01 // Bulk OUT
+#define ENDPOINT_IN  0x81 // Bulk IN
+#define ENDPOINT_OUT 0x01 // Bulk OUT
 
 // Error codes
 #define ACK_SUCCESS 0x00
