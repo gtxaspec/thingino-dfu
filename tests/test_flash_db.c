@@ -28,11 +28,11 @@ static void test_spi_nor_lookup(void) {
 
     /* Test lookup by JEDEC ID */
     const spi_nor_chip_t *chip = spi_nor_find_by_id(0xef4018);
-    TEST(chip != NULL, "find WIN25Q128JVSQ by JEDEC ID 0xef4018");
+    TEST(chip != NULL, "find W25Q128JVSQ by JEDEC ID 0xef4018");
     if (chip) {
-        TEST(strcmp(chip->name, "WIN25Q128JVSQ") == 0, "correct name for 0xef4018");
-        TEST(chip->size == 16777216, "correct size 16MB for WIN25Q128JVSQ");
-        TEST(chip->page_size == 256, "correct page size 256 for WIN25Q128JVSQ");
+        TEST(strcmp(chip->name, "W25Q128JVSQ") == 0, "correct name for 0xef4018");
+        TEST(chip->size == 16777216, "correct size 16MB for W25Q128JVSQ");
+        TEST(chip->page_size == 256, "correct page size 256 for W25Q128JVSQ");
     }
 
     /* Test lookup by name */

@@ -547,10 +547,10 @@ int flash_descriptor_create_a1_read(const spi_nor_chip_t *chip, uint8_t *buffer)
 }
 
 /**
- * Create flash descriptor for WIN25Q128JVSQ (legacy, calls generic function)
+ * Create flash descriptor for W25Q128JVSQ (legacy, calls generic function)
  */
 int flash_descriptor_create_win25q128(uint8_t *buffer) {
-    const spi_nor_chip_t *chip = spi_nor_find_by_name("WIN25Q128JVSQ");
+    const spi_nor_chip_t *chip = spi_nor_find_by_name("W25Q128JVSQ");
     if (!chip)
         chip = spi_nor_find_by_id(0xef4018);
     if (!chip)
@@ -566,7 +566,7 @@ int flash_descriptor_create_t31x_writer_full(uint8_t *buffer) {
      * Use GD25Q127CSIG as default, fall back to W25Q128. */
     const spi_nor_chip_t *chip = spi_nor_find_by_name("GD25Q127CSIG");
     if (!chip)
-        chip = spi_nor_find_by_name("WIN25Q128JVSQ");
+        chip = spi_nor_find_by_name("W25Q128JVSQ");
     if (!chip)
         return -1;
     return flash_descriptor_create(chip, buffer);
