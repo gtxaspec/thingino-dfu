@@ -37,6 +37,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         private const val PREFS_NAME = "tdfu_prefs"
         private const val PREF_HOST = "remote_host"
         private const val PREF_PORT = "remote_port"
+        private const val PREF_USE_DFU = "use_dfu"
     }
 
     private lateinit var usbHelper: UsbHelper
@@ -55,6 +56,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
     // Mode selection UI
     private lateinit var modeRadioGroup: RadioGroup
+    private lateinit var backendRadioGroup: RadioGroup
     private lateinit var remoteInputRow: LinearLayout
     private lateinit var hostInput: EditText
     private lateinit var portInput: EditText
@@ -64,6 +66,10 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     private var detectedSoc: String = ""
     private var operationRunning = false
     private var isRemoteMode = false
+    // DFU is the default backend; cloner is legacy (mirrors CLI/daemon).
+    private var useDfu = true
+    // True when the connected local USB device is already a U-Boot DFU gadget.
+    private var isDfuGadget = false
     private var remoteClient: RemoteClient? = null
     private var remoteDevices: List<RemoteClient.DeviceEntry> = emptyList()
     private var selectedDeviceIndex: Int = 0
@@ -116,6 +122,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
         // Mode selection UI
         modeRadioGroup = findViewById(R.id.modeRadioGroup)
+        backendRadioGroup = findViewById(R.id.backendRadioGroup)
         remoteInputRow = findViewById(R.id.remoteInputRow)
         hostInput = findViewById(R.id.hostInput)
         portInput = findViewById(R.id.portInput)
@@ -125,6 +132,10 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         hostInput.setText(prefs.getString(PREF_HOST, ""))
         val savedPort = prefs.getInt(PREF_PORT, 0)
         if (savedPort > 0) portInput.setText(savedPort.toString())
+
+        // Restore backend choice (DFU default)
+        useDfu = prefs.getBoolean(PREF_USE_DFU, true)
+        backendRadioGroup.check(if (useDfu) R.id.radioDfu else R.id.radioCloner)
 
         logText.movementMethod = ScrollingMovementMethod()
 
@@ -148,6 +159,14 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                 updateStatus("No device connected")
                 scanForDevices()
             }
+        }
+
+        // Backend toggle (DFU default / legacy cloner)
+        backendRadioGroup.setOnCheckedChangeListener { _, checkedId ->
+            useDfu = checkedId == R.id.radioDfu
+            prefs.edit().putBoolean(PREF_USE_DFU, useDfu).apply()
+            remoteClient?.useCloner = !useDfu
+            appendLog("Backend: ${if (useDfu) "DFU" else "cloner (legacy)"}\n")
         }
 
         connectButton.setOnClickListener {
@@ -252,6 +271,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
         lifecycleScope.launch(Dispatchers.IO) {
             val client = RemoteClient(this@MainActivity)
+            client.useCloner = !useDfu
             val connected = client.connect(host, port)
 
             if (!connected) {
@@ -342,6 +362,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             updateStatus("No device connected")
             socText.text = ""
             detectedSoc = ""
+            isDfuGadget = false
             setButtonsEnabled(false)
         }
     }
@@ -361,7 +382,19 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
             appendLog("Device opened (fd=$fd)\n")
             updateStatus("Connected: ${usbHelper.getDeviceDescription(device)}")
-            detectSoc(fd)
+
+            isDfuGadget = UsbHelper.isDfuGadget(device)
+            if (isDfuGadget) {
+                // A running U-Boot DFU gadget only speaks DFU class requests, so
+                // the Ingenic SoC-detection protocol does not apply. The variant
+                // is irrelevant for DFU (opaque byte movement to a named alt).
+                detectedSoc = ""
+                socText.text = getString(R.string.status_dfu_gadget)
+                appendLog("U-Boot DFU gadget detected - ready to read/write.\n")
+                setButtonsEnabled(true)
+            } else {
+                detectSoc(fd)
+            }
         }
     }
 
@@ -414,6 +447,74 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     }
 
     // ======================================================================
+    // DFU Bootstrap (local USB: bootrom -> U-Boot DFU gadget)
+    // ======================================================================
+
+    /**
+     * Load the DFU-capable U-Boot onto a device still in bootrom. The device
+     * then re-enumerates as a 4d44 DFU gadget, which Android sees as a brand-new
+     * USB device (new fd), so the read/write is retried once it reconnects.
+     */
+    private fun bootstrapToDfu() {
+        if (operationRunning) return
+        if (detectedSoc.isEmpty()) {
+            appendLog("ERROR: SoC not detected; cannot select DFU U-Boot\n")
+            return
+        }
+        val device = usbHelper.getDevice()
+        if (device == null) {
+            appendLog("ERROR: No USB device connected\n")
+            return
+        }
+
+        operationRunning = true
+        setButtonsEnabled(false)
+        progressBar.visibility = View.VISIBLE
+        progressText.visibility = View.VISIBLE
+        progressBar.progress = 0
+
+        appendLog("\n--- DFU BOOTSTRAP ---\n")
+        appendLog("Loading U-Boot DFU gadget onto ${detectedSoc.uppercase()}...\n")
+
+        val cacheDir = cacheDir.absolutePath
+        val assetManager = assets
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val newFd = withContext(Dispatchers.Main) {
+                val d = usbHelper.getDevice()
+                if (d != null) {
+                    usbHelper.closeDevice()
+                    usbHelper.openDevice(d)
+                } else -1
+            }
+
+            if (newFd < 0) {
+                withContext(Dispatchers.Main) {
+                    appendLog("ERROR: Failed to reopen device\n")
+                    finishOperation()
+                }
+                return@launch
+            }
+
+            val result = TdfuBridge.nativeBootstrap(
+                newFd, detectedSoc, cacheDir, assetManager, true
+            )
+
+            withContext(Dispatchers.Main) {
+                if (result == 0) {
+                    appendLog("DFU U-Boot running; device is re-enumerating as a gadget.\n")
+                    appendLog("When it reconnects, press READ or WRITE again.\n")
+                    updateStatus("Waiting for DFU gadget...")
+                } else {
+                    appendLog("DFU bootstrap failed (error $result)\n")
+                    updateStatus("Bootstrap failed")
+                }
+                finishOperation()
+            }
+        }
+    }
+
+    // ======================================================================
     // Read Operation
     // ======================================================================
 
@@ -431,8 +532,16 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             return
         }
 
+        // DFU mode on a device still in bootrom: load the DFU U-Boot first.
+        // The device re-enumerates as a gadget, then the read is retried.
+        if (useDfu && !isDfuGadget) {
+            bootstrapToDfu()
+            return
+        }
+
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
-        val filename = "firmware_${detectedSoc.uppercase()}_${timestamp}.bin"
+        val socLabel = if (detectedSoc.isEmpty()) "DFU" else detectedSoc.uppercase()
+        val filename = "firmware_${socLabel}_${timestamp}.bin"
         val downloadsDir = Environment.getExternalStoragePublicDirectory(
             Environment.DIRECTORY_DOWNLOADS
         )
@@ -469,7 +578,8 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             }
 
             val result = TdfuBridge.nativeReadFirmware(
-                newFd, detectedSoc, outputFile.absolutePath, cacheDir, assetManager
+                newFd, detectedSoc, outputFile.absolutePath, cacheDir, assetManager,
+                useDfu || isDfuGadget
             )
 
             withContext(Dispatchers.Main) {
@@ -528,6 +638,12 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
     private fun pickFileForWrite() {
         if (operationRunning) return
+        // DFU mode on a bootrom device: load the DFU U-Boot first; the user
+        // retries the write once it re-enumerates as a gadget.
+        if (!isRemoteMode && useDfu && !isDfuGadget) {
+            bootstrapToDfu()
+            return
+        }
         filePickerLauncher.launch("application/octet-stream")
     }
 
@@ -594,7 +710,8 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             }
 
             val result = TdfuBridge.nativeWriteFirmware(
-                newFd, detectedSoc, tempFile.absolutePath, cacheDir, assetManager
+                newFd, detectedSoc, tempFile.absolutePath, cacheDir, assetManager,
+                useDfu || isDfuGadget
             )
 
             tempFile.delete()

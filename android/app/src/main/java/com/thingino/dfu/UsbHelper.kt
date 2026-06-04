@@ -23,6 +23,9 @@ class UsbHelper(private val context: Context) {
         private const val TAG = "UsbHelper"
         const val ACTION_USB_PERMISSION = "com.thingino.dfu.USB_PERMISSION"
 
+        // U-Boot DFU gadget ("USB download gadget")
+        const val PID_DFU_GADGET = 0x4D44
+
         // Ingenic USB VID/PID pairs
         private val INGENIC_DEVICES = listOf(
             Pair(0xA108, 0xC309),  // T30/T31/T40 series bootrom (alt VID)
@@ -33,6 +36,8 @@ class UsbHelper(private val context: Context) {
             Pair(0x601A, 0x8887),  // Firmware stage
             Pair(0xA108, 0x601E),  // Alternative firmware stage
             Pair(0x601A, 0x601E),  // Alternative firmware stage
+            Pair(0xA108, PID_DFU_GADGET),  // U-Boot DFU gadget (alt VID)
+            Pair(0x601A, PID_DFU_GADGET),  // U-Boot DFU gadget
         )
 
         fun isIngenicDevice(device: UsbDevice): Boolean {
@@ -40,6 +45,9 @@ class UsbHelper(private val context: Context) {
                 device.vendorId == vid && device.productId == pid
             }
         }
+
+        /** True if the device is a running U-Boot DFU gadget (a108/601a:4d44). */
+        fun isDfuGadget(device: UsbDevice): Boolean = device.productId == PID_DFU_GADGET
     }
 
     private val usbManager: UsbManager =
@@ -230,6 +238,7 @@ class UsbHelper(private val context: Context) {
         val stage = when (pid) {
             0x4770, 0xC309, 0x601A -> "bootrom"
             0x8887, 0x601E -> "firmware"
+            PID_DFU_GADGET -> "U-Boot DFU"
             else -> "unknown"
         }
         return "Ingenic ${vid.toString(16).uppercase()}:${pid.toString(16).uppercase()} ($stage)"

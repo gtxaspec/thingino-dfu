@@ -6,8 +6,11 @@
     <string name="btn_write">WRITE</string>
     <string name="mode_local_usb">Local USB</string>
     <string name="mode_remote">Remote</string>
+    <string name="backend_dfu">DFU</string>
+    <string name="backend_cloner">Cloner</string>
     <string name="hint_host">Host</string>
     <string name="hint_port">5050</string>
     <string name="btn_connect">Connect</string>
     <string name="btn_disconnect">Disconnect</string>
+    <string name="status_dfu_gadget">U-Boot DFU gadget ready</string>
 </resources>

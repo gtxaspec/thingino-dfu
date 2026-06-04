@@ -141,6 +141,7 @@ set(LIBTDFU_SOURCES
     "${LIBTDFU_DIR}/src/bootstrap.c"
     "${LIBTDFU_DIR}/src/utils.c"
     "${LIBTDFU_DIR}/src/operations.c"
+    "${LIBTDFU_DIR}/src/dfu/dfu.c"
 )
 
 # ---------------------------------------------------------------------------

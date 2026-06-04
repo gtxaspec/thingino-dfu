@@ -23,6 +23,7 @@
 /* libtdfu headers */
 #include "tdfu/tdfu.h"
 #include "tdfu/core.h"
+#include "tdfu/dfu.h"
 #include "tdfu/platform_profile.h"
 #include "tdfu/flash_descriptor.h"
 #include "spi_nor_db.h"
@@ -183,10 +184,58 @@ static void device_close(usb_device_t *dev) {
     }
 }
 
-/* Android-specific close: prevent libusb_close since Android owns the fd */
+/* Android-specific close: Android's UsbManager owns the underlying fd, so we
+ * must NOT libusb_close() it (that would close Android's fd). Just free our
+ * wrapper struct. */
 static void device_close_android(usb_device_t *dev) {
-    if (dev) {
-        device_close_android(dev);
+    free(dev);
+}
+
+/* Read a whole file into a malloc'd buffer (caller frees). Returns 0 on success. */
+static int read_file_to_mem(const char *path, uint8_t **out, size_t *out_len) {
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        return -1;
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (sz <= 0) {
+        fclose(f);
+        return -1;
+    }
+    uint8_t *buf = (uint8_t *)malloc((size_t)sz);
+    if (!buf) {
+        fclose(f);
+        return -1;
+    }
+    if (fread(buf, 1, (size_t)sz, f) != (size_t)sz) {
+        free(buf);
+        fclose(f);
+        return -1;
+    }
+    fclose(f);
+    *out = buf;
+    *out_len = (size_t)sz;
+    return 0;
+}
+
+/* Map a SoC variant to its firmware/dfu/<dir> name (mirrors dfu_variant_dir). */
+static const char *dfu_asset_dir(tdfu_variant_t v) {
+    switch (v) {
+    case TDFU_VARIANT_T31:
+    case TDFU_VARIANT_T31X:
+    case TDFU_VARIANT_T31ZX:
+    case TDFU_VARIANT_T31AL:
+        return "t31";
+    case TDFU_VARIANT_T31A:
+        return "t31_ddr3";
+    case TDFU_VARIANT_T23:
+    case TDFU_VARIANT_T23DL:
+        return "t23";
+    case TDFU_VARIANT_T40XP:
+        return "t40_ddr3";
+    default:
+        return tdfu_variant_to_string(v);
     }
 }
 
@@ -331,7 +380,7 @@ Java_com_thingino_dfu_TdfuBridge_nativeDetectSoc(
 JNIEXPORT jint JNICALL
 Java_com_thingino_dfu_TdfuBridge_nativeBootstrap(
         JNIEnv *env, jclass clazz, jint fd, jstring variant_str,
-        jstring firmware_dir_str, jobject asset_manager) {
+        jstring firmware_dir_str, jobject asset_manager, jboolean use_dfu) {
     (void)clazz;
 
     const char *variant_cstr = (*env)->GetStringUTFChars(env, variant_str, NULL);
@@ -342,7 +391,56 @@ Java_com_thingino_dfu_TdfuBridge_nativeBootstrap(
         return -1;
     }
 
-    LOGI("nativeBootstrap: fd=%d variant=%s fw_dir=%s", fd, variant_cstr, fw_dir_cstr);
+    LOGI("nativeBootstrap: fd=%d variant=%s fw_dir=%s dfu=%d", fd, variant_cstr, fw_dir_cstr, (int)use_dfu);
+
+    /* DFU bootstrap: USB-boot the DFU-capable SPL + U-Boot (firmware/dfu/<soc>/)
+     * onto the bootrom; the device then re-enumerates as a 4d44 DFU gadget. */
+    if (use_dfu) {
+        char dmsg[512];
+        tdfu_variant_t v = tdfu_variant_from_string(variant_cstr);
+        const char *ddir = dfu_asset_dir(v);
+        char spl_asset[256], uboot_asset[256], spl_path[512], uboot_path[512];
+        snprintf(spl_asset, sizeof(spl_asset), "firmware/dfu/%s/spl.bin", ddir);
+        snprintf(uboot_asset, sizeof(uboot_asset), "firmware/dfu/%s/uboot.bin", ddir);
+        snprintf(spl_path, sizeof(spl_path), "%s/dfu_%s_spl.bin", fw_dir_cstr, ddir);
+        snprintf(uboot_path, sizeof(uboot_path), "%s/dfu_%s_uboot.bin", fw_dir_cstr, ddir);
+
+        jni_log("DFU bootstrap (bootrom -> U-Boot DFU gadget)...\n");
+        jni_progress(10, "bootstrap", "Extracting DFU U-Boot...");
+
+        uint8_t *spl = NULL, *uboot = NULL;
+        size_t sl = 0, ul = 0;
+        tdfu_error_t dr = TDFU_ERROR_FILE_IO;
+        if (extract_asset_to_file(env, asset_manager, spl_asset, spl_path) == 0 &&
+            extract_asset_to_file(env, asset_manager, uboot_asset, uboot_path) == 0 &&
+            read_file_to_mem(spl_path, &spl, &sl) == 0 && read_file_to_mem(uboot_path, &uboot, &ul) == 0) {
+            usb_device_t *ddev = device_from_fd(fd);
+            if (ddev) {
+                jni_progress(40, "bootstrap", "USB-booting U-Boot...");
+                dr = tdfu_dfu_bootstrap_device(ddev, spl, sl, uboot, ul);
+                device_close_android(ddev);
+            } else {
+                dr = TDFU_ERROR_OPEN_FAILED;
+            }
+        } else {
+            snprintf(dmsg, sizeof(dmsg), "ERROR: missing DFU firmware asset (%s)\n", spl_asset);
+            jni_log(dmsg);
+        }
+        free(spl);
+        free(uboot);
+        unlink(spl_path);
+        unlink(uboot_path);
+        if (dr == TDFU_SUCCESS) {
+            jni_progress(100, "bootstrap", "DFU U-Boot running");
+            jni_log("Device re-enumerating as a U-Boot DFU gadget.\n");
+        } else {
+            snprintf(dmsg, sizeof(dmsg), "ERROR: DFU bootstrap failed: %s\n", tdfu_error_to_string(dr));
+            jni_log(dmsg);
+        }
+        (*env)->ReleaseStringUTFChars(env, variant_str, variant_cstr);
+        (*env)->ReleaseStringUTFChars(env, firmware_dir_str, fw_dir_cstr);
+        return (dr == TDFU_SUCCESS) ? 0 : -1;
+    }
 
     char msg[256];
     snprintf(msg, sizeof(msg), "Bootstrapping device (variant=%s)...\n", variant_cstr);
@@ -454,7 +552,7 @@ Java_com_thingino_dfu_TdfuBridge_nativeBootstrap(
 JNIEXPORT jint JNICALL
 Java_com_thingino_dfu_TdfuBridge_nativeReadFirmware(
         JNIEnv *env, jclass clazz, jint fd, jstring variant_str,
-        jstring output_file_str, jstring firmware_dir_str, jobject asset_manager) {
+        jstring output_file_str, jstring firmware_dir_str, jobject asset_manager, jboolean use_dfu) {
     (void)clazz;
 
     const char *variant_cstr = (*env)->GetStringUTFChars(env, variant_str, NULL);
@@ -467,7 +565,29 @@ Java_com_thingino_dfu_TdfuBridge_nativeReadFirmware(
         return -1;
     }
 
-    LOGI("nativeReadFirmware: fd=%d variant=%s output=%s", fd, variant_cstr, output_cstr);
+    LOGI("nativeReadFirmware: fd=%d variant=%s output=%s dfu=%d", fd, variant_cstr, output_cstr, (int)use_dfu);
+
+    /* DFU read: the device is already a running U-Boot DFU gadget - no bootstrap
+     * or flash protocol, just a DFU upload of the (single) alt setting. */
+    if (use_dfu) {
+        char dmsg[256];
+        jni_log("DFU read (U-Boot gadget)...\n");
+        jni_progress(0, "read", "Opening DFU gadget...");
+        usb_device_t *ddev = device_from_fd(fd);
+        tdfu_error_t dr = ddev ? tdfu_dfu_read_device(ddev, -1, output_cstr, 0) : TDFU_ERROR_OPEN_FAILED;
+        if (ddev) device_close_android(ddev);
+        if (dr == TDFU_SUCCESS) {
+            jni_progress(100, "read", "Read complete!");
+            jni_log("DFU read complete.\n");
+        } else {
+            snprintf(dmsg, sizeof(dmsg), "ERROR: DFU read failed: %s\n", tdfu_error_to_string(dr));
+            jni_log(dmsg);
+        }
+        (*env)->ReleaseStringUTFChars(env, variant_str, variant_cstr);
+        (*env)->ReleaseStringUTFChars(env, output_file_str, output_cstr);
+        (*env)->ReleaseStringUTFChars(env, firmware_dir_str, fw_dir_cstr);
+        return (dr == TDFU_SUCCESS) ? 0 : -1;
+    }
 
     char msg[512];
     snprintf(msg, sizeof(msg), "Starting firmware read (variant=%s)...\n", variant_cstr);
@@ -728,7 +848,7 @@ read_err:
 JNIEXPORT jint JNICALL
 Java_com_thingino_dfu_TdfuBridge_nativeWriteFirmware(
         JNIEnv *env, jclass clazz, jint fd, jstring variant_str,
-        jstring input_file_str, jstring firmware_dir_str, jobject asset_manager) {
+        jstring input_file_str, jstring firmware_dir_str, jobject asset_manager, jboolean use_dfu) {
     (void)clazz;
 
     const char *variant_cstr = (*env)->GetStringUTFChars(env, variant_str, NULL);
@@ -741,7 +861,29 @@ Java_com_thingino_dfu_TdfuBridge_nativeWriteFirmware(
         return -1;
     }
 
-    LOGI("nativeWriteFirmware: fd=%d variant=%s input=%s", fd, variant_cstr, input_cstr);
+    LOGI("nativeWriteFirmware: fd=%d variant=%s input=%s dfu=%d", fd, variant_cstr, input_cstr, (int)use_dfu);
+
+    /* DFU write: the device is a running U-Boot DFU gadget - just DFU-download
+     * the file to the (single) alt setting. */
+    if (use_dfu) {
+        char dmsg[256];
+        jni_log("DFU write (U-Boot gadget)...\n");
+        jni_progress(0, "write", "Opening DFU gadget...");
+        usb_device_t *ddev = device_from_fd(fd);
+        tdfu_error_t dr = ddev ? tdfu_dfu_write_device(ddev, -1, input_cstr) : TDFU_ERROR_OPEN_FAILED;
+        if (ddev) device_close_android(ddev);
+        if (dr == TDFU_SUCCESS) {
+            jni_progress(100, "write", "Write complete!");
+            jni_log("DFU write complete.\n");
+        } else {
+            snprintf(dmsg, sizeof(dmsg), "ERROR: DFU write failed: %s\n", tdfu_error_to_string(dr));
+            jni_log(dmsg);
+        }
+        (*env)->ReleaseStringUTFChars(env, variant_str, variant_cstr);
+        (*env)->ReleaseStringUTFChars(env, input_file_str, input_cstr);
+        (*env)->ReleaseStringUTFChars(env, firmware_dir_str, fw_dir_cstr);
+        return (dr == TDFU_SUCCESS) ? 0 : -1;
+    }
 
     char msg[512];
     snprintf(msg, sizeof(msg), "Starting firmware write (variant=%s)...\n", variant_cstr);

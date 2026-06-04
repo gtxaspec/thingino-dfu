@@ -61,6 +61,29 @@
                     android:text="@string/mode_remote" />
             </RadioGroup>
 
+            <RadioGroup
+                android:id="@+id/backendRadioGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="4dp">
+
+                <RadioButton
+                    android:id="@+id/radioDfu"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/backend_dfu"
+                    android:checked="true" />
+
+                <RadioButton
+                    android:id="@+id/radioCloner"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/backend_cloner" />
+            </RadioGroup>
+
             <LinearLayout
                 android:id="@+id/remoteInputRow"
                 android:layout_width="match_parent"

@@ -13,4 +13,8 @@
     <usb-device vendor-id="41224" product-id="34951" />  <!-- 0xA108:0x8887 -->
     <usb-device vendor-id="24602" product-id="24606" />  <!-- 0x601A:0x601E -->
     <usb-device vendor-id="41224" product-id="24606" />  <!-- 0xA108:0x601E -->
+
+    <!-- U-Boot DFU gadget ("USB download gadget") -->
+    <usb-device vendor-id="41224" product-id="19780" />  <!-- 0xA108:0x4D44 -->
+    <usb-device vendor-id="24602" product-id="19780" />  <!-- 0x601A:0x4D44 -->
 </resources>
