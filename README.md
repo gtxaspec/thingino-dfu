@@ -73,11 +73,15 @@ Output binaries:
 ## Usage
 
 ```
-thingino-dfu -i 0 -b                        # Bootstrap device (auto-detect SoC)
-thingino-dfu -i 0 -b -w firmware.bin         # Bootstrap + write firmware
-thingino-dfu -i 0 -b -r dump.bin             # Bootstrap + read flash
-thingino-dfu -l                               # List connected devices
-thingino-dfu --list-cpus                      # Show supported CPU targets
+# DFU is the default backend (device runs U-Boot's `dfu` command):
+thingino-dfu -b                              # Bootrom -> U-Boot DFU mode (auto-detect SoC)
+thingino-dfu -l                              # List DFU alt-settings
+thingino-dfu --alt rootfs -w rootfs.bin      # Flash an alt-setting via DFU
+thingino-dfu --alt u-boot -r uboot.bin       # Read an alt-setting via DFU
+
+# Legacy cloner backend (vendor USB-boot flash protocol):
+thingino-dfu --cloner -i 0 -b -w firmware.bin   # Bootstrap + write
+thingino-dfu --list-cpus                     # Show supported CPU targets
 ```
 
 The SoC is auto-detected by reading hardware ID registers from the bootrom. Use `--cpu <variant>` to override if needed.
@@ -91,6 +95,8 @@ The SoC is auto-detected by reading hardware ID registers from the bootrom. Use 
 | `-b, --bootstrap` | Bootstrap device (DDR + SPL + U-Boot) |
 | `-w, --write <file>` | Write firmware to flash |
 | `-r, --read <file>` | Read firmware from flash |
+| `--cloner` | Use the legacy cloner backend (default: DFU) |
+| `--alt <name/num>` | DFU alt-setting to target |
 | `--cpu <variant>` | Override SoC variant (default: auto-detect) |
 | `--flash-chip <name>` | Override flash chip (default: auto-detect via JEDEC) |
 | `--chunk-size <bytes>` | Write chunk size (default: 128KB) |

@@ -45,7 +45,7 @@ typedef struct {
     int remote_port;     // Remote daemon port (default: 5050)
     char *auth_token;    // Auth token for remote daemon
     char *flash_chip;    // Override flash chip name (default: auto-detect)
-    bool dfu;            // Use DFU backend (device already in U-Boot DFU mode)
+    bool cloner;         // Use the legacy cloner backend (default backend is DFU)
     char *alt;           // DFU alt-setting: name or number
 } cli_options_t;
 
@@ -75,12 +75,13 @@ void print_usage(const char *program_name) {
     printf("      --skip-ddr            Skip DDR configuration during bootstrap\n");
     printf("      --flash-chip <name>   Override flash chip (auto-detect from JEDEC ID)\n");
     printf("      --list-cpus           List supported CPU targets for --cpu\n");
-    printf("      --dfu                 DFU mode: device already in U-Boot DFU\n");
-    printf("      --alt <name|num>      DFU alt-setting to target (with --dfu)\n");
-    printf("\nExamples:\n");
-    printf("  thingino-dfu -l                                 # List devices\n");
-    printf("  thingino-dfu -i 0 -b --cpu t31                  # Bootstrap device 0 as T31\n");
-    printf("  thingino-dfu -i 0 -b -w firmware.bin --cpu a1   # Bootstrap + write to A1\n");
+    printf("      --cloner              Use the legacy cloner backend (default: DFU)\n");
+    printf("      --alt <name|num>      DFU alt-setting to target\n");
+    printf("\nExamples (DFU is the default backend):\n");
+    printf("  thingino-dfu -b                                 # Bootrom -> U-Boot DFU (auto-detect SoC)\n");
+    printf("  thingino-dfu -l                                 # List DFU alt-settings\n");
+    printf("  thingino-dfu --alt rootfs -w rootfs.bin         # Flash an alt-setting via DFU\n");
+    printf("  thingino-dfu --cloner -i 0 -b -w fw.bin         # Legacy cloner bootstrap + write\n");
     printf("  thingino-dfu --list-cpus                        # Show all supported CPUs\n");
 }
 
@@ -152,8 +153,8 @@ tdfu_error_t parse_arguments(int argc, char *argv[], cli_options_t *options) {
                 return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->firmware_dir = argv[++i];
-        } else if (strcmp(argv[i], "--dfu") == 0) {
-            options->dfu = true;
+        } else if (strcmp(argv[i], "--cloner") == 0) {
+            options->cloner = true;
         } else if (strcmp(argv[i], "--alt") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires an alt setting (name or number)\n", argv[i]);
@@ -378,8 +379,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Local mode
-    if (!options.list_devices && !options.bootstrap && !options.read_firmware && !options.write_firmware &&
-        !options.dfu) {
+    if (!options.list_devices && !options.bootstrap && !options.read_firmware && !options.write_firmware) {
         printf("No action specified. Use -h for help.\n");
         return 1;
     }
@@ -394,8 +394,9 @@ int main(int argc, char *argv[]) {
     int exit_code = 0;
 
     /* DFU mode: device is already running U-Boot's `dfu` command */
-    if (options.dfu) {
-        /* --dfu -b: bootstrap a bootrom device into U-Boot DFU mode */
+    /* DFU is the default backend; --cloner selects the legacy cloner path. */
+    if (!options.cloner) {
+        /* -b: bootstrap a bootrom device into U-Boot DFU mode */
         if (options.bootstrap) {
             result = tdfu_dfu_bootstrap(&manager, options.device_index, options.firmware_dir, options.force_cpu);
             usb_manager_cleanup(&manager);
@@ -403,7 +404,7 @@ int main(int argc, char *argv[]) {
                 LOG_ERROR("DFU bootstrap failed: %s\n", tdfu_error_to_string(result));
                 return EXIT_DEVICE_ERROR;
             }
-            printf("Re-run with --dfu -l / -w / -r once the DFU device enumerates.\n");
+            printf("Re-run with -l / -w / -r once the DFU device enumerates.\n");
             return 0;
         }
         tdfu_dfu_info_t dfu_info;
@@ -414,8 +415,8 @@ int main(int argc, char *argv[]) {
             return EXIT_DEVICE_ERROR;
         }
         if (options.list_devices) {
-            printf("DFU device: %d alt setting(s), transfer size %u bytes, DFU %d.%d\n", dfu_info.alt_count,
-                   dfu_info.transfer_size, dfu_info.bcd_dfu >> 8, dfu_info.bcd_dfu & 0xff);
+            printf("DFU device: %d alt setting(s), transfer size %u bytes, DFU %x.%02x\n", dfu_info.alt_count,
+                   dfu_info.transfer_size, (dfu_info.bcd_dfu >> 8) & 0xff, dfu_info.bcd_dfu & 0xff);
             for (int i = 0; i < dfu_info.alt_count; i++)
                 printf("  alt %d: \"%s\"\n", dfu_info.alts[i].alt, dfu_info.alts[i].name);
             usb_manager_cleanup(&manager);
@@ -427,7 +428,7 @@ int main(int argc, char *argv[]) {
         else if (dfu_info.alt_count == 1)
             alt = dfu_info.alts[0].alt;
         if (alt < 0) {
-            LOG_ERROR("Specify --alt <name|num> (use --dfu -l to list alt settings)\n");
+            LOG_ERROR("Specify --alt <name|num> (use -l to list alt settings)\n");
             usb_manager_cleanup(&manager);
             return EXIT_DEVICE_ERROR;
         }

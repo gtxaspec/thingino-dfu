@@ -160,8 +160,12 @@ static tdfu_error_t dfu_read_info(usb_device_t *dev, tdfu_dfu_info_t *info) {
     info->transfer_size = 1024; /* conservative default if no functional descriptor */
 
     struct libusb_config_descriptor *cfg = NULL;
-    if (libusb_get_active_config_descriptor(dev->device, &cfg) != 0 || !cfg)
-        return TDFU_ERROR_PROTOCOL;
+    if (libusb_get_active_config_descriptor(dev->device, &cfg) != 0 || !cfg) {
+        /* Fall back to the first config descriptor when the kernel has not
+         * set an active configuration on the gadget. */
+        if (libusb_get_config_descriptor(dev->device, 0, &cfg) != 0 || !cfg)
+            return TDFU_ERROR_PROTOCOL;
+    }
 
     bool found_func = false;
     for (int i = 0; i < cfg->bNumInterfaces && info->alt_count < TDFU_DFU_MAX_ALTS; i++) {
@@ -213,12 +217,22 @@ static tdfu_error_t dfu_open_device(usb_manager_t *manager, int index, usb_devic
     if (cnt < 0)
         return TDFU_ERROR_INIT_FAILED;
 
+    LOG_DEBUG("dfu_open_device: scanning %zd USB devices for a DFU interface\n", cnt);
     libusb_device *target = NULL;
     int match = 0;
     for (ssize_t i = 0; i < cnt && !target; i++) {
         struct libusb_config_descriptor *cfg = NULL;
-        if (libusb_get_active_config_descriptor(list[i], &cfg) != 0 || !cfg)
-            continue;
+        int rc = libusb_get_active_config_descriptor(list[i], &cfg);
+        if (rc != 0 || !cfg) {
+            /* The "active config" query fails when the kernel has not set a
+             * configuration (common for a driverless DFU gadget); fall back
+             * to the first config descriptor. */
+            rc = libusb_get_config_descriptor(list[i], 0, &cfg);
+            if (rc != 0 || !cfg) {
+                LOG_DEBUG("  [%zd] no config descriptor (%s)\n", i, libusb_error_name(rc));
+                continue;
+            }
+        }
         bool is_dfu = false;
         for (int a = 0; a < cfg->bNumInterfaces && !is_dfu; a++) {
             for (int b = 0; b < cfg->interface[a].num_altsetting; b++) {
@@ -457,25 +471,48 @@ tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, 
 /* Bootrom -> DFU bootstrap (port of tools/t31-usbboot.py)                 */
 /* ====================================================================== */
 
-/* Per-variant USB-boot load parameters. Defaults are the XBurst1 (T31)
- * values from t31-usbboot.py. XBurst2 SoCs (T40/T41/A1) load a larger SPL
- * and may need a separate DDR-config blob + exec_size hint - fill these in
- * per SoC (verified against the mainline U-Boot) as firmware/dfu is
- * populated. */
-typedef struct {
-    uint32_t spl_addr;
-    uint32_t spl_entry;
-    uint32_t uboot_addr;
-    uint32_t uboot_entry;
-    uint32_t exec_size; /* extra SET_DATA_LENGTH before START1 (XBurst2); 0 = skip */
-} dfu_boot_params_t;
+/* USB-boot load addresses - the same for every Ingenic SoC we target. The
+ * t31-usbboot.py --ddr-config / --exec-size / address knobs are unused. */
+#define DFU_SPL_ADDR   0x80001000u /* SPL load address */
+#define DFU_SPL_ENTRY  0x80001800u /* SPL entry (past the 0x800 signature) */
+#define DFU_UBOOT_ADDR 0x80100000u /* U-Boot load + entry address */
 
-static dfu_boot_params_t dfu_boot_params_for(tdfu_variant_t variant) {
-    /* XBurst1 default (t31-usbboot.py): SPL at 0x80001000, entry past the
-     * 0x800 signature, U-Boot at 0x80100000. */
-    dfu_boot_params_t p = {0x80001000, 0x80001800, 0x80100000, 0x80100000, 0};
-    (void)variant;
-    return p;
+/* Map a detected SoC variant to its firmware/dfu/<dir> name. The mainline DFU
+ * images are keyed by SoC family + DDR type (t31, t31_ddr3, t40, t40_ddr3,
+ * ...), which differs from the cloner firmware naming. */
+static const char *dfu_variant_dir(tdfu_variant_t v) {
+    switch (v) {
+    case TDFU_VARIANT_T10:
+        return "t10";
+    case TDFU_VARIANT_T20:
+        return "t20";
+    case TDFU_VARIANT_T21:
+        return "t21";
+    case TDFU_VARIANT_T23:
+    case TDFU_VARIANT_T23DL:
+        return "t23";
+    case TDFU_VARIANT_T30:
+        return "t30";
+    case TDFU_VARIANT_T31:
+    case TDFU_VARIANT_T31X:
+    case TDFU_VARIANT_T31ZX:
+    case TDFU_VARIANT_T31AL: /* T31AL is DDR2 */
+        return "t31";
+    case TDFU_VARIANT_T31A: /* T31A is DDR3 */
+        return "t31_ddr3";
+    case TDFU_VARIANT_T32:
+        return "t32";
+    case TDFU_VARIANT_T40:
+        return "t40";
+    case TDFU_VARIANT_T40XP: /* T40XP is DDR3 */
+        return "t40_ddr3";
+    case TDFU_VARIANT_T41:
+        return "t41";
+    case TDFU_VARIANT_A1:
+        return "a1";
+    default:
+        return tdfu_variant_to_string(v);
+    }
 }
 
 tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const char *firmware_dir,
@@ -489,7 +526,6 @@ tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const 
     tdfu_variant_t variant;
     const char *name;
     const char *root = firmware_dir ? firmware_dir : "./firmware";
-    dfu_boot_params_t p;
 
     tdfu_error_t r = usb_manager_find_devices(manager, &devs, &n);
     if (r != TDFU_SUCCESS)
@@ -516,7 +552,7 @@ tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const 
             return r;
         }
     }
-    name = variant_to_firmware_dir(variant);
+    name = dfu_variant_dir(variant);
     LOG_INFO("DFU bootstrap: SoC %s\n", name);
 
     /* 2) Load the DFU-capable SPL + U-Boot for this variant. */
@@ -534,26 +570,23 @@ tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const 
     }
 
     /* 3) USB-boot sequence (mirrors t31-usbboot.py). */
-    p = dfu_boot_params_for(variant);
-    LOG_INFO("stage1 SPL: %zu bytes -> 0x%08x (entry 0x%08x)\n", spl_len, p.spl_addr, p.spl_entry);
-    r = bootstrap_load_data_to_memory(dev, spl, spl_len, p.spl_addr);
+    LOG_INFO("stage1 SPL: %zu bytes -> 0x%08x (entry 0x%08x)\n", spl_len, DFU_SPL_ADDR, DFU_SPL_ENTRY);
+    r = bootstrap_load_data_to_memory(dev, spl, spl_len, DFU_SPL_ADDR);
     if (r != TDFU_SUCCESS)
         goto out;
-    if (p.exec_size)
-        protocol_set_data_length(dev, p.exec_size);
-    r = protocol_prog_stage1(dev, p.spl_entry);
+    r = protocol_prog_stage1(dev, DFU_SPL_ENTRY);
     if (r != TDFU_SUCCESS)
         goto out;
 
     /* stage1 brings up clk+DDR and returns to the bootrom; let it settle. */
     tdfu_sleep_milliseconds(1000);
 
-    LOG_INFO("stage2 U-Boot: %zu bytes -> 0x%08x (entry 0x%08x)\n", uboot_len, p.uboot_addr, p.uboot_entry);
-    r = bootstrap_load_data_to_memory(dev, uboot, uboot_len, p.uboot_addr);
+    LOG_INFO("stage2 U-Boot: %zu bytes -> 0x%08x\n", uboot_len, DFU_UBOOT_ADDR);
+    r = bootstrap_load_data_to_memory(dev, uboot, uboot_len, DFU_UBOOT_ADDR);
     if (r != TDFU_SUCCESS)
         goto out;
     protocol_flush_cache(dev);
-    protocol_prog_stage2(dev, p.uboot_entry); /* tolerates the re-enumeration error */
+    protocol_prog_stage2(dev, DFU_UBOOT_ADDR); /* tolerates the re-enumeration error */
     LOG_INFO("U-Boot starting; device will re-enumerate in DFU mode\n");
     r = TDFU_SUCCESS;
 
