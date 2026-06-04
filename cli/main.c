@@ -1,5 +1,6 @@
 #include "tdfu/tdfu.h"
 #include "tdfu/core.h"
+#include "tdfu/dfu.h"
 #include "tdfu/protocol.h"
 #include "remote.h"
 #include "ddr_config_database.h"
@@ -44,6 +45,8 @@ typedef struct {
     int remote_port;     // Remote daemon port (default: 5050)
     char *auth_token;    // Auth token for remote daemon
     char *flash_chip;    // Override flash chip name (default: auto-detect)
+    bool dfu;            // Use DFU backend (device already in U-Boot DFU mode)
+    char *alt;           // DFU alt-setting: name or number
 } cli_options_t;
 
 void print_usage(const char *program_name) {
@@ -72,6 +75,8 @@ void print_usage(const char *program_name) {
     printf("      --skip-ddr            Skip DDR configuration during bootstrap\n");
     printf("      --flash-chip <name>   Override flash chip (auto-detect from JEDEC ID)\n");
     printf("      --list-cpus           List supported CPU targets for --cpu\n");
+    printf("      --dfu                 DFU mode: device already in U-Boot DFU\n");
+    printf("      --alt <name|num>      DFU alt-setting to target (with --dfu)\n");
     printf("\nExamples:\n");
     printf("  thingino-dfu -l                                 # List devices\n");
     printf("  thingino-dfu -i 0 -b --cpu t31                  # Bootstrap device 0 as T31\n");
@@ -147,6 +152,14 @@ tdfu_error_t parse_arguments(int argc, char *argv[], cli_options_t *options) {
                 return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->firmware_dir = argv[++i];
+        } else if (strcmp(argv[i], "--dfu") == 0) {
+            options->dfu = true;
+        } else if (strcmp(argv[i], "--alt") == 0) {
+            if (i + 1 >= argc) {
+                printf("Error: %s requires an alt setting (name or number)\n", argv[i]);
+                return TDFU_ERROR_INVALID_PARAMETER;
+            }
+            options->alt = argv[++i];
         } else if (strcmp(argv[i], "--host") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a hostname\n", argv[i]);
@@ -188,10 +201,13 @@ tdfu_error_t parse_arguments(int argc, char *argv[], cli_options_t *options) {
             {
                 char *endptr;
                 unsigned long val = strtoul(argv[++i], &endptr, 10);
-                if (endptr != argv[i] && (*endptr == 'k' || *endptr == 'K'))
-                    { val *= 1024; endptr++; }
-                else if (endptr != argv[i] && (*endptr == 'm' || *endptr == 'M'))
-                    { val *= 1024 * 1024; endptr++; }
+                if (endptr != argv[i] && (*endptr == 'k' || *endptr == 'K')) {
+                    val *= 1024;
+                    endptr++;
+                } else if (endptr != argv[i] && (*endptr == 'm' || *endptr == 'M')) {
+                    val *= 1024 * 1024;
+                    endptr++;
+                }
                 if (*endptr == 'b' || *endptr == 'B')
                     endptr++;
                 if (*endptr != '\0' || val == 0 || val > 0xFFFFFFFFUL) {
@@ -362,7 +378,8 @@ int main(int argc, char *argv[]) {
     }
 
     // Local mode
-    if (!options.list_devices && !options.bootstrap && !options.read_firmware && !options.write_firmware) {
+    if (!options.list_devices && !options.bootstrap && !options.read_firmware && !options.write_firmware &&
+        !options.dfu) {
         printf("No action specified. Use -h for help.\n");
         return 1;
     }
@@ -376,6 +393,45 @@ int main(int argc, char *argv[]) {
 
     int exit_code = 0;
 
+    /* DFU mode: device is already running U-Boot's `dfu` command */
+    if (options.dfu) {
+        tdfu_dfu_info_t dfu_info;
+        result = tdfu_dfu_probe(&manager, options.device_index, &dfu_info);
+        if (result != TDFU_SUCCESS) {
+            LOG_ERROR("DFU probe failed: %s\n", tdfu_error_to_string(result));
+            usb_manager_cleanup(&manager);
+            return EXIT_DEVICE_ERROR;
+        }
+        if (options.list_devices) {
+            printf("DFU device: %d alt setting(s), transfer size %u bytes, DFU %d.%d\n", dfu_info.alt_count,
+                   dfu_info.transfer_size, dfu_info.bcd_dfu >> 8, dfu_info.bcd_dfu & 0xff);
+            for (int i = 0; i < dfu_info.alt_count; i++)
+                printf("  alt %d: \"%s\"\n", dfu_info.alts[i].alt, dfu_info.alts[i].name);
+            usb_manager_cleanup(&manager);
+            return 0;
+        }
+        int alt = -1;
+        if (options.alt)
+            alt = tdfu_dfu_find_alt(&dfu_info, options.alt);
+        else if (dfu_info.alt_count == 1)
+            alt = dfu_info.alts[0].alt;
+        if (alt < 0) {
+            LOG_ERROR("Specify --alt <name|num> (use --dfu -l to list alt settings)\n");
+            usb_manager_cleanup(&manager);
+            return EXIT_DEVICE_ERROR;
+        }
+        if (options.write_firmware && options.input_file)
+            result = tdfu_dfu_download(&manager, options.device_index, alt, options.input_file);
+        else if (options.read_firmware && options.output_file)
+            result = tdfu_dfu_upload(&manager, options.device_index, alt, options.output_file, 0);
+        else {
+            LOG_ERROR("DFU mode needs -l (list alts), -w <file> (download), or -r <file> (upload)\n");
+            result = TDFU_ERROR_INVALID_PARAMETER;
+        }
+        usb_manager_cleanup(&manager);
+        return result != TDFU_SUCCESS ? EXIT_TRANSFER_ERROR : 0;
+    }
+
     /* List devices and exit */
     if (options.list_devices) {
         result = list_devices(&manager);
@@ -386,9 +442,8 @@ int main(int argc, char *argv[]) {
     /* Bootstrap (required for all device operations from bootrom) */
     const char *detected_cpu = options.force_cpu;
     if (options.bootstrap) {
-        result =
-            tdfu_op_bootstrap(&manager, options.device_index, options.force_cpu, options.verbose, options.skip_ddr,
-                                options.config_file, options.spl_file, options.uboot_file, options.firmware_dir);
+        result = tdfu_op_bootstrap(&manager, options.device_index, options.force_cpu, options.verbose, options.skip_ddr,
+                                   options.config_file, options.spl_file, options.uboot_file, options.firmware_dir);
         if (result != TDFU_SUCCESS) {
             LOG_ERROR("Bootstrap failed: %s\n", tdfu_error_to_string(result));
             usb_manager_cleanup(&manager);
@@ -404,10 +459,10 @@ int main(int argc, char *argv[]) {
 
     /* Write firmware */
     if (options.write_firmware && options.input_file) {
-        result = tdfu_op_write_firmware(
-            &manager, options.device_index, options.input_file, detected_cpu, options.flash_chip, options.no_erase,
-            options.reboot_after, options.bootstrap, options.verbose, options.skip_ddr, options.config_file,
-            options.spl_file, options.uboot_file, options.firmware_dir, options.chunk_size);
+        result = tdfu_op_write_firmware(&manager, options.device_index, options.input_file, detected_cpu,
+                                        options.flash_chip, options.no_erase, options.reboot_after, options.bootstrap,
+                                        options.verbose, options.skip_ddr, options.config_file, options.spl_file,
+                                        options.uboot_file, options.firmware_dir, options.chunk_size);
         if (result != TDFU_SUCCESS)
             exit_code = EXIT_TRANSFER_ERROR;
     }
@@ -415,7 +470,7 @@ int main(int argc, char *argv[]) {
     /* Read firmware */
     if (options.read_firmware && options.output_file) {
         result = tdfu_op_read_firmware(&manager, options.device_index, options.output_file, detected_cpu,
-                                         options.flash_chip);
+                                       options.flash_chip);
         if (result != TDFU_SUCCESS)
             exit_code = EXIT_TRANSFER_ERROR;
     }

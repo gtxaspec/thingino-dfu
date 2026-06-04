@@ -146,7 +146,7 @@ typedef enum tdfu_variant {
 #define TDFU_VARIANT_DEFINED
 
 // Device stages
-typedef enum { TDFU_STAGE_BOOTROM, TDFU_STAGE_FIRMWARE } tdfu_stage_t;
+typedef enum { TDFU_STAGE_BOOTROM, TDFU_STAGE_FIRMWARE, TDFU_STAGE_DFU } tdfu_stage_t;
 
 // Error codes
 typedef enum {

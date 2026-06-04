@@ -41,6 +41,7 @@ set(LIBTDFU_SOURCES
     src/bootstrap.c
     src/utils.c
     src/operations.c
+    src/dfu/dfu.c
 )
 
 add_library(tdfu STATIC ${LIBTDFU_SOURCES})
