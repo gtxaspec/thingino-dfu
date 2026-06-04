@@ -14,11 +14,15 @@ mergeInto(LibraryManager.library, {
         device_descriptors: [],
         next_handle_id: 1,
         handle_device_map: new Map(),
-        // Route diagnostics to BOTH the browser DevTools console and the
-        // in-page log (via Emscripten's err()->printErr, which app.js renders).
+        // Diagnostics always go to the DevTools console; they reach the in-page
+        // log (via Emscripten's err()->printErr, rendered by app.js) only when
+        // the page was loaded with ?debug (app.js sets window.__tdfu_debug).
         log: function(msg) {
             try { console.log(msg); } catch (e) {}
-            try { if (typeof err === 'function') err(msg); } catch (e) {}
+            try {
+                if (typeof window !== 'undefined' && window.__tdfu_debug && typeof err === 'function')
+                    err(msg);
+            } catch (e) {}
         },
         // Build a human-readable dump of a WebUSB device's descriptor tree.
         dump: function(d) {

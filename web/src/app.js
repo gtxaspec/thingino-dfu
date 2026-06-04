@@ -23,6 +23,12 @@ var wasmBusy = false;
 var backendMode = localStorage.getItem('tdfu_backend') || 'dfu';
 var inDfuMode = false; /* connected device is a U-Boot DFU gadget (a108:4d44) */
 
+/* Verbose [DEBUG]/[shim] diagnostics are gated behind ?debug in the URL. The
+ * shim reads window.__tdfu_debug; the C side is toggled via tdfu_web_set_debug()
+ * once the module loads. Normal info/warn/error always show. */
+var debugEnabled = new URLSearchParams(location.search).has('debug') || /\bdebug\b/.test(location.hash);
+window.__tdfu_debug = debugEnabled;
+
 /**
  * Serialize all WASM async ccalls — Asyncify only supports one at a time.
  */
@@ -275,7 +281,7 @@ async function initModule() {
     try {
         Module = await createTdfuModule({
             printErr: function(text) {
-                if (text.startsWith('[DEBUG]')) {
+                if (text.startsWith('[DEBUG]') || text.startsWith('[shim]')) {
                     log(text, 'debug');
                 } else if (text.startsWith('[WARN]')) {
                     log(text, 'warn');
@@ -292,6 +298,12 @@ async function initModule() {
 
         console.log('WASM module loaded (' +
             (Module.HEAPU8.length / 1024 / 1024).toFixed(1) + ' MB heap)');
+
+        // Enable verbose C [DEBUG] logging only when ?debug is set.
+        if (debugEnabled) {
+            Module.ccall('tdfu_web_set_debug', null, ['number'], [1]);
+            log('Debug logging enabled (?debug)', 'debug');
+        }
 
         // {async:true} is required — tdfu_init calls libusb_init which is async
         var result = await wasmCall('tdfu_init', 'number', [], []);
@@ -312,15 +324,8 @@ async function initModule() {
         if (verEl) verEl.textContent = 'v' + version;
 
         log('Ready — click Connect Device to begin');
-
-        // If a previously-authorized device is already plugged in, attach it
-        // now (the 'connect' event only fires for NEW connections, not ones
-        // present at load). No chooser - getDevices() returns permitted devices.
-        try {
-            var known = await navigator.usb.getDevices();
-            var ing = known.find(function(d) { return d.vendorId === 0x601A || d.vendorId === 0xA108; });
-            if (ing) autoAttachDevice(ing);
-        } catch (e) { /* no permitted devices yet */ }
+        // Nothing on initial load: auto-attach happens ONLY via the USB 'connect'
+        // event (re-enumeration / hotplug of an already-authorized device).
     } catch (e) {
         log('Failed to initialize — check console for details', 'error');
         console.error(e);
@@ -379,7 +384,8 @@ async function connectDevice() {
         // an Ingenic bootrom, so skip the cloner detect path.
         if (device.productId === 0x4D44) {
             inDfuMode = true;
-            showDeviceInfo('U-Boot DFU', 'DFU', device.vendorId, device.productId);
+            showDeviceInfo(detectedVariantName ? detectedVariantName.toUpperCase() : '—', 'U-Boot DFU',
+                       device.vendorId, device.productId);
             log('Device in U-Boot DFU mode — ready (Write to flash, Read to dump).');
             setState('done');
             return;
@@ -421,10 +427,17 @@ async function connectDevice() {
  * (WebUSB won't surface a device that isn't present yet, and the PID changes
  * across re-enumeration). */
 async function autoAttachDevice(device) {
-    if (!tdfuReady || !device) return;
-    if (device.vendorId !== 0x601A && device.vendorId !== 0xA108) return;
+    if (!tdfuReady || !device) { log('autoAttach: not ready', 'debug'); return; }
+    if (device.vendorId !== 0x601A && device.vendorId !== 0xA108) {
+        log('autoAttach: ignoring non-Ingenic 0x' + device.vendorId.toString(16), 'debug');
+        return;
+    }
     // Never hijack an operation in flight (read/write/bootstrap).
-    if (currentState !== 'idle' && currentState !== 'done') return;
+    if (currentState !== 'idle' && currentState !== 'done') {
+        log('autoAttach: skipped, busy (' + currentState + ')', 'debug');
+        return;
+    }
+    log('autoAttach: attaching 0x' + device.productId.toString(16) + ' (state ' + currentState + ')', 'debug');
 
     if (!window._webusb_devices) window._webusb_devices = [];
     if (!window._webusb_devices.some(function(d) { return d === device; }))
@@ -433,7 +446,8 @@ async function autoAttachDevice(device) {
 
     if (device.productId === 0x4D44) {
         inDfuMode = true;
-        showDeviceInfo('U-Boot DFU', 'DFU', device.vendorId, device.productId);
+        showDeviceInfo(detectedVariantName ? detectedVariantName.toUpperCase() : '—', 'U-Boot DFU',
+                       device.vendorId, device.productId);
         log('Device reconnected in U-Boot DFU mode — ready (no re-pick needed).');
         setState('done');
         return;
@@ -450,26 +464,6 @@ async function autoAttachDevice(device) {
     showDeviceInfo(info.variantName.toUpperCase(), stageName, info.vid, info.pid);
     log('Detected: ' + info.variantName.toUpperCase() + ' (' + stageName + ')');
     setState('done');
-}
-
-/* Backstop for the post-bootstrap re-enumeration: poll getDevices() for the
- * DFU gadget for a few seconds and auto-attach it, in case the 'connect' event
- * raced ahead while we were still in the 'bootstrapping' state. Only finds the
- * gadget if it was authorized before (getDevices returns permitted devices). */
-function pollForDfuGadget() {
-    var tries = 0;
-    var iv = setInterval(async function() {
-        if (++tries > 16 || (inDfuMode && currentState === 'done')) { clearInterval(iv); return; }
-        if (currentState !== 'idle') return; // user started something else
-        try {
-            var devs = await navigator.usb.getDevices();
-            var g = devs.find(function(d) { return d.productId === 0x4D44; });
-            if (g) { clearInterval(iv); autoAttachDevice(g); return; }
-        } catch (e) { /* keep trying */ }
-        // Not auto-attached after ~3s -> the gadget isn't authorized in this
-        // browser profile yet, so glow Connect to prompt the one-time pick.
-        if (tries >= 6) setAttention('btn-connect', true);
-    }, 500);
 }
 
 /* ------------------------------------------------------------------ */
@@ -751,7 +745,13 @@ async function doDfuBootstrap() {
         document.getElementById('device-info').classList.add('d-none');
         document.getElementById('device-disconnected').classList.remove('d-none');
         setState('idle');
-        pollForDfuGadget(); // auto-attach the gadget once it enumerates (if already authorized)
+        // Auto-attach happens via the USB 'connect' event when the gadget
+        // enumerates (only if it was authorized before). One-shot (NOT a poll):
+        // if it hasn't auto-attached within a few seconds, the gadget isn't
+        // authorized yet, so glow Connect to prompt the one-time manual pick.
+        setTimeout(function() {
+            if (currentState === 'idle' && !inDfuMode) setAttention('btn-connect', true);
+        }, 3000);
     } catch (e) {
         log('DFU bootstrap error: ' + e.message, 'error');
         console.error(e); hideProgress(); setState('error');
@@ -845,8 +845,9 @@ Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSele
     }
 
     navigator.usb.addEventListener('connect', function(e) {
-        console.log('USB device connected: VID=0x' + e.device.vendorId.toString(16) +
-            ' PID=0x' + e.device.productId.toString(16));
+        var id = '0x' + e.device.vendorId.toString(16) + ':0x' + e.device.productId.toString(16);
+        console.log('USB device connected: ' + id);
+        log('USB connect event: ' + id, 'debug');
         // Re-attach automatically if we already have permission for it.
         autoAttachDevice(e.device);
     });

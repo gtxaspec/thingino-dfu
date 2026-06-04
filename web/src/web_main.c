@@ -8,8 +8,13 @@
 
 #include <stdbool.h>
 
-/* libtdfu references this; enabled so [DEBUG] lines reach the in-page log */
-bool g_debug_enabled = true;
+/* libtdfu references this; off by default. The web app toggles it at runtime
+ * via tdfu_web_set_debug() when the page is loaded with ?debug. */
+bool g_debug_enabled = false;
+
+void tdfu_web_set_debug(int on) {
+    g_debug_enabled = on ? true : false;
+}
 
 const char *tdfu_get_version(void) {
     return VERSION;
