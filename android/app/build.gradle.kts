@@ -10,11 +10,13 @@ val computedVersionName: String = run {
     try {
         val p = ProcessBuilder("git", "describe", "--tags", "--abbrev=0")
             .directory(rootProject.projectDir)
-            .redirectErrorStream(true)
             .start()
         val out = p.inputStream.bufferedReader().readText().trim()
-        p.waitFor()
-        out.removePrefix("v").ifEmpty { "0.0.0" }
+        val code = p.waitFor()
+        // Only trust a clean exit AND a version-shaped string. Do NOT capture
+        // stderr - otherwise git's "fatal: no names found" (tagless/shallow
+        // checkout) would become the version. Mirrors the web build's fallback.
+        if (code == 0 && out.matches(Regex("^v?[0-9].*"))) out.removePrefix("v") else "0.0.0"
     } catch (e: Exception) {
         "0.0.0"
     }
