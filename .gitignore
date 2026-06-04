@@ -19,3 +19,4 @@ android/thingino-release.jks
 web/dist/
 web/public/wasm/
 web/node_modules/
+/emsdk/

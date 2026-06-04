@@ -7,9 +7,10 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
 EMSDK_DIR="$REPO_DIR/emsdk"
 
-# Bootstrap emsdk submodule if needed
+# Fetch the Emscripten SDK if not already present. Not vendored as a submodule -
+# cloned fresh (matching CI), and emsdk/ is gitignored. Delete emsdk/ to upgrade.
 if [ ! -f "$EMSDK_DIR/emsdk" ]; then
-    git -C "$REPO_DIR" submodule update --init --recursive emsdk
+    git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$EMSDK_DIR"
 fi
 
 # Install/activate the latest upstream SDK if emcc is not yet available
