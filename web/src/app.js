@@ -741,32 +741,47 @@ function toggleAdvanced(e) {
     if (chev) chev.className = hidden ? 'bi bi-chevron-right' : 'bi bi-chevron-down';
 }
 
+/* Flip a Select button between its idle (blue outline + file icon) and loaded
+ * (solid green + check) look, so it's obvious which images are staged. */
+function setSelectButtonLoaded(id, loaded) {
+    var b = document.getElementById(id);
+    if (!b) return;
+    var icon = b.querySelector('i');
+    if (loaded) {
+        b.classList.remove('btn-outline-primary');
+        b.classList.add('btn-success');
+        if (icon) icon.className = 'bi bi-check-circle-fill me-1';
+    } else {
+        b.classList.remove('btn-success');
+        b.classList.add('btn-outline-primary');
+        if (icon) icon.className = 'bi bi-file-earmark-binary me-1';
+    }
+}
+
 /* Read a chosen file into a { name, data } record and report it. */
-function readCustomBootloaderFile(input, label, assign) {
+function readCustomBootloaderFile(input, which) {
     if (!input.files || !input.files[0]) return;
     var file = input.files[0];
+    var isSpl = which === 'spl';
+    var infoId = isSpl ? 'custom-spl-info' : 'custom-uboot-info';
+    var btnId = isSpl ? 'btn-sel-spl' : 'btn-sel-uboot';
+    var label = isSpl ? 'SPL' : 'U-Boot';
     var reader = new FileReader();
     reader.onload = function(e) {
         var rec = { name: file.name, data: new Uint8Array(e.target.result) };
-        assign(rec);
-        document.getElementById(label).textContent =
-            (label === 'custom-spl-info' ? 'SPL: ' : 'U-Boot: ') + file.name +
-            ' (' + rec.data.length + ' bytes)';
-        log('Custom ' + (label === 'custom-spl-info' ? 'SPL' : 'U-Boot') +
-            ' selected: ' + file.name + ' (' + rec.data.length + ' bytes)');
+        if (isSpl) customSpl = rec; else customUboot = rec;
+        document.getElementById(infoId).textContent =
+            label + ': ' + file.name + ' (' + rec.data.length + ' bytes)';
+        setSelectButtonLoaded(btnId, true);
+        log('Custom ' + label + ' selected: ' + file.name + ' (' + rec.data.length + ' bytes)');
         if (customSpl && customUboot)
             log('Custom SPL + U-Boot ready — next Bootstrap will use them.', 'warn');
     };
     reader.readAsArrayBuffer(file);
 }
 
-function customSplSelected(input) {
-    readCustomBootloaderFile(input, 'custom-spl-info', function(r) { customSpl = r; });
-}
-
-function customUbootSelected(input) {
-    readCustomBootloaderFile(input, 'custom-uboot-info', function(r) { customUboot = r; });
-}
+function customSplSelected(input) { readCustomBootloaderFile(input, 'spl'); }
+function customUbootSelected(input) { readCustomBootloaderFile(input, 'uboot'); }
 
 function clearCustomBootloader() {
     customSpl = null;
@@ -775,6 +790,8 @@ function clearCustomBootloader() {
     document.getElementById('custom-uboot-info').textContent = 'U-Boot: bundled';
     document.getElementById('custom-spl-file').value = '';
     document.getElementById('custom-uboot-file').value = '';
+    setSelectButtonLoaded('btn-sel-spl', false);
+    setSelectButtonLoaded('btn-sel-uboot', false);
     log('Custom bootloader cleared — using bundled DFU U-Boot.');
 }
 

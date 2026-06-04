@@ -147,13 +147,13 @@
                         detection is skipped.
                     </p>
                     <div class="d-flex flex-wrap gap-2">
-                        <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('custom-spl-file').click()">
+                        <button id="btn-sel-spl" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('custom-spl-file').click()">
                             <i class="bi bi-file-earmark-binary me-1"></i> Select SPL
                         </button>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('custom-uboot-file').click()">
+                        <button id="btn-sel-uboot" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('custom-uboot-file').click()">
                             <i class="bi bi-file-earmark-binary me-1"></i> Select U-Boot
                         </button>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="clearCustomBootloader()">
+                        <button id="btn-clear-custom" class="btn btn-outline-danger btn-sm" onclick="clearCustomBootloader()">
                             <i class="bi bi-x-lg me-1"></i> Clear
                         </button>
                     </div>
