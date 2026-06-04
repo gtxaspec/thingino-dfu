@@ -1,5 +1,5 @@
 /**
- * Remote client - sends commands to cloner-remote daemon over TCP
+ * Remote client - sends commands to dfu-remote daemon over TCP
  *
  * All firmware data is sent over the wire. The daemon never loads
  * firmware from its own filesystem.

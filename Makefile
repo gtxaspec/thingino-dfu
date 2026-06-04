@@ -8,7 +8,7 @@ JOBS          ?= $(shell nproc)
 
 PREFIX        ?= /usr/local
 BINDIR        ?= $(PREFIX)/bin
-LIBDIR        ?= $(PREFIX)/lib/thingino-cloner
+LIBDIR        ?= $(PREFIX)/lib/thingino-dfu
 
 .PHONY: all arm64 win64 bundle-win64 web install uninstall clean help
 
@@ -23,31 +23,31 @@ win64:
 	@mkdir -p $(BUILD_WIN64) && cd $(BUILD_WIN64) && cmake .. -DCMAKE_TOOLCHAIN_FILE=../$(TOOLCHAIN_WIN) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE) && make -j$(JOBS)
 
 bundle-win64: win64
-	@mkdir -p dist/thingino-cloner-windows-x64
-	cp $(BUILD_WIN64)/cli/thingino-cloner.exe dist/thingino-cloner-windows-x64/
-	cp $(BUILD_WIN64)/cloner-remote/cloner-remote.exe dist/thingino-cloner-windows-x64/
-	cp $(BUILD_WIN64)/cli/libusb-1.0.dll dist/thingino-cloner-windows-x64/
-	cp -r firmware dist/thingino-cloner-windows-x64/
-	cd dist && zip -r thingino-cloner-windows-x64.zip thingino-cloner-windows-x64
-	rm -rf dist/thingino-cloner-windows-x64
-	@echo "Created dist/thingino-cloner-windows-x64.zip"
+	@mkdir -p dist/thingino-dfu-windows-x64
+	cp $(BUILD_WIN64)/cli/thingino-dfu.exe dist/thingino-dfu-windows-x64/
+	cp $(BUILD_WIN64)/dfu-remote/dfu-remote.exe dist/thingino-dfu-windows-x64/
+	cp $(BUILD_WIN64)/cli/libusb-1.0.dll dist/thingino-dfu-windows-x64/
+	cp -r firmware dist/thingino-dfu-windows-x64/
+	cd dist && zip -r thingino-dfu-windows-x64.zip thingino-dfu-windows-x64
+	rm -rf dist/thingino-dfu-windows-x64
+	@echo "Created dist/thingino-dfu-windows-x64.zip"
 
 web:
 	@./web/build.sh
 
 install: all
 	install -d $(DESTDIR)$(LIBDIR)
-	install -m 755 $(BUILD_DIR)/cli/thingino-cloner $(DESTDIR)$(LIBDIR)/
-	[ -f $(BUILD_DIR)/cloner-remote/cloner-remote ] && install -m 755 $(BUILD_DIR)/cloner-remote/cloner-remote $(DESTDIR)$(LIBDIR)/ || true
+	install -m 755 $(BUILD_DIR)/cli/thingino-dfu $(DESTDIR)$(LIBDIR)/
+	[ -f $(BUILD_DIR)/dfu-remote/dfu-remote ] && install -m 755 $(BUILD_DIR)/dfu-remote/dfu-remote $(DESTDIR)$(LIBDIR)/ || true
 	install -d $(DESTDIR)$(LIBDIR)/firmware
 	cp -r firmware/* $(DESTDIR)$(LIBDIR)/firmware/
 	install -d $(DESTDIR)$(BINDIR)
-	ln -sf ../lib/thingino-cloner/thingino-cloner $(DESTDIR)$(BINDIR)/thingino-cloner
-	[ -f $(DESTDIR)$(LIBDIR)/cloner-remote ] && ln -sf ../lib/thingino-cloner/cloner-remote $(DESTDIR)$(BINDIR)/cloner-remote || true
+	ln -sf ../lib/thingino-dfu/thingino-dfu $(DESTDIR)$(BINDIR)/thingino-dfu
+	[ -f $(DESTDIR)$(LIBDIR)/dfu-remote ] && ln -sf ../lib/thingino-dfu/dfu-remote $(DESTDIR)$(BINDIR)/dfu-remote || true
 
 uninstall:
-	rm -f $(DESTDIR)$(BINDIR)/thingino-cloner
-	rm -f $(DESTDIR)$(BINDIR)/cloner-remote
+	rm -f $(DESTDIR)$(BINDIR)/thingino-dfu
+	rm -f $(DESTDIR)$(BINDIR)/dfu-remote
 	rm -rf $(DESTDIR)$(LIBDIR)
 
 clean:

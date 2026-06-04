@@ -1,19 +1,19 @@
 # Engineering Reference
 
-Technical documentation for thingino-cloner internals. Covers the USB protocol, flash descriptor formats, DDR binary layout, and platform-specific behavior.
+Technical documentation for thingino-dfu internals. Covers the USB protocol, flash descriptor formats, DDR binary layout, and platform-specific behavior.
 
 ## Architecture
 
 ### Components
 
 ```
-[thingino-cloner]  -- USB --  [device]                          (local mode)
-[thingino-cloner]  -- TCP --  [cloner-remote]  -- USB --  [device]   (remote mode)
+[thingino-dfu]  -- USB --  [device]                          (local mode)
+[thingino-dfu]  -- TCP --  [dfu-remote]  -- USB --  [device]   (remote mode)
 ```
 
 - **libcloner** -- Core library: DDR generation, USB protocol, flash read/write, chip databases
-- **cli** (`thingino-cloner`) -- CLI frontend, local or remote mode
-- **cloner-remote** -- Daemon on USB host, accepts network commands from CLI
+- **cli** (`thingino-dfu`) -- CLI frontend, local or remote mode
+- **dfu-remote** -- Daemon on USB host, accepts network commands from CLI
 
 ### Build System
 
@@ -46,7 +46,7 @@ libcloner/
       ddr_rdd_ddr3.c        # INNO PHY RDD for DDR3
 cli/
   main.c                # CLI argument parsing and dispatch
-cloner-remote/          # Network daemon
+dfu-remote/          # Network daemon
 ```
 
 ---
@@ -555,7 +555,7 @@ The SPL and U-Boot binaries in `firmware/cloner/` are extracted from Ingenic's p
 
 ## Remote Protocol
 
-The `cloner-remote` daemon accepts TCP connections on port 5050 (configurable). Wire format uses big-endian fields.
+The `dfu-remote` daemon accepts TCP connections on port 5050 (configurable). Wire format uses big-endian fields.
 
 ### Message Header
 

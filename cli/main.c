@@ -47,7 +47,7 @@ typedef struct {
 } cli_options_t;
 
 void print_usage(const char *program_name) {
-    printf("Thingino Cloner - USB Device Cloner for Ingenic Processors\n");
+    printf("thingino-dfu - USB flashing tool for Ingenic SoCs\n");
     printf("Usage: %s [options]\n\n", program_name);
     printf("Options:\n");
     printf("  -h, --help                Show this help message\n");
@@ -66,17 +66,17 @@ void print_usage(const char *program_name) {
     printf("      --spl <file>          Custom SPL file\n");
     printf("      --uboot <file>        Custom U-Boot file\n");
     printf("      --firmware-dir <dir>  Firmware root directory (default: ./firmware)\n");
-    printf("      --host <addr>         Connect to remote cloner-remote daemon\n");
+    printf("      --host <addr>         Connect to remote dfu-remote daemon\n");
     printf("      --port <port>         Remote daemon port (default: 5050)\n");
     printf("      --token <secret>      Auth token for remote daemon\n");
     printf("      --skip-ddr            Skip DDR configuration during bootstrap\n");
     printf("      --flash-chip <name>   Override flash chip (auto-detect from JEDEC ID)\n");
     printf("      --list-cpus           List supported CPU targets for --cpu\n");
     printf("\nExamples:\n");
-    printf("  thingino-cloner -l                                 # List devices\n");
-    printf("  thingino-cloner -i 0 -b --cpu t31                  # Bootstrap device 0 as T31\n");
-    printf("  thingino-cloner -i 0 -b -w firmware.bin --cpu a1   # Bootstrap + write to A1\n");
-    printf("  thingino-cloner --list-cpus                        # Show all supported CPUs\n");
+    printf("  thingino-dfu -l                                 # List devices\n");
+    printf("  thingino-dfu -i 0 -b --cpu t31                  # Bootstrap device 0 as T31\n");
+    printf("  thingino-dfu -i 0 -b -w firmware.bin --cpu a1   # Bootstrap + write to A1\n");
+    printf("  thingino-dfu --list-cpus                        # Show all supported CPUs\n");
 }
 
 static void print_supported_cpus(void) {
@@ -277,7 +277,7 @@ thingino_error_t list_devices(usb_manager_t *manager) {
  * cloner_op_read_firmware(), cloner_op_write_firmware(). */
 
 int main(int argc, char *argv[]) {
-    fprintf(stderr, "thingino-cloner %s (%s)\n", VERSION, GIT_HASH);
+    fprintf(stderr, "thingino-dfu %s (%s)\n", VERSION, GIT_HASH);
 
     /* Resolve default firmware dir relative to the binary location */
     static char default_fw_dir[4096];
@@ -317,7 +317,7 @@ int main(int argc, char *argv[]) {
     // Set global debug flag based on CLI options
     g_debug_enabled = options.debug;
 
-    // Remote mode: dispatch to cloner-remote daemon
+    // Remote mode: dispatch to dfu-remote daemon
     if (options.remote_host) {
         int port = options.remote_port > 0 ? options.remote_port : CLONER_DEFAULT_PORT;
         if (remote_connect(options.remote_host, port, options.auth_token) < 0)

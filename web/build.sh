@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build thingino-cloner for WebAssembly
+# Build thingino-dfu for WebAssembly
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

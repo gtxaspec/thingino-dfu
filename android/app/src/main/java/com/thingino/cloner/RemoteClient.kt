@@ -9,7 +9,7 @@ import java.nio.ByteOrder
 import java.util.zip.CRC32
 
 /**
- * TCP client for the cloner-remote daemon binary protocol.
+ * TCP client for the dfu-remote daemon binary protocol.
  * Pure Kotlin — no JNI or USB dependency.
  */
 class RemoteClient(private val callback: ClonerBridge.NativeCallback?) {

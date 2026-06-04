@@ -1,5 +1,5 @@
 /**
- * cloner-remote - daemon that provides USB cloner access over TCP
+ * dfu-remote - daemon that provides USB device access over TCP
  *
  * Started manually on the machine with physical USB access.
  * Listens on TCP port, accepts one client at a time, dispatches
@@ -581,7 +581,7 @@ static void handle_client(int client_fd, const char *firmware_dir) {
 /* ------------------------------------------------------------------ */
 
 static void print_usage(const char *name) {
-    printf("cloner-remote - USB cloner daemon\n");
+    printf("dfu-remote - thingino-dfu remote daemon\n");
     printf("Usage: %s [options]\n\n", name);
     printf("Options:\n");
     printf("  -p, --port <port>         Listen port (default: %d)\n", CLONER_DEFAULT_PORT);
@@ -682,7 +682,7 @@ int main(int argc, char **argv) {
 
     g_server_fd = server_fd;
 
-    printf("cloner-remote listening on port %d\n", port);
+    printf("dfu-remote listening on port %d\n", port);
     printf("Firmware directory: %s\n", firmware_dir);
 
     while (g_running) {
@@ -701,6 +701,6 @@ int main(int argc, char **argv) {
 
     if (g_server_fd >= 0)
         CLOSE_SOCKET(g_server_fd);
-    printf("\ncloner-remote stopped\n");
+    printf("\ndfu-remote stopped\n");
     return 0;
 }

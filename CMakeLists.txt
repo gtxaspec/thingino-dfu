@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(thingino-cloner LANGUAGES C)
+project(thingino-dfu LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -133,24 +133,24 @@ enable_testing()
 # Build targets
 add_subdirectory(libcloner)
 add_subdirectory(cli)
-add_subdirectory(cloner-remote)
+add_subdirectory(dfu-remote)
 add_subdirectory(tests)
 
 # Install targets
 # Binaries and firmware install to the same directory so that the binary
 # can find firmware/ relative to its own location via /proc/self/exe.
-# Default: /usr/local/lib/thingino-cloner/  (override with -DCLONER_INSTALL_DIR=)
-set(CLONER_INSTALL_DIR "lib/thingino-cloner" CACHE STRING "Install directory for cloner binaries and firmware")
-install(TARGETS thingino-cloner cloner-remote RUNTIME DESTINATION ${CLONER_INSTALL_DIR})
+# Default: /usr/local/lib/thingino-dfu/  (override with -DCLONER_INSTALL_DIR=)
+set(CLONER_INSTALL_DIR "lib/thingino-dfu" CACHE STRING "Install directory for cloner binaries and firmware")
+install(TARGETS thingino-dfu dfu-remote RUNTIME DESTINATION ${CLONER_INSTALL_DIR})
 install(DIRECTORY firmware/ DESTINATION ${CLONER_INSTALL_DIR}/firmware)
 
 # Symlinks in bin/ for convenience
 install(CODE "
     file(MAKE_DIRECTORY \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin)
     execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
-        ../${CLONER_INSTALL_DIR}/thingino-cloner
-        \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/thingino-cloner)
+        ../${CLONER_INSTALL_DIR}/thingino-dfu
+        \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/thingino-dfu)
     execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
-        ../${CLONER_INSTALL_DIR}/cloner-remote
-        \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/cloner-remote)
+        ../${CLONER_INSTALL_DIR}/dfu-remote
+        \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/dfu-remote)
 ")

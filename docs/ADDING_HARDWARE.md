@@ -1,6 +1,6 @@
 # Adding New Hardware Support
 
-Guide for adding new flash chips, DDR chips, and platform profiles to thingino-cloner.
+Guide for adding new flash chips, DDR chips, and platform profiles to thingino-dfu.
 
 ## Adding a SPI NOR Flash Chip
 
@@ -309,7 +309,7 @@ set(LIBCLONER_SOURCES
 
 ```bash
 make
-./build/cli/thingino-cloner -i 0 -b --cpu new_soc
+./build/cli/thingino-dfu -i 0 -b --cpu new_soc
 ```
 
 ## Where to Get Platform Parameters

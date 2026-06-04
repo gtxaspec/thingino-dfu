@@ -1,4 +1,4 @@
-# thingino-cloner
+# thingino-dfu
 
 USB flashing tool for Ingenic SoC devices. Bootstraps a device over USB (DDR init, SPL, U-Boot), then reads or writes SPI NOR flash. Automatically detects the SoC variant, no manual configuration needed.
 
@@ -53,7 +53,7 @@ cd android
 
 APK output: `android/app/build/outputs/apk/release/app-release.apk`
 
-The Android app supports both local USB (via USB OTG) and remote mode (connecting to a `cloner-remote` daemon over TCP).
+The Android app supports both local USB (via USB OTG) and remote mode (connecting to a `dfu-remote` daemon over TCP).
 
 ### Install
 
@@ -64,20 +64,20 @@ sudo make uninstall                  # remove
 ```
 
 Output binaries:
-- Linux: `build/cli/thingino-cloner`
-- ARM64: `build-aarch64/cli/thingino-cloner`
-- Windows: `build-win64/cli/thingino-cloner.exe` + `libusb-1.0.dll`
+- Linux: `build/cli/thingino-dfu`
+- ARM64: `build-aarch64/cli/thingino-dfu`
+- Windows: `build-win64/cli/thingino-dfu.exe` + `libusb-1.0.dll`
 - Android: `android/app/build/outputs/apk/release/app-release.apk`
 - Web: `web/dist/cloner.js` + `web/dist/cloner.wasm` (serve with any HTTP server)
 
 ## Usage
 
 ```
-thingino-cloner -i 0 -b                        # Bootstrap device (auto-detect SoC)
-thingino-cloner -i 0 -b -w firmware.bin         # Bootstrap + write firmware
-thingino-cloner -i 0 -b -r dump.bin             # Bootstrap + read flash
-thingino-cloner -l                               # List connected devices
-thingino-cloner --list-cpus                      # Show supported CPU targets
+thingino-dfu -i 0 -b                        # Bootstrap device (auto-detect SoC)
+thingino-dfu -i 0 -b -w firmware.bin         # Bootstrap + write firmware
+thingino-dfu -i 0 -b -r dump.bin             # Bootstrap + read flash
+thingino-dfu -l                               # List connected devices
+thingino-dfu --list-cpus                      # Show supported CPU targets
 ```
 
 The SoC is auto-detected by reading hardware ID registers from the bootrom. Use `--cpu <variant>` to override if needed.
@@ -98,7 +98,7 @@ The SoC is auto-detected by reading hardware ID registers from the bootrom. Use 
 | `--reboot` | Reboot device after write |
 | `--skip-ddr` | Skip DDR configuration |
 | `--firmware-dir <dir>` | Firmware root directory (default: `./firmware`) |
-| `--host <addr>` | Connect to remote cloner-remote daemon |
+| `--host <addr>` | Connect to remote dfu-remote daemon |
 | `-v, --verbose` | Verbose output |
 | `-d, --debug` | Debug output |
 
@@ -131,7 +131,7 @@ Detected sub-variants include: T31X, T31N, T31A, T31AL, T31ZX, T32LQ, T40N, T40N
 1. If the Ingenic vendor USB driver is installed, remove it first via Device Manager
 2. Connect the device in USB boot mode
 3. Install the WinUSB driver using [Zadig](https://zadig.akeo.ie/). Select the "Ingenic USB Boot Device" and install WinUSB
-4. Run `thingino-cloner.exe -i 0 -b`
+4. Run `thingino-dfu.exe -i 0 -b`
 
 **Important:** The Ingenic vendor driver (libusb0.sys) is not compatible and must be removed before installing WinUSB via Zadig.
 
@@ -143,7 +143,7 @@ The flash chip is auto-detected via JEDEC ID after bootstrap. The tool includes 
 
 For headless setups (e.g., an Orange Pi connected to devices via USB):
 
-1. Run `cloner-remote` on the USB host machine
+1. Run `dfu-remote` on the USB host machine
 2. Use `--host <addr>` from anywhere on the network
 
 Protocol uses TCP port 5050. Both the daemon and client work on all platforms (Linux, macOS, Windows).

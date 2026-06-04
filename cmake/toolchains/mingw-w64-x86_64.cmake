@@ -1,7 +1,7 @@
 set(CMAKE_SYSTEM_NAME Windows)
 set(CMAKE_SYSTEM_PROCESSOR x86_64)
 
-set(THINGINO_MINGW_TRIPLET "x86_64-w64-mingw32" CACHE STRING "MinGW-w64 triplet used for cross-compiling Thingino Cloner")
+set(THINGINO_MINGW_TRIPLET "x86_64-w64-mingw32" CACHE STRING "MinGW-w64 triplet used for cross-compiling thingino-dfu")
 
 set(CMAKE_C_COMPILER "${THINGINO_MINGW_TRIPLET}-gcc")
 set(CMAKE_RC_COMPILER "${THINGINO_MINGW_TRIPLET}-windres")

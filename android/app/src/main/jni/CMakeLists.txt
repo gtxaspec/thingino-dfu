@@ -3,8 +3,8 @@ project(cloner_jni C)
 
 # Path to libcloner sources (relative to this CMakeLists.txt)
 # CMAKE_CURRENT_SOURCE_DIR = android/app/src/main/jni/
-# libcloner is at the repo root: thingino-cloner/libcloner/
-# jni/ -> main/ -> src/ -> app/ -> android/ -> thingino-cloner/
+# libcloner is at the repo root: thingino-dfu/libcloner/
+# jni/ -> main/ -> src/ -> app/ -> android/ -> thingino-dfu/
 set(LIBCLONER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../libcloner")
 
 # ---------------------------------------------------------------------------

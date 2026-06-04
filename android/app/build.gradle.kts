@@ -29,9 +29,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("../thingino-release.jks")
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "thingino-cloner"
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "thingino-dfu"
             keyAlias = "thingino"
-            keyPassword = System.getenv("KEY_PASSWORD") ?: "thingino-cloner"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "thingino-dfu"
         }
     }
 

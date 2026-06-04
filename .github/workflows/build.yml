@@ -30,16 +30,16 @@ jobs:
 
       - name: Package
         run: |
-          mkdir -p dist/thingino-cloner-linux-x86_64
-          cp build/cli/thingino-cloner dist/thingino-cloner-linux-x86_64/
-          [ -f build/cloner-remote/cloner-remote ] && cp build/cloner-remote/cloner-remote dist/thingino-cloner-linux-x86_64/ || true
-          cp -r firmware dist/thingino-cloner-linux-x86_64/
-          cd dist && tar czf thingino-cloner-linux-x86_64.tar.gz thingino-cloner-linux-x86_64
+          mkdir -p dist/thingino-dfu-linux-x86_64
+          cp build/cli/thingino-dfu dist/thingino-dfu-linux-x86_64/
+          [ -f build/dfu-remote/dfu-remote ] && cp build/dfu-remote/dfu-remote dist/thingino-dfu-linux-x86_64/ || true
+          cp -r firmware dist/thingino-dfu-linux-x86_64/
+          cd dist && tar czf thingino-dfu-linux-x86_64.tar.gz thingino-dfu-linux-x86_64
 
       - uses: actions/upload-artifact@v7
         with:
-          name: thingino-cloner-linux-x86_64
-          path: dist/thingino-cloner-linux-x86_64.tar.gz
+          name: thingino-dfu-linux-x86_64
+          path: dist/thingino-dfu-linux-x86_64.tar.gz
 
   build-linux-aarch64:
     runs-on: ubuntu-24.04-arm
@@ -62,16 +62,16 @@ jobs:
 
       - name: Package
         run: |
-          mkdir -p dist/thingino-cloner-linux-aarch64
-          cp build/cli/thingino-cloner dist/thingino-cloner-linux-aarch64/
-          [ -f build/cloner-remote/cloner-remote ] && cp build/cloner-remote/cloner-remote dist/thingino-cloner-linux-aarch64/ || true
-          cp -r firmware dist/thingino-cloner-linux-aarch64/
-          cd dist && tar czf thingino-cloner-linux-aarch64.tar.gz thingino-cloner-linux-aarch64
+          mkdir -p dist/thingino-dfu-linux-aarch64
+          cp build/cli/thingino-dfu dist/thingino-dfu-linux-aarch64/
+          [ -f build/dfu-remote/dfu-remote ] && cp build/dfu-remote/dfu-remote dist/thingino-dfu-linux-aarch64/ || true
+          cp -r firmware dist/thingino-dfu-linux-aarch64/
+          cd dist && tar czf thingino-dfu-linux-aarch64.tar.gz thingino-dfu-linux-aarch64
 
       - uses: actions/upload-artifact@v7
         with:
-          name: thingino-cloner-linux-aarch64
-          path: dist/thingino-cloner-linux-aarch64.tar.gz
+          name: thingino-dfu-linux-aarch64
+          path: dist/thingino-dfu-linux-aarch64.tar.gz
 
   build-windows:
     runs-on: ubuntu-latest
@@ -88,17 +88,17 @@ jobs:
 
       - name: Package
         run: |
-          mkdir -p dist/thingino-cloner-windows-x64
-          cp build-win64/cli/thingino-cloner.exe dist/thingino-cloner-windows-x64/
-          cp build-win64/cloner-remote/cloner-remote.exe dist/thingino-cloner-windows-x64/
-          cp build-win64/cli/libusb-1.0.dll dist/thingino-cloner-windows-x64/
-          cp -r firmware dist/thingino-cloner-windows-x64/
-          cd dist && zip -r thingino-cloner-windows-x64.zip thingino-cloner-windows-x64
+          mkdir -p dist/thingino-dfu-windows-x64
+          cp build-win64/cli/thingino-dfu.exe dist/thingino-dfu-windows-x64/
+          cp build-win64/dfu-remote/dfu-remote.exe dist/thingino-dfu-windows-x64/
+          cp build-win64/cli/libusb-1.0.dll dist/thingino-dfu-windows-x64/
+          cp -r firmware dist/thingino-dfu-windows-x64/
+          cd dist && zip -r thingino-dfu-windows-x64.zip thingino-dfu-windows-x64
 
       - uses: actions/upload-artifact@v7
         with:
-          name: thingino-cloner-windows-x64
-          path: dist/thingino-cloner-windows-x64.zip
+          name: thingino-dfu-windows-x64
+          path: dist/thingino-dfu-windows-x64.zip
 
   build-macos:
     runs-on: macos-latest
@@ -123,22 +123,22 @@ jobs:
           make -j$(sysctl -n hw.ncpu)
 
       - name: Verify universal binary
-        run: file build/cli/thingino-cloner
+        run: file build/cli/thingino-dfu
 
       - name: Run tests
         run: cd build && ctest --output-on-failure
 
       - name: Package
         run: |
-          mkdir -p dist/thingino-cloner-macos-universal
-          cp build/cli/thingino-cloner dist/thingino-cloner-macos-universal/
-          cp -r firmware dist/thingino-cloner-macos-universal/
-          cd dist && tar czf thingino-cloner-macos-universal.tar.gz thingino-cloner-macos-universal
+          mkdir -p dist/thingino-dfu-macos-universal
+          cp build/cli/thingino-dfu dist/thingino-dfu-macos-universal/
+          cp -r firmware dist/thingino-dfu-macos-universal/
+          cd dist && tar czf thingino-dfu-macos-universal.tar.gz thingino-dfu-macos-universal
 
       - uses: actions/upload-artifact@v7
         with:
-          name: thingino-cloner-macos-universal
-          path: dist/thingino-cloner-macos-universal.tar.gz
+          name: thingino-dfu-macos-universal
+          path: dist/thingino-dfu-macos-universal.tar.gz
 
   build-web:
     runs-on: ubuntu-latest
@@ -169,13 +169,13 @@ jobs:
       - name: Package
         run: |
           mkdir -p dist
-          cp -r web/dist dist/thingino-cloner-web
-          cd dist && tar czf thingino-cloner-web.tar.gz thingino-cloner-web
+          cp -r web/dist dist/thingino-dfu-web
+          cd dist && tar czf thingino-dfu-web.tar.gz thingino-dfu-web
 
       - uses: actions/upload-artifact@v7
         with:
-          name: thingino-cloner-web
-          path: dist/thingino-cloner-web.tar.gz
+          name: thingino-dfu-web
+          path: dist/thingino-dfu-web.tar.gz
 
   build-android:
     runs-on: ubuntu-latest
@@ -204,12 +204,12 @@ jobs:
       - name: Package
         run: |
           mkdir -p dist
-          cp android/app/build/outputs/apk/release/app-release.apk dist/thingino-cloner-android.apk
+          cp android/app/build/outputs/apk/release/app-release.apk dist/thingino-dfu-android.apk
 
       - uses: actions/upload-artifact@v7
         with:
-          name: thingino-cloner-android
-          path: dist/thingino-cloner-android.apk
+          name: thingino-dfu-android
+          path: dist/thingino-dfu-android.apk
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -226,10 +226,10 @@ jobs:
         uses: softprops/action-gh-release@v2.6.1
         with:
           files: |
-            artifacts/thingino-cloner-linux-x86_64/*.tar.gz
-            artifacts/thingino-cloner-linux-aarch64/*.tar.gz
-            artifacts/thingino-cloner-windows-x64/*.zip
-            artifacts/thingino-cloner-macos-universal/*.tar.gz
-            artifacts/thingino-cloner-android/*.apk
-            artifacts/thingino-cloner-web/*.tar.gz
+            artifacts/thingino-dfu-linux-x86_64/*.tar.gz
+            artifacts/thingino-dfu-linux-aarch64/*.tar.gz
+            artifacts/thingino-dfu-windows-x64/*.zip
+            artifacts/thingino-dfu-macos-universal/*.tar.gz
+            artifacts/thingino-dfu-android/*.apk
+            artifacts/thingino-dfu-web/*.tar.gz
           generate_release_notes: true
