@@ -382,6 +382,13 @@ tdfu_error_t tdfu_web_dfu_bootstrap(int device_index, const char *firmware_dir, 
     return tdfu_dfu_bootstrap(&g_manager, device_index, firmware_dir, force_cpu, NULL, NULL);
 }
 
+/* Bootstrap with caller-supplied SPL + U-Boot (both required). Mirrors the CLI
+ * --spl/--uboot override: SoC detection is skipped, the given images are used
+ * verbatim. The web app writes the user's files into MEMFS and passes the paths. */
+tdfu_error_t tdfu_web_dfu_bootstrap_files(int device_index, const char *spl_path, const char *uboot_path) {
+    return tdfu_dfu_bootstrap(&g_manager, device_index, "", NULL, spl_path, uboot_path);
+}
+
 static int web_dfu_resolve_alt(int device_index, const char *alt_name) {
     tdfu_dfu_info_t info;
     tdfu_error_t pr = tdfu_dfu_probe(&g_manager, device_index, &info);

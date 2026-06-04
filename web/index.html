@@ -135,6 +135,35 @@
             <div class="file-info mt-1" id="file-info"></div>
             <input type="file" id="firmware-file" accept=".bin" onchange="firmwareSelected(this)">
 
+            <!-- Advanced: optional custom DFU bootloader (DFU backend only) -->
+            <div id="adv-wrap" class="mt-2">
+                <a href="#" id="adv-toggle" class="small text-secondary text-decoration-none" onclick="toggleAdvanced(event)">
+                    <i class="bi bi-chevron-right" id="adv-chevron"></i> Advanced: custom SPL / U-Boot
+                </a>
+                <div id="adv-controls" class="d-none mt-2 p-2 border rounded" style="border-color: #30363d !important;">
+                    <p class="small text-secondary mb-2">
+                        Optional. Supply your own DFU-capable <strong>SPL</strong> and <strong>U-Boot</strong> to use for
+                        the next <strong>Bootstrap</strong> instead of the bundled images. Both are required; SoC
+                        detection is skipped.
+                    </p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('custom-spl-file').click()">
+                            <i class="bi bi-file-earmark-binary me-1"></i> Select SPL
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('custom-uboot-file').click()">
+                            <i class="bi bi-file-earmark-binary me-1"></i> Select U-Boot
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="clearCustomBootloader()">
+                            <i class="bi bi-x-lg me-1"></i> Clear
+                        </button>
+                    </div>
+                    <div class="file-info mt-2" id="custom-spl-info">SPL: bundled</div>
+                    <div class="file-info" id="custom-uboot-info">U-Boot: bundled</div>
+                    <input type="file" id="custom-spl-file" accept=".bin" onchange="customSplSelected(this)">
+                    <input type="file" id="custom-uboot-file" accept=".bin" onchange="customUbootSelected(this)">
+                </div>
+            </div>
+
             <div id="progress" class="mt-2 d-none">
                 <div class="progress">
                     <div class="progress-bar bg-warning" id="progress-fill" role="progressbar" style="width: 0%"></div>

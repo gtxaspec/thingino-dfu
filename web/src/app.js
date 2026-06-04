@@ -18,6 +18,12 @@ var detectedVariant = -1;
 var detectedVariantName = '';
 var wasmBusy = false;
 
+/* Optional user-supplied DFU bootloader (Advanced area). When BOTH are set, the
+ * next DFU Bootstrap uses these instead of the bundled images and skips SoC
+ * detection. Each is { name: string, data: Uint8Array } or null. */
+var customSpl = null;
+var customUboot = null;
+
 /* Backend: 'dfu' (default) drives U-Boot DFU; 'cloner' is the legacy Ingenic
  * USB-boot flash protocol. Persisted across reloads. */
 var backendMode = localStorage.getItem('tdfu_backend') || 'dfu';
@@ -471,8 +477,11 @@ async function autoAttachDevice(device) {
 /* ------------------------------------------------------------------ */
 
 async function doBootstrap() {
-    if (!tdfuReady || detectedVariant < 0) return;
+    if (!tdfuReady) return;
+    // DFU bootstrap handles its own variant/custom-file check (custom SPL+U-Boot
+    // need no detected variant); the cloner path below requires a variant.
     if (backendMode === 'dfu') return doDfuBootstrap();
+    if (detectedVariant < 0) return;
 
     setState('bootstrapping');
     showProgress(10, 'Loading firmware files...');
@@ -721,19 +730,81 @@ async function doRead() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Advanced: custom DFU bootloader (optional SPL + U-Boot upload)      */
+/* ------------------------------------------------------------------ */
+
+function toggleAdvanced(e) {
+    if (e) e.preventDefault();
+    var controls = document.getElementById('adv-controls');
+    var chev = document.getElementById('adv-chevron');
+    var hidden = controls.classList.toggle('d-none');
+    if (chev) chev.className = hidden ? 'bi bi-chevron-right' : 'bi bi-chevron-down';
+}
+
+/* Read a chosen file into a { name, data } record and report it. */
+function readCustomBootloaderFile(input, label, assign) {
+    if (!input.files || !input.files[0]) return;
+    var file = input.files[0];
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        var rec = { name: file.name, data: new Uint8Array(e.target.result) };
+        assign(rec);
+        document.getElementById(label).textContent =
+            (label === 'custom-spl-info' ? 'SPL: ' : 'U-Boot: ') + file.name +
+            ' (' + rec.data.length + ' bytes)';
+        log('Custom ' + (label === 'custom-spl-info' ? 'SPL' : 'U-Boot') +
+            ' selected: ' + file.name + ' (' + rec.data.length + ' bytes)');
+        if (customSpl && customUboot)
+            log('Custom SPL + U-Boot ready — next Bootstrap will use them.', 'warn');
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function customSplSelected(input) {
+    readCustomBootloaderFile(input, 'custom-spl-info', function(r) { customSpl = r; });
+}
+
+function customUbootSelected(input) {
+    readCustomBootloaderFile(input, 'custom-uboot-info', function(r) { customUboot = r; });
+}
+
+function clearCustomBootloader() {
+    customSpl = null;
+    customUboot = null;
+    document.getElementById('custom-spl-info').textContent = 'SPL: bundled';
+    document.getElementById('custom-uboot-info').textContent = 'U-Boot: bundled';
+    document.getElementById('custom-spl-file').value = '';
+    document.getElementById('custom-uboot-file').value = '';
+    log('Custom bootloader cleared — using bundled DFU U-Boot.');
+}
+
+/* ------------------------------------------------------------------ */
 /*  DFU backend flows (default)                                        */
 /* ------------------------------------------------------------------ */
 
 async function doDfuBootstrap() {
-    if (detectedVariant < 0) { log('Connect a device in bootrom mode first', 'warn'); return; }
+    var custom = !!(customSpl && customUboot);
+    if (detectedVariant < 0 && !custom) { log('Connect a device in bootrom mode first', 'warn'); return; }
     setState('bootstrapping');
-    showProgress(10, 'Loading DFU U-Boot...');
-    log('DFU bootstrap for ' + detectedVariantName.toUpperCase() + '...');
+    showProgress(10, custom ? 'Loading custom U-Boot...' : 'Loading DFU U-Boot...');
+    log(custom ? 'DFU bootstrap with custom SPL + U-Boot...'
+               : 'DFU bootstrap for ' + detectedVariantName.toUpperCase() + '...');
     try {
-        await loadDfuFirmwareToMemFS(detectedVariantName);
-        showProgress(40, 'USB-booting U-Boot (DFU)...');
-        var rc = await wasmCall('tdfu_web_dfu_bootstrap', 'number',
-            ['number', 'string', 'string'], [0, './firmware', detectedVariantName]);
+        var rc;
+        if (custom) {
+            Module.FS.writeFile('/tmp/custom_spl.bin', customSpl.data);
+            Module.FS.writeFile('/tmp/custom_uboot.bin', customUboot.data);
+            showProgress(40, 'USB-booting custom U-Boot (DFU)...');
+            rc = await wasmCall('tdfu_web_dfu_bootstrap_files', 'number',
+                ['number', 'string', 'string'], [0, '/tmp/custom_spl.bin', '/tmp/custom_uboot.bin']);
+            try { Module.FS.unlink('/tmp/custom_spl.bin'); } catch (e) { /* ignore */ }
+            try { Module.FS.unlink('/tmp/custom_uboot.bin'); } catch (e) { /* ignore */ }
+        } else {
+            await loadDfuFirmwareToMemFS(detectedVariantName);
+            showProgress(40, 'USB-booting U-Boot (DFU)...');
+            rc = await wasmCall('tdfu_web_dfu_bootstrap', 'number',
+                ['number', 'string', 'string'], [0, './firmware', detectedVariantName]);
+        }
         if (rc !== 0) {
             log('DFU bootstrap failed: error ' + rc, 'error');
             hideProgress(); setState('error'); return;
@@ -809,6 +880,9 @@ function applyBackendMode(mode) {
     localStorage.setItem('tdfu_backend', backendMode);
     var ind = document.getElementById('mode-indicator');
     if (ind) ind.textContent = backendMode === 'cloner' ? 'Cloner' : 'DFU';
+    // The custom SPL/U-Boot override is a DFU-bootstrap feature; hide it in cloner mode.
+    var adv = document.getElementById('adv-wrap');
+    if (adv) adv.classList.toggle('d-none', backendMode !== 'dfu');
     setState(currentState); // re-evaluate which action buttons are live for this backend
 }
 
@@ -835,7 +909,8 @@ function saveSettings() {
 
 // Expose handlers referenced by HTML onclick/onchange attributes
 Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSelected, doRead,
-                        openSettings, closeSettings, saveSettings });
+                        openSettings, closeSettings, saveSettings,
+                        toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader });
 
 (function() {
     if (!navigator.usb) {
