@@ -288,6 +288,34 @@ static void dfu_close_device(usb_device_t *dev, int iface) {
     free(dev);
 }
 
+/* Set the device configuration (the driverless DFU gadget often has none set,
+ * which makes claim fail), claim the DFU interface, and select the alt. */
+static tdfu_error_t dfu_claim_alt(usb_device_t *dev, int iface, int alt) {
+    struct libusb_config_descriptor *cfg = NULL;
+    int cfgval = 1;
+    if (libusb_get_active_config_descriptor(dev->device, &cfg) == 0 && cfg)
+        cfgval = cfg->bConfigurationValue;
+    else if (libusb_get_config_descriptor(dev->device, 0, &cfg) == 0 && cfg)
+        cfgval = cfg->bConfigurationValue;
+    if (cfg)
+        libusb_free_config_descriptor(cfg);
+
+    int cur = 0;
+    if (libusb_get_configuration(dev->handle, &cur) != 0 || cur != cfgval)
+        libusb_set_configuration(dev->handle, cfgval);
+
+    if (libusb_claim_interface(dev->handle, iface) != 0) {
+        LOG_ERROR("Failed to claim DFU interface %d\n", iface);
+        return TDFU_ERROR_OPEN_FAILED;
+    }
+    /* Selecting the alt is a no-op for the default alt 0; only fatal otherwise. */
+    if (libusb_set_interface_alt_setting(dev->handle, iface, alt) != 0 && alt != 0) {
+        LOG_ERROR("Failed to select DFU alt setting %d\n", alt);
+        return TDFU_ERROR_PROTOCOL;
+    }
+    return TDFU_SUCCESS;
+}
+
 /* ====================================================================== */
 /* Public API                                                              */
 /* ====================================================================== */
@@ -336,15 +364,10 @@ tdfu_error_t tdfu_dfu_download(usb_manager_t *manager, int device_index, int alt
         dfu_close_device(dev, 0);
         return r;
     }
-    if (libusb_claim_interface(dev->handle, info.interface) != 0) {
-        LOG_ERROR("Failed to claim DFU interface %d\n", info.interface);
+    r = dfu_claim_alt(dev, info.interface, alt);
+    if (r != TDFU_SUCCESS) {
         dfu_close_device(dev, info.interface);
-        return TDFU_ERROR_OPEN_FAILED;
-    }
-    if (libusb_set_interface_alt_setting(dev->handle, info.interface, alt) != 0) {
-        LOG_ERROR("Failed to select DFU alt setting %d\n", alt);
-        dfu_close_device(dev, info.interface);
-        return TDFU_ERROR_PROTOCOL;
+        return r;
     }
 
     r = load_file(path, &data, &len);
@@ -408,11 +431,10 @@ tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, 
         dfu_close_device(dev, 0);
         return r;
     }
-    if (libusb_claim_interface(dev->handle, info.interface) != 0 ||
-        libusb_set_interface_alt_setting(dev->handle, info.interface, alt) != 0) {
-        LOG_ERROR("Failed to claim/select DFU alt %d\n", alt);
+    r = dfu_claim_alt(dev, info.interface, alt);
+    if (r != TDFU_SUCCESS) {
         dfu_close_device(dev, info.interface);
-        return TDFU_ERROR_OPEN_FAILED;
+        return r;
     }
 
     FILE *f = fopen(path, "wb");
