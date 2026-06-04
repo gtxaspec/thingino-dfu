@@ -38,6 +38,32 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
+        /* "Click me" attention glow for the Connect button when a manual
+           re-pick is needed (e.g. first authorization of the DFU gadget). */
+        @keyframes connect-glow {
+            0%   { box-shadow: 0 0 0 0 rgba(255, 140, 0, 0.65); }
+            70%  { box-shadow: 0 0 0 9px rgba(255, 140, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 140, 0, 0); }
+        }
+        .btn-attention {
+            animation: connect-glow 1.3s infinite;
+            border-color: darkorange !important;
+            color: darkorange !important;
+            background-color: rgba(255, 140, 0, 0.08) !important;
+        }
+        /* Disabled actions read as clearly OFF: flat muted grey instead of a
+           dimmed accent color, so it's obvious at a glance which are live. */
+        #btn-connect:disabled,
+        #btn-bootstrap:disabled,
+        #btn-write:disabled,
+        #btn-read:disabled {
+            color: #484f58 !important;
+            border-color: #30363d !important;
+            background-color: transparent !important;
+            opacity: 1 !important;
+            box-shadow: none !important;
+            cursor: not-allowed;
+        }
         @media (max-width: 576px) {
             body { padding: 0.5rem !important; }
             .card-header { padding: 0.6rem 0.75rem; }
@@ -64,6 +90,8 @@
                 <i class="bi bi-cpu me-1"></i><span class="d-none d-sm-inline"> Thingino Web Flasher for Ingenic</span><span class="d-sm-none"> Thingino Flasher</span>
             </h2>
             <span id="status-badge" class="badge bg-secondary ms-auto">Idle</span>
+            <span id="mode-indicator" class="badge bg-info-subtle text-info border border-info-subtle" title="Active backend">DFU</span>
+            <button id="btn-settings" class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="openSettings()" title="Settings"><i class="bi bi-gear"></i></button>
         </div>
 
         <div id="op-warning" class="card-header bg-danger bg-opacity-10 text-danger text-center py-1 d-none" style="animation: pulse-warn 1.5s infinite;">
@@ -78,7 +106,6 @@
                     data-bs-toggle="tooltip" title="Connect to a device in USB bootrom mode">
                     <i class="bi bi-usb-symbol me-1"></i> Connect Device
                 </button>
-                <span class="text-secondary ms-2 small">WebUSB requires Chrome or Edge</span>
             </div>
             <div id="device-info" class="device-info d-none">
                 <div class="row g-2">
@@ -92,7 +119,7 @@
         <!-- Actions -->
         <div class="card-footer">
             <div class="d-flex flex-wrap align-items-center gap-2">
-                <button id="btn-bootstrap" class="btn btn-outline-secondary btn-sm" onclick="doBootstrap()" disabled
+                <button id="btn-bootstrap" class="btn btn-outline-success btn-sm" onclick="doBootstrap()" disabled
                     data-bs-toggle="tooltip" title="Boot a device to the U-Boot burner prompt">
                     <i class="bi bi-arrow-repeat me-1"></i> Bootstrap
                 </button>
@@ -126,6 +153,30 @@
         </div>
         <div class="card-body p-2">
             <div id="log"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings overlay -->
+<div id="settings-overlay" class="d-none" style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1050; display: flex; align-items: center; justify-content: center; padding: 1rem;">
+    <div class="card flasher-card">
+        <div class="card-header d-flex align-items-center gap-2">
+            <h2 class="card-title mb-0 fs-6"><i class="bi bi-gear me-1"></i> Settings</h2>
+        </div>
+        <div class="card-body">
+            <p class="small text-secondary mb-2">Flashing backend</p>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="backend-mode" id="setting-dfu" value="dfu">
+                <label class="form-check-label" for="setting-dfu"><strong>DFU</strong> - U-Boot DFU mode (default)</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="backend-mode" id="setting-cloner" value="cloner">
+                <label class="form-check-label" for="setting-cloner">Cloner - legacy Ingenic USB-boot protocol</label>
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-end gap-2">
+            <button class="btn btn-outline-secondary btn-sm" onclick="closeSettings()">Cancel</button>
+            <button class="btn btn-outline-primary btn-sm" onclick="saveSettings()">Save</button>
         </div>
     </div>
 </div>

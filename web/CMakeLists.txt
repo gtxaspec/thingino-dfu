@@ -70,6 +70,7 @@ set(LIBTDFU_SOURCES
     ${LIBTDFU_DIR}/src/bootstrap.c
     ${LIBTDFU_DIR}/src/utils.c
     ${LIBTDFU_DIR}/src/operations.c
+    ${LIBTDFU_DIR}/src/dfu/dfu.c
     # Web glue: provides g_debug_enabled and main()
     ${CMAKE_CURRENT_SOURCE_DIR}/src/web_main.c
 )
@@ -107,6 +108,9 @@ set(EXPORTED_FUNCTIONS
     "_tdfu_get_version"
     "_tdfu_variant_to_string"
     "_tdfu_variant_from_string"
+    "_tdfu_web_dfu_bootstrap"
+    "_tdfu_web_dfu_download"
+    "_tdfu_web_dfu_upload"
     "_malloc"
     "_free"
 )
@@ -133,4 +137,7 @@ set_target_properties(tdfu_web PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/public/wasm"
     OUTPUT_NAME "tdfu"
     SUFFIX ".js"
+    # --js-library is not auto-tracked as a link input, so edits to the shim
+    # would otherwise not trigger a relink. Make it an explicit link dependency.
+    LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/libusb-webusb.js"
 )

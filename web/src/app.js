@@ -18,6 +18,11 @@ var detectedVariant = -1;
 var detectedVariantName = '';
 var wasmBusy = false;
 
+/* Backend: 'dfu' (default) drives U-Boot DFU; 'cloner' is the legacy Ingenic
+ * USB-boot flash protocol. Persisted across reloads. */
+var backendMode = localStorage.getItem('tdfu_backend') || 'dfu';
+var inDfuMode = false; /* connected device is a U-Boot DFU gadget (a108:4d44) */
+
 /**
  * Serialize all WASM async ccalls — Asyncify only supports one at a time.
  */
@@ -44,6 +49,15 @@ var TDFU_VARIANT_DIR_MAP = {
 
 function variantToFirmwareDir(name) {
     return TDFU_VARIANT_DIR_MAP[name] || name;
+}
+
+/* DFU firmware directory mapping (mirrors dfu_variant_dir in dfu.c) */
+var TDFU_DFU_DIR_MAP = {
+    't23dl': 't23', 't31x': 't31', 't31zx': 't31', 't31al': 't31',
+    't31a': 't31_ddr3', 't40xp': 't40_ddr3',
+};
+function dfuVariantDir(name) {
+    return TDFU_DFU_DIR_MAP[name] || name;
 }
 
 /* ------------------------------------------------------------------ */
@@ -104,10 +118,30 @@ function setState(state) {
     } else {
         warn.classList.add('d-none');
     }
+    // Enable actions based on the actual workflow, not just "a device exists":
+    //  - DFU backend: a bootrom must be BOOTSTRAPPED into the U-Boot DFU gadget
+    //    before Read/Write work, so only Bootstrap is live with a bootrom, and
+    //    only Read/Write are live once we're in DFU mode.
+    //  - Cloner backend: Read/Write/Bootstrap all act on the connected device.
+    var hasDevice = state === 'done';
+    var dfu = backendMode === 'dfu';
+    var canBoot = hasDevice && !busy && !inDfuMode;          // bootstrap a bootrom (pointless once in DFU)
+    var canRW = hasDevice && !busy && (dfu ? inDfuMode : true);
+
     document.getElementById('btn-connect').disabled = busy;
-    document.getElementById('btn-bootstrap').disabled = busy || state === 'idle';
-    document.getElementById('btn-write').disabled = busy || state === 'idle';
-    document.getElementById('btn-read').disabled = busy || state === 'idle';
+    document.getElementById('btn-bootstrap').disabled = !canBoot;
+    document.getElementById('btn-write').disabled = !canRW;
+    document.getElementById('btn-read').disabled = !canRW;
+
+    // Glow the single "next action" so it's obvious what to click. In DFU mode
+    // with a bootrom attached, that's Bootstrap.
+    setAttention('btn-bootstrap', canBoot && dfu);
+}
+
+/* Toggle the pulsing "click me" glow on a button. */
+function setAttention(id, on) {
+    var el = document.getElementById(id);
+    if (el) el.classList.toggle('btn-attention', !!on);
 }
 
 function showDeviceInfo(soc, stage, vid, pid) {
@@ -152,6 +186,30 @@ async function loadFirmwareFileToMemFS(variant) {
     }
 
     // ddr.bin not fetched — always generated dynamically by the C DDR system
+}
+
+/**
+ * Fetch the DFU-capable SPL + U-Boot for a variant into MEMFS at
+ * ./firmware/dfu/<dir>/ so tdfu_web_dfu_bootstrap can USB-boot them.
+ */
+async function loadDfuFirmwareToMemFS(variant) {
+    var dir = dfuVariantDir(variant);
+    var basePath = './firmware/dfu/' + dir;
+    try { Module.FS.mkdir('./firmware'); } catch (e) { /* exists */ }
+    try { Module.FS.mkdir('./firmware/dfu'); } catch (e) { /* exists */ }
+    try { Module.FS.mkdir(basePath); } catch (e) { /* exists */ }
+
+    var files = ['spl.bin', 'uboot.bin'];
+    for (var i = 0; i < files.length; i++) {
+        var url = 'firmware/dfu/' + dir + '/' + files[i];
+        var response = await fetch(url);
+        if (!response.ok) {
+            throw new Error('Failed to fetch ' + url + ': ' + response.status);
+        }
+        var data = new Uint8Array(await response.arrayBuffer());
+        Module.FS.writeFile(basePath + '/' + files[i], data);
+        console.log('Loaded dfu ' + files[i] + ': ' + data.length + ' bytes');
+    }
 }
 
 /* ------------------------------------------------------------------ */
@@ -254,6 +312,15 @@ async function initModule() {
         if (verEl) verEl.textContent = 'v' + version;
 
         log('Ready — click Connect Device to begin');
+
+        // If a previously-authorized device is already plugged in, attach it
+        // now (the 'connect' event only fires for NEW connections, not ones
+        // present at load). No chooser - getDevices() returns permitted devices.
+        try {
+            var known = await navigator.usb.getDevices();
+            var ing = known.find(function(d) { return d.vendorId === 0x601A || d.vendorId === 0xA108; });
+            if (ing) autoAttachDevice(ing);
+        } catch (e) { /* no permitted devices yet */ }
     } catch (e) {
         log('Failed to initialize — check console for details', 'error');
         console.error(e);
@@ -271,6 +338,7 @@ async function connectDevice() {
     }
 
     setState('connecting');
+    setAttention('btn-connect', false); // user is acting on the prompt
     log('Requesting USB device...');
 
     try {
@@ -286,6 +354,8 @@ async function connectDevice() {
             { vendorId: 0xA108, productId: 0x601E },
             { vendorId: 0x601A, productId: 0x601A },
             { vendorId: 0xA108, productId: 0x601A },
+            { vendorId: 0x601A, productId: 0x4D44 },
+            { vendorId: 0xA108, productId: 0x4D44 },
         ];
 
         var device;
@@ -304,6 +374,17 @@ async function connectDevice() {
 
         console.log('Device selected: VID=0x' + device.vendorId.toString(16) +
             ' PID=0x' + device.productId.toString(16));
+
+        // A U-Boot DFU gadget (a108:4d44) is ready to flash directly; it isn't
+        // an Ingenic bootrom, so skip the cloner detect path.
+        if (device.productId === 0x4D44) {
+            inDfuMode = true;
+            showDeviceInfo('U-Boot DFU', 'DFU', device.vendorId, device.productId);
+            log('Device in U-Boot DFU mode — ready (Write to flash, Read to dump).');
+            setState('done');
+            return;
+        }
+        inDfuMode = false;
 
         setState('detecting');
         console.log('Discovering devices...');
@@ -330,12 +411,74 @@ async function connectDevice() {
     }
 }
 
+/* Attach a device we ALREADY have permission for, with no chooser and no user
+ * gesture. Driven by the 'connect' event and a getDevices() sweep at load.
+ *
+ * This is what removes the manual re-pick after a bootstrap: once the DFU
+ * gadget (a108:4d44) has been authorized once, WebUSB persists that grant, so
+ * when the device re-enumerates the 'connect' event fires and we wire it up
+ * automatically. The very first authorization still needs one chooser click
+ * (WebUSB won't surface a device that isn't present yet, and the PID changes
+ * across re-enumeration). */
+async function autoAttachDevice(device) {
+    if (!tdfuReady || !device) return;
+    if (device.vendorId !== 0x601A && device.vendorId !== 0xA108) return;
+    // Never hijack an operation in flight (read/write/bootstrap).
+    if (currentState !== 'idle' && currentState !== 'done') return;
+
+    if (!window._webusb_devices) window._webusb_devices = [];
+    if (!window._webusb_devices.some(function(d) { return d === device; }))
+        window._webusb_devices.push(device);
+    setAttention('btn-connect', false); // device is here; no manual re-pick needed
+
+    if (device.productId === 0x4D44) {
+        inDfuMode = true;
+        showDeviceInfo('U-Boot DFU', 'DFU', device.vendorId, device.productId);
+        log('Device reconnected in U-Boot DFU mode — ready (no re-pick needed).');
+        setState('done');
+        return;
+    }
+
+    // Bootrom / firmware stage: probe and show what it is.
+    inDfuMode = false;
+    setState('detecting');
+    var info = await discoverDevices();
+    if (!info) { setState('idle'); return; }
+    detectedVariant = info.variant;
+    detectedVariantName = info.variantName;
+    var stageName = info.stage === 0 ? 'Bootrom' : 'Firmware';
+    showDeviceInfo(info.variantName.toUpperCase(), stageName, info.vid, info.pid);
+    log('Detected: ' + info.variantName.toUpperCase() + ' (' + stageName + ')');
+    setState('done');
+}
+
+/* Backstop for the post-bootstrap re-enumeration: poll getDevices() for the
+ * DFU gadget for a few seconds and auto-attach it, in case the 'connect' event
+ * raced ahead while we were still in the 'bootstrapping' state. Only finds the
+ * gadget if it was authorized before (getDevices returns permitted devices). */
+function pollForDfuGadget() {
+    var tries = 0;
+    var iv = setInterval(async function() {
+        if (++tries > 16 || (inDfuMode && currentState === 'done')) { clearInterval(iv); return; }
+        if (currentState !== 'idle') return; // user started something else
+        try {
+            var devs = await navigator.usb.getDevices();
+            var g = devs.find(function(d) { return d.productId === 0x4D44; });
+            if (g) { clearInterval(iv); autoAttachDevice(g); return; }
+        } catch (e) { /* keep trying */ }
+        // Not auto-attached after ~3s -> the gadget isn't authorized in this
+        // browser profile yet, so glow Connect to prompt the one-time pick.
+        if (tries >= 6) setAttention('btn-connect', true);
+    }, 500);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Bootstrap                                                          */
 /* ------------------------------------------------------------------ */
 
 async function doBootstrap() {
     if (!tdfuReady || detectedVariant < 0) return;
+    if (backendMode === 'dfu') return doDfuBootstrap();
 
     setState('bootstrapping');
     showProgress(10, 'Loading firmware files...');
@@ -418,6 +561,7 @@ function firmwareSelected(input) {
 
 async function doWrite() {
     if (!tdfuReady || !firmwareData) return;
+    if (backendMode === 'dfu') return doDfuWrite();
 
     // Always bootstrap from JS if device is in bootrom — the internal
     // bootstrap in tdfu_op_write_firmware doesn't handle WebUSB re-enumeration
@@ -491,6 +635,7 @@ async function doWrite() {
 
 async function doRead() {
     if (!tdfuReady) return;
+    if (backendMode === 'dfu') return doDfuRead();
 
     // Always bootstrap from JS if device is in bootrom
     var info = await discoverDevices();
@@ -582,11 +727,115 @@ async function doRead() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  DFU backend flows (default)                                        */
+/* ------------------------------------------------------------------ */
+
+async function doDfuBootstrap() {
+    if (detectedVariant < 0) { log('Connect a device in bootrom mode first', 'warn'); return; }
+    setState('bootstrapping');
+    showProgress(10, 'Loading DFU U-Boot...');
+    log('DFU bootstrap for ' + detectedVariantName.toUpperCase() + '...');
+    try {
+        await loadDfuFirmwareToMemFS(detectedVariantName);
+        showProgress(40, 'USB-booting U-Boot (DFU)...');
+        var rc = await wasmCall('tdfu_web_dfu_bootstrap', 'number',
+            ['number', 'string', 'string'], [0, './firmware', detectedVariantName]);
+        if (rc !== 0) {
+            log('DFU bootstrap failed: error ' + rc, 'error');
+            hideProgress(); setState('error'); return;
+        }
+        showProgress(100, 'U-Boot DFU running');
+        log('Device is re-enumerating as a U-Boot DFU gadget.');
+        log('First time: click Connect and pick "USB download gadget" once. After that it reconnects automatically.', 'warn');
+        setTimeout(hideProgress, 1500);
+        document.getElementById('device-info').classList.add('d-none');
+        document.getElementById('device-disconnected').classList.remove('d-none');
+        setState('idle');
+        pollForDfuGadget(); // auto-attach the gadget once it enumerates (if already authorized)
+    } catch (e) {
+        log('DFU bootstrap error: ' + e.message, 'error');
+        console.error(e); hideProgress(); setState('error');
+    }
+}
+
+async function doDfuRead() {
+    if (!inDfuMode) { log('Not a DFU device — bootstrap into DFU mode first', 'warn'); return; }
+    setState('reading');
+    showProgress(20, 'Reading flash via DFU...');
+    log('DFU upload (reading flash)...');
+    try {
+        var rc = await wasmCall('tdfu_web_dfu_upload', 'number',
+            ['number', 'string', 'string', 'number'], [0, '', '/tmp/dfu-rd.bin', 0]);
+        if (rc !== 0) { log('DFU read failed: error ' + rc, 'error'); hideProgress(); setState('error'); return; }
+        var data = Module.FS.readFile('/tmp/dfu-rd.bin');
+        try { Module.FS.unlink('/tmp/dfu-rd.bin'); } catch (e) { /* ignore */ }
+        log('Read ' + data.length + ' bytes from flash (DFU)');
+        var blob = new Blob([data], { type: 'application/octet-stream' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a'); a.href = url; a.download = 'firmware_dump.bin'; a.click();
+        URL.revokeObjectURL(url);
+        showProgress(100, 'Read complete'); log('Firmware saved as firmware_dump.bin');
+        setTimeout(hideProgress, 1500); setState('done');
+    } catch (e) {
+        log('DFU read error: ' + e.message, 'error'); console.error(e); hideProgress(); setState('error');
+    }
+}
+
+async function doDfuWrite() {
+    if (!firmwareData) { log('Select a firmware file first', 'warn'); return; }
+    if (!inDfuMode) { log('Not a DFU device — bootstrap into DFU mode first', 'warn'); return; }
+    setState('writing');
+    showProgress(20, 'Writing flash via DFU...');
+    log('DFU download: ' + firmwareFileName + ' (' + firmwareData.length + ' bytes)...');
+    try {
+        Module.FS.writeFile('/tmp/dfu-wr.bin', firmwareData);
+        var rc = await wasmCall('tdfu_web_dfu_download', 'number',
+            ['number', 'string', 'string'], [0, '', '/tmp/dfu-wr.bin']);
+        try { Module.FS.unlink('/tmp/dfu-wr.bin'); } catch (e) { /* ignore */ }
+        if (rc !== 0) { log('DFU write failed: error ' + rc, 'error'); hideProgress(); setState('error'); return; }
+        showProgress(100, 'Write complete'); log('Firmware written via DFU!');
+        setTimeout(hideProgress, 1500); setState('done');
+    } catch (e) {
+        log('DFU write error: ' + e.message, 'error'); console.error(e); hideProgress(); setState('error');
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Settings (backend selection)                                       */
+/* ------------------------------------------------------------------ */
+
+function applyBackendMode(mode) {
+    backendMode = (mode === 'cloner') ? 'cloner' : 'dfu';
+    localStorage.setItem('tdfu_backend', backendMode);
+    var ind = document.getElementById('mode-indicator');
+    if (ind) ind.textContent = backendMode === 'cloner' ? 'Cloner' : 'DFU';
+    setState(currentState); // re-evaluate which action buttons are live for this backend
+}
+
+function openSettings() {
+    var r = document.getElementById('setting-' + backendMode);
+    if (r) r.checked = true;
+    document.getElementById('settings-overlay').classList.remove('d-none');
+}
+
+function closeSettings() {
+    document.getElementById('settings-overlay').classList.add('d-none');
+}
+
+function saveSettings() {
+    var sel = document.querySelector('input[name="backend-mode"]:checked');
+    applyBackendMode(sel ? sel.value : 'dfu');
+    log('Backend: ' + (backendMode === 'cloner' ? 'Cloner (legacy)' : 'DFU'));
+    closeSettings();
+}
+
+/* ------------------------------------------------------------------ */
 /*  Init                                                               */
 /* ------------------------------------------------------------------ */
 
 // Expose handlers referenced by HTML onclick/onchange attributes
-Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSelected, doRead });
+Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSelected, doRead,
+                        openSettings, closeSettings, saveSettings });
 
 (function() {
     if (!navigator.usb) {
@@ -598,11 +847,16 @@ Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSele
     navigator.usb.addEventListener('connect', function(e) {
         console.log('USB device connected: VID=0x' + e.device.vendorId.toString(16) +
             ' PID=0x' + e.device.productId.toString(16));
+        // Re-attach automatically if we already have permission for it.
+        autoAttachDevice(e.device);
     });
     navigator.usb.addEventListener('disconnect', function(e) {
-        console.log('USB device disconnected');
+        console.log('USB device disconnected: PID=0x' + e.device.productId.toString(16));
+        if (window._webusb_devices)
+            window._webusb_devices = window._webusb_devices.filter(function(d) { return d !== e.device; });
     });
 
+    applyBackendMode(backendMode);
     setState('idle');
     initModule();
 })();

@@ -14,6 +14,34 @@ mergeInto(LibraryManager.library, {
         device_descriptors: [],
         next_handle_id: 1,
         handle_device_map: new Map(),
+        // Route diagnostics to BOTH the browser DevTools console and the
+        // in-page log (via Emscripten's err()->printErr, which app.js renders).
+        log: function(msg) {
+            try { console.log(msg); } catch (e) {}
+            try { if (typeof err === 'function') err(msg); } catch (e) {}
+        },
+        // Build a human-readable dump of a WebUSB device's descriptor tree.
+        dump: function(d) {
+            var s = (d.vendorId || 0).toString(16) + ':' + (d.productId || 0).toString(16) +
+                ' opened=' + !!d.opened + ' activeCfg=' + (d.configuration ? (d.configuration.configurationValue) : 'none') +
+                ' nCfg=' + (d.configurations ? d.configurations.length : 0);
+            var cfgs = d.configurations || [];
+            for (var c = 0; c < cfgs.length; c++) {
+                var ifs = cfgs[c].interfaces || [];
+                s += ' | cfg#' + cfgs[c].configurationValue + '[';
+                for (var ii = 0; ii < ifs.length; ii++) {
+                    var alts = ifs[ii].alternates || [];
+                    for (var jj = 0; jj < alts.length; jj++) {
+                        var a = alts[jj];
+                        s += 'if' + ifs[ii].interfaceNumber + '.alt' + a.alternateSetting +
+                            '=cls' + a.interfaceClass + '/sub' + a.interfaceSubclass + '/proto' + a.interfaceProtocol +
+                            (a.interfaceName ? '("' + a.interfaceName + '")' : '') + ' ';
+                    }
+                }
+                s += ']';
+            }
+            return s;
+        },
     },
 
     $webusb_state__deps: [],
@@ -45,7 +73,7 @@ mergeInto(LibraryManager.library, {
     libusb_get_device_list: function(ctx, list_ptr) {
         return Asyncify.handleAsync(function() {
             var INGENIC_VIDS = [0x601A, 0xA108];
-            var INGENIC_PIDS = [0x4770, 0xC309, 0x601A, 0x8887, 0x601E];
+            var INGENIC_PIDS = [0x4770, 0xC309, 0x601A, 0x8887, 0x601E, 0x4D44];
 
             var tryFind = function(attempt, maxAttempts) {
                 return navigator.usb.getDevices().then(function(allDevices) {
@@ -70,6 +98,10 @@ mergeInto(LibraryManager.library, {
 
             return tryFind(0, 16).then(function(devices) {
                 webusb_state.devices = devices;
+                webusb_state.log('[shim] get_device_list: ' + devices.length + ' device(s)');
+                for (var di = 0; di < devices.length; di++) {
+                    webusb_state.log('[shim]   dev[' + di + '] ' + webusb_state.dump(devices[di]));
+                }
                 webusb_state.device_descriptors = [];
                 for (var i = 0; i < devices.length; i++) {
                     webusb_state.device_descriptors.push({
@@ -143,7 +175,13 @@ mergeInto(LibraryManager.library, {
                 {{{ makeSetValue('handle_ptr', '0', 'handle_id', 'i32') }}};
                 return 0;
             }).catch(function(e) {
-                console.error('libusb_open error:', e);
+                webusb_state.log('[shim] libusb_open ' + (e && e.name) + ': ' + (e && e.message));
+                if (e && e.name === 'SecurityError') {
+                    webusb_state.log('[shim] The browser/OS denied USB access to this device. On Linux add a ' +
+                        'udev rule granting access to this VID:PID, then replug and reconnect.');
+                    return -3; // LIBUSB_ERROR_ACCESS
+                }
+                if (e && e.name === 'NotFoundError') return -4; // LIBUSB_ERROR_NO_DEVICE
                 return -3;
             });
         });
@@ -186,7 +224,10 @@ mergeInto(LibraryManager.library, {
     libusb_get_configuration: function(handle_ptr, config_ptr) {
         var device = webusb_state.handles[handle_ptr];
         if (!device) return -4;
-        var v = device.configuration ? device.configuration.configurationValue : 1;
+        // Report 0 (unconfigured) when WebUSB has no configuration selected yet,
+        // so callers know to call set_configuration (selectConfiguration) before
+        // claiming - WebUSB requires it.
+        var v = device.configuration ? device.configuration.configurationValue : 0;
         {{{ makeSetValue('config_ptr', '0', 'v', 'i32') }}};
         return 0;
     },
@@ -231,11 +272,75 @@ mergeInto(LibraryManager.library, {
         if (!device) return -4;
 
         var isIn = (bmRequestType & 0x80) !== 0;
-        var setup = { requestType: 'vendor', recipient: 'device',
-                      request: bRequest, value: wValue, index: wIndex };
+        // Decode bmRequestType: bits 6-5 = type, bits 4-0 = recipient. The
+        // cloner uses vendor/device; DFU uses class/interface; GET_DESCRIPTOR /
+        // SET_INTERFACE use standard.
+        var typeBits = (bmRequestType >> 5) & 0x3;
+        var recipBits = bmRequestType & 0x1f;
+        var setup = {
+            requestType: typeBits === 1 ? 'class' : typeBits === 2 ? 'vendor' : 'standard',
+            recipient: recipBits === 1 ? 'interface' : recipBits === 2 ? 'endpoint'
+                                                                       : recipBits === 3 ? 'other' : 'device',
+            request: bRequest, value: wValue, index: wIndex };
         var timeoutMs = (timeout && timeout > 0) ? timeout : 5000;
 
         return Asyncify.handleAsync(function() {
+            // WebUSB blocks standard control requests; emulate the ones the DFU
+            // host needs from WebUSB's parsed config + high-level methods.
+            if (typeBits === 0) {
+                if (bRequest === 0x06 && isIn) { // GET_DESCRIPTOR
+                    var descType = (wValue >> 8) & 0xff;
+                    var bytes = null;
+                    var cfg = device.configuration || (device.configurations && device.configurations[0]);
+                    if (descType === 0x02 && cfg) { // CONFIGURATION
+                        var ifs = cfg.interfaces || [];
+                        var body = [];
+                        var sawDfu = false;
+                        for (var ii = 0; ii < ifs.length; ii++) {
+                            var alts = ifs[ii].alternates || [];
+                            for (var jj = 0; jj < alts.length; jj++) {
+                                var al = alts[jj];
+                                body.push(9, 4, ifs[ii].interfaceNumber & 0xff, al.alternateSetting & 0xff, 0,
+                                          al.interfaceClass & 0xff, al.interfaceSubclass & 0xff,
+                                          al.interfaceProtocol & 0xff, 0);
+                                if (al.interfaceClass === 0xFE && al.interfaceSubclass === 0x01) sawDfu = true;
+                            }
+                        }
+                        // WebUSB strips the DFU functional descriptor (0x21), so the host can't
+                        // read wTransferSize/bcdDFU. Reconstruct one with the Ingenic U-Boot
+                        // values (wTransferSize=4096, bcdDFU=1.10) so uploads use 4096-byte blocks.
+                        if (sawDfu) {
+                            body.push(0x09, 0x21, 0x0F, 0xFF, 0x00, 0x00, 0x10, 0x10, 0x01);
+                        }
+                        var totalLen = 9 + body.length;
+                        bytes = new Uint8Array([9, 2, totalLen & 0xff, (totalLen >> 8) & 0xff, ifs.length & 0xff,
+                                                (cfg.configurationValue || 1) & 0xff, 0, 0x80, 0].concat(body));
+                    } else if (descType === 0x03) { // STRING (WebUSB hides indices)
+                        bytes = new Uint8Array([2, 3]);
+                    }
+                    webusb_state.log('[shim] GET_DESCRIPTOR type=0x' + descType.toString(16) + ' wLen=' + wLength +
+                        ' hasCfg=' + !!cfg + ' built=' + (bytes ? bytes.length : 'null') + ' ifclasses=' +
+                        (cfg ? (cfg.interfaces || []).map(function(x) {
+                            return (x.alternates || []).map(function(a) {
+                                return a.interfaceClass + '/' + a.interfaceSubclass; }).join(','); }).join(';') : '(none)'));
+                    if (!bytes) return Promise.resolve(-9);
+                    var m = Math.min(bytes.length, wLength);
+                    for (var k = 0; k < m; k++) {
+                        {{{ makeSetValue('data_ptr', 'k', 'bytes[k]', 'i8') }}};
+                    }
+                    return Promise.resolve(m);
+                }
+                if (bRequest === 0x0B && !isIn) { // SET_INTERFACE (value=alt, index=iface)
+                    return device.selectAlternateInterface(wIndex, wValue)
+                        .then(function() { return 0; })
+                        .catch(function(e) { console.error('selectAlternateInterface:', e); return -9; });
+                }
+                if (bRequest === 0x09 && !isIn) { // SET_CONFIGURATION
+                    return device.selectConfiguration(wValue).then(function() { return 0; }).catch(function() { return 0; });
+                }
+                return Promise.resolve(-12);
+            }
+
             var transferPromise;
             if (isIn) {
                 transferPromise = device.controlTransferIn(setup, wLength).then(function(result) {
@@ -265,14 +370,14 @@ mergeInto(LibraryManager.library, {
             });
             return Promise.race([transferPromise, timeoutPromise]).catch(function(e) {
                 if (e.name === 'TimeoutError') {
-                    console.warn('control_transfer TIMEOUT: req=0x' + bRequest.toString(16) +
-                        ' val=0x' + wValue.toString(16) + ' idx=0x' + wIndex.toString(16) +
+                    webusb_state.log('[shim] control_transfer TIMEOUT: type=' + setup.requestType + '/' + setup.recipient +
+                        ' req=0x' + bRequest.toString(16) + ' val=0x' + wValue.toString(16) + ' idx=0x' + wIndex.toString(16) +
                         ' len=' + wLength + ' dir=' + (isIn ? 'IN' : 'OUT') + ' after ' + timeoutMs + 'ms');
                     return -7;
                 }
                 if (e.name === 'NotFoundError') return -4;
-                if (e.name === 'NetworkError') return -9;
-                console.error('control_transfer error: req=0x' + bRequest.toString(16) + ' ' + e.name + ': ' + e.message);
+                if (e.name === 'NetworkError') { webusb_state.log('[shim] control_transfer NetworkError: req=0x' + bRequest.toString(16)); return -9; }
+                webusb_state.log('[shim] control_transfer error: req=0x' + bRequest.toString(16) + ' ' + e.name + ': ' + e.message);
                 return -1;
             });
         });

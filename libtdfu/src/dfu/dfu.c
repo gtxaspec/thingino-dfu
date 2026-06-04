@@ -96,14 +96,18 @@ static tdfu_error_t dfu_upload_block(usb_device_t *dev, uint16_t iface, uint16_t
     return usb_device_control_transfer(dev, DFU_BMREQ_IN, DFU_UPLOAD, block, iface, data, len, got);
 }
 
-/* Drive the device back to dfuIDLE (clear errors / abort a stuck transfer). */
+/* Drive the device back to dfuIDLE (clear errors / abort a stuck transfer).
+ * Bails immediately if GET_STATUS itself fails: that means the gadget is
+ * unresponsive (a dwc2 EP0 wedge after an interrupted DNLOAD), and the caller
+ * recovers with a USB reset rather than wasting 5s timeouts on aborts that also
+ * hang. On a responsive device (e.g. dfuERROR after a stale-sequence STALL),
+ * GET_STATUS succeeds and we clear it normally. */
 static tdfu_error_t dfu_make_idle(usb_device_t *dev, uint16_t iface) {
     dfu_status_t st;
-    for (int retry = 0; retry < 4; retry++) {
-        if (dfu_get_status(dev, iface, &st) != TDFU_SUCCESS) {
-            dfu_abort(dev, iface);
-            continue;
-        }
+    for (int retry = 0; retry < 3; retry++) {
+        tdfu_error_t gr = dfu_get_status(dev, iface, &st);
+        if (gr != TDFU_SUCCESS)
+            return gr;
         if (st.bState == DFU_STATE_dfuIDLE)
             return TDFU_SUCCESS;
         if (st.bState == DFU_STATE_dfuERROR)
@@ -234,7 +238,9 @@ static tdfu_error_t dfu_read_info(usb_device_t *dev, tdfu_dfu_info_t *info) {
  * is confirmed by reading the config descriptor over a control transfer - the
  * same path works on native libusb and the WebUSB shim. */
 static tdfu_error_t dfu_open_device(usb_manager_t *manager, int index, usb_device_t **out) {
-    if (!manager || !manager->context)
+    /* Guard on `initialized`, not `context`: the WebUSB shim leaves context
+     * NULL (and ignores it) while the manager is fully initialized. */
+    if (!manager || !manager->initialized)
         return TDFU_ERROR_INIT_FAILED;
 
     libusb_device **list = NULL;
@@ -245,6 +251,7 @@ static tdfu_error_t dfu_open_device(usb_manager_t *manager, int index, usb_devic
     LOG_DEBUG("dfu_open_device: scanning %zd USB devices for a DFU interface\n", cnt);
     usb_device_t *found = NULL;
     int match = 0;
+    bool access_denied = false;
     for (ssize_t i = 0; i < cnt && !found; i++) {
         struct libusb_device_descriptor dd;
         if (libusb_get_device_descriptor(list[i], &dd) != 0)
@@ -253,15 +260,28 @@ static tdfu_error_t dfu_open_device(usb_manager_t *manager, int index, usb_devic
             continue;
 
         libusb_device_handle *handle = NULL;
-        if (libusb_open(list[i], &handle) != 0 || !handle)
+        int orc = libusb_open(list[i], &handle);
+        if (orc != 0 || !handle) {
+            if (orc == LIBUSB_ERROR_ACCESS) {
+                access_denied = true;
+                LOG_ERROR("Cannot open %04x:%04x: OS denied USB access. Grant access to this device "
+                          "(Linux: udev rule for this VID:PID; Windows: bind WinUSB via Zadig), then "
+                          "replug and reconnect.\n",
+                          dd.idVendor, dd.idProduct);
+            } else {
+                LOG_WARN("Cannot open %04x:%04x (libusb error %d)\n", dd.idVendor, dd.idProduct, orc);
+            }
             continue;
+        }
 
         usb_device_t probe = {0};
         probe.handle = handle;
         probe.context = manager->context;
         uint8_t cfg[512];
         int n = dfu_read_config(&probe, cfg, sizeof(cfg));
-        if (n >= 4 && dfu_config_is_dfu(cfg, n) && match++ == index) {
+        int isdfu = (n >= 4) && dfu_config_is_dfu(cfg, n);
+        LOG_DEBUG("dfu scan: %04x:%04x config=%d bytes, is_dfu=%d\n", dd.idVendor, dd.idProduct, n, isdfu);
+        if (isdfu && match++ == index) {
             usb_device_t *dev = (usb_device_t *)calloc(1, sizeof(*dev));
             if (!dev) {
                 libusb_close(handle);
@@ -279,7 +299,7 @@ static tdfu_error_t dfu_open_device(usb_manager_t *manager, int index, usb_devic
     libusb_free_device_list(list, 1);
 
     if (!found)
-        return TDFU_ERROR_DEVICE_NOT_FOUND;
+        return access_denied ? TDFU_ERROR_OPEN_FAILED : TDFU_ERROR_DEVICE_NOT_FOUND;
     *out = found;
     return TDFU_SUCCESS;
 }
@@ -292,6 +312,51 @@ static void dfu_close_device(usb_device_t *dev, int iface) {
         libusb_close(dev->handle);
     }
     free(dev);
+}
+
+/* Recover a wedged DFU gadget with a USB bus reset. An interrupted control-OUT
+ * (a DFU DNLOAD - e.g. a browser reload mid-write) leaves the dwc2 UDC's EP0
+ * stuck so it stops answering control transfers entirely; a bus reset re-inits
+ * the gadget's endpoints (verified on A1/T31). The wedged device can't be
+ * confirmed as DFU through its config descriptor (that read hangs too), so it
+ * is matched by Ingenic VID only. Returns true if a device was reset. */
+static bool dfu_reset_device(usb_manager_t *manager, int device_index) {
+    if (!manager || !manager->initialized)
+        return false;
+    libusb_device **list = NULL;
+    ssize_t cnt = libusb_get_device_list(manager->context, &list);
+    if (cnt < 0)
+        return false;
+    bool did_reset = false;
+    int match = 0;
+    for (ssize_t i = 0; i < cnt; i++) {
+        struct libusb_device_descriptor dd;
+        if (libusb_get_device_descriptor(list[i], &dd) != 0)
+            continue;
+        if (dd.idVendor != 0x601A && dd.idVendor != 0xA108)
+            continue;
+        if (match++ != device_index)
+            continue;
+        libusb_device_handle *h = NULL;
+        if (libusb_open(list[i], &h) == 0 && h) {
+            LOG_WARN("DFU gadget unresponsive - issuing a USB reset to recover\n");
+            libusb_reset_device(h);
+            libusb_close(h);
+            did_reset = true;
+        }
+        break;
+    }
+    libusb_free_device_list(list, 1);
+    if (did_reset)
+        tdfu_sleep_milliseconds(1500); /* let the gadget re-enumerate */
+    return did_reset;
+}
+
+/* Errors that signal a device-comms failure a USB reset might clear (vs. a
+ * local error like FILE_IO/MEMORY where a reset would be pointless). */
+static bool dfu_err_recoverable(tdfu_error_t r) {
+    return r == TDFU_ERROR_TRANSFER_FAILED || r == TDFU_ERROR_TRANSFER_TIMEOUT || r == TDFU_ERROR_TIMEOUT ||
+           r == TDFU_ERROR_PROTOCOL || r == TDFU_ERROR_DEVICE_NOT_FOUND || r == TDFU_ERROR_OPEN_FAILED;
 }
 
 /* SET_INTERFACE (host-to-device, standard, interface) to select the alt. */
@@ -315,8 +380,11 @@ static tdfu_error_t dfu_claim_alt(usb_device_t *dev, int iface, int alt) {
         LOG_ERROR("Failed to claim DFU interface %d\n", iface);
         return TDFU_ERROR_OPEN_FAILED;
     }
-    /* Selecting the alt is a no-op for the default alt 0; only fatal otherwise. */
-    if (dfu_set_interface(dev, (uint16_t)iface, (uint16_t)alt) != TDFU_SUCCESS && alt != 0) {
+    /* SET_INTERFACE is only required to switch to a NON-default alt. A single-alt
+     * interface (U-Boot's DFU gadget) is allowed by USB 9.4.10 to STALL it, and
+     * over WebUSB that STALL wedges EP0 - breaking every following GET_STATUS /
+     * UPLOAD. So never issue it for the default alt 0. */
+    if (alt != 0 && dfu_set_interface(dev, (uint16_t)iface, (uint16_t)alt) != TDFU_SUCCESS) {
         LOG_ERROR("Failed to select DFU alt setting %d\n", alt);
         return TDFU_ERROR_PROTOCOL;
     }
@@ -327,15 +395,26 @@ static tdfu_error_t dfu_claim_alt(usb_device_t *dev, int iface, int alt) {
 /* Public API                                                              */
 /* ====================================================================== */
 
-tdfu_error_t tdfu_dfu_probe(usb_manager_t *manager, int device_index, tdfu_dfu_info_t *info) {
-    if (!info)
-        return TDFU_ERROR_INVALID_PARAMETER;
+static tdfu_error_t dfu_probe_impl(usb_manager_t *manager, int device_index, tdfu_dfu_info_t *info) {
     usb_device_t *dev = NULL;
     tdfu_error_t r = dfu_open_device(manager, device_index, &dev);
     if (r != TDFU_SUCCESS)
         return r;
     r = dfu_read_info(dev, info);
     dfu_close_device(dev, info->interface);
+    return r;
+}
+
+/* Probe with the same wedge-recovery as the transfers: native callers probe
+ * BEFORE reading/writing, and a gadget wedged by an interrupted DNLOAD fails
+ * the probe's descriptor read - so USB-reset and retry once. (On the WebUSB
+ * shim the probe is served from the cached config and succeeds anyway.) */
+tdfu_error_t tdfu_dfu_probe(usb_manager_t *manager, int device_index, tdfu_dfu_info_t *info) {
+    if (!info)
+        return TDFU_ERROR_INVALID_PARAMETER;
+    tdfu_error_t r = dfu_probe_impl(manager, device_index, info);
+    if (r != TDFU_SUCCESS && dfu_err_recoverable(r) && dfu_reset_device(manager, device_index))
+        r = dfu_probe_impl(manager, device_index, info);
     return r;
 }
 
@@ -357,7 +436,7 @@ int tdfu_dfu_find_alt(const tdfu_dfu_info_t *info, const char *name_or_num) {
     return -1;
 }
 
-tdfu_error_t tdfu_dfu_download(usb_manager_t *manager, int device_index, int alt, const char *path) {
+static tdfu_error_t dfu_download_impl(usb_manager_t *manager, int device_index, int alt, const char *path) {
     usb_device_t *dev = NULL;
     tdfu_dfu_info_t info;
     uint8_t *data = NULL;
@@ -386,29 +465,39 @@ tdfu_error_t tdfu_dfu_download(usb_manager_t *manager, int device_index, int alt
 
     LOG_INFO("DFU download: %s -> alt %d (%zu bytes, %u-byte blocks)\n", path, alt, len, info.transfer_size);
 
-    if (dfu_make_idle(dev, info.interface) != TDFU_SUCCESS) {
-        LOG_ERROR("Device not in a DFU-idle state\n");
-        free(data);
-        dfu_close_device(dev, info.interface);
-        return TDFU_ERROR_PROTOCOL;
-    }
-
+    /* See the upload path: a reload mid-transfer can leave U-Boot expecting a
+     * stale block sequence. The first block-0 write trips its cleanup + STALL,
+     * so on a block-0 failure we clear the error and retry once. */
     uint16_t block = 0;
     size_t offset = 0;
     dfu_status_t st;
-    while (offset < len) {
-        uint16_t chunk = (len - offset > info.transfer_size) ? info.transfer_size : (uint16_t)(len - offset);
-        r = dfu_dnload(dev, info.interface, block, data + offset, chunk);
-        if (r != TDFU_SUCCESS)
-            break;
-        r = dfu_poll_until_ready(dev, info.interface, &st);
-        if (r != TDFU_SUCCESS) {
-            LOG_ERROR("DFU download stalled at %zu/%zu (status %u, state %u)\n", offset, len, st.bStatus, st.bState);
+    for (int attempt = 0; attempt < 2; attempt++) {
+        if (dfu_make_idle(dev, info.interface) != TDFU_SUCCESS) {
+            LOG_ERROR("Device not in a DFU-idle state\n");
+            r = TDFU_ERROR_PROTOCOL;
             break;
         }
-        offset += chunk;
-        block++;
-        LOG_INFO("\r  %zu/%zu bytes (%d%%)", offset, len, (int)(offset * 100 / len));
+        block = 0;
+        offset = 0;
+        r = TDFU_SUCCESS;
+        while (offset < len) {
+            uint16_t chunk = (len - offset > info.transfer_size) ? info.transfer_size : (uint16_t)(len - offset);
+            r = dfu_dnload(dev, info.interface, block, data + offset, chunk);
+            if (r != TDFU_SUCCESS)
+                break;
+            r = dfu_poll_until_ready(dev, info.interface, &st);
+            if (r != TDFU_SUCCESS) {
+                LOG_ERROR("DFU download stalled at %zu/%zu (status %u, state %u)\n", offset, len, st.bStatus,
+                          st.bState);
+                break;
+            }
+            offset += chunk;
+            block++;
+            LOG_INFO("\r  %zu/%zu bytes (%d%%)", offset, len, (int)(offset * 100 / len));
+        }
+        if (r == TDFU_SUCCESS || block != 0)
+            break; /* done, or a genuine mid-stream error (not a stale sequence) */
+        LOG_WARN("DFU download: clearing a stale transaction (reload mid-transfer?) and retrying\n");
     }
 
     if (r == TDFU_SUCCESS) {
@@ -426,7 +515,8 @@ tdfu_error_t tdfu_dfu_download(usb_manager_t *manager, int device_index, int alt
     return r;
 }
 
-tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, const char *path, uint32_t size) {
+static tdfu_error_t dfu_upload_impl(usb_manager_t *manager, int device_index, int alt, const char *path,
+                                    uint32_t size) {
     usb_device_t *dev = NULL;
     tdfu_dfu_info_t info;
 
@@ -452,11 +542,6 @@ tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, 
     }
 
     LOG_INFO("DFU upload: alt %d -> %s\n", alt, path);
-    if (dfu_make_idle(dev, info.interface) != TDFU_SUCCESS) {
-        fclose(f);
-        dfu_close_device(dev, info.interface);
-        return TDFU_ERROR_PROTOCOL;
-    }
 
     uint8_t *buf = (uint8_t *)malloc(info.transfer_size);
     if (!buf) {
@@ -465,26 +550,45 @@ tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, 
         return TDFU_ERROR_MEMORY;
     }
 
+    /* A page reload / unplug mid-transfer leaves U-Boot's DFU expecting the next
+     * block of the OLD sequence. The first block-0 request then trips its
+     * "Wrong sequence number" path, which resets the transaction (i_blk_seq_num,
+     * inited) and STALLs into dfuERROR. So on a block-0 failure we clear the
+     * error (CLRSTATUS via make_idle) and retry once - the retry starts clean.
+     * A healthy device completes on the first attempt and never retries. */
     uint16_t block = 0;
     uint32_t total = 0;
-    for (;;) {
-        int got = 0;
-        r = dfu_upload_block(dev, info.interface, block, buf, info.transfer_size, &got);
-        if (r != TDFU_SUCCESS)
+    for (int attempt = 0; attempt < 2; attempt++) {
+        if (dfu_make_idle(dev, info.interface) != TDFU_SUCCESS) {
+            r = TDFU_ERROR_PROTOCOL;
             break;
-        if (got > 0) {
-            if (fwrite(buf, 1, got, f) != (size_t)got) {
-                r = TDFU_ERROR_FILE_IO;
-                break;
-            }
-            total += got;
-            LOG_INFO("\r  %u bytes", total);
         }
-        block++;
-        if (got < (int)info.transfer_size)
-            break; /* short block = end of upload */
-        if (size && total >= size)
-            break;
+        rewind(f);
+        block = 0;
+        total = 0;
+        r = TDFU_SUCCESS;
+        for (;;) {
+            int got = 0;
+            r = dfu_upload_block(dev, info.interface, block, buf, info.transfer_size, &got);
+            if (r != TDFU_SUCCESS)
+                break;
+            if (got > 0) {
+                if (fwrite(buf, 1, got, f) != (size_t)got) {
+                    r = TDFU_ERROR_FILE_IO;
+                    break;
+                }
+                total += got;
+                LOG_INFO("\r  %u bytes", total);
+            }
+            block++;
+            if (got < (int)info.transfer_size)
+                break; /* short block = end of upload */
+            if (size && total >= size)
+                break;
+        }
+        if (r == TDFU_SUCCESS || block != 0)
+            break; /* done, or a genuine mid-stream error (not a stale sequence) */
+        LOG_WARN("DFU upload: clearing a stale transaction (reload mid-transfer?) and retrying\n");
     }
     LOG_INFO("\n");
     if (r == TDFU_SUCCESS)
@@ -493,6 +597,24 @@ tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, 
     free(buf);
     fclose(f);
     dfu_close_device(dev, info.interface);
+    return r;
+}
+
+/* Public download/upload: run the operation, and if it fails with a device-comms
+ * error (a wedged gadget after an interrupted transfer), USB-reset the device and
+ * retry once. The reset re-inits the dwc2 EP0 that an interrupted DNLOAD leaves
+ * stuck; the retry's own make_idle + stale-sequence handling does the rest. */
+tdfu_error_t tdfu_dfu_download(usb_manager_t *manager, int device_index, int alt, const char *path) {
+    tdfu_error_t r = dfu_download_impl(manager, device_index, alt, path);
+    if (r != TDFU_SUCCESS && dfu_err_recoverable(r) && dfu_reset_device(manager, device_index))
+        r = dfu_download_impl(manager, device_index, alt, path);
+    return r;
+}
+
+tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, const char *path, uint32_t size) {
+    tdfu_error_t r = dfu_upload_impl(manager, device_index, alt, path, size);
+    if (r != TDFU_SUCCESS && dfu_err_recoverable(r) && dfu_reset_device(manager, device_index))
+        r = dfu_upload_impl(manager, device_index, alt, path, size);
     return r;
 }
 

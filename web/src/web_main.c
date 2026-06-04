@@ -8,8 +8,8 @@
 
 #include <stdbool.h>
 
-/* libtdfu references this; default off for web builds */
-bool g_debug_enabled = false;
+/* libtdfu references this; enabled so [DEBUG] lines reach the in-page log */
+bool g_debug_enabled = true;
 
 const char *tdfu_get_version(void) {
     return VERSION;

@@ -8,6 +8,7 @@
 #include "tdfu/core.h"
 #include "tdfu/constants.h"
 #include "tdfu/tdfu.h"
+#include "tdfu/dfu.h"
 #include "ddr_config_database.h"
 #include "ddr_binary_builder.h"
 #include <stdlib.h>
@@ -372,3 +373,50 @@ tdfu_error_t tdfu_set_device_variant(int device_index, tdfu_variant_t variant) {
 /* tdfu_variant_to_string / tdfu_variant_from_string live in utils.c
  * (formerly processor_variant_to_string / string_to_processor_variant);
  * the facade no longer wraps them. */
+
+#ifdef __EMSCRIPTEN__
+/* Web/JS convenience wrappers for the DFU backend, bound to the core
+ * g_manager. They take alt-setting names (or "") to avoid marshalling the
+ * tdfu_dfu_info_t struct across the JS boundary. */
+tdfu_error_t tdfu_web_dfu_bootstrap(int device_index, const char *firmware_dir, const char *force_cpu) {
+    return tdfu_dfu_bootstrap(&g_manager, device_index, firmware_dir, force_cpu);
+}
+
+static int web_dfu_resolve_alt(int device_index, const char *alt_name) {
+    tdfu_dfu_info_t info;
+    tdfu_error_t pr = tdfu_dfu_probe(&g_manager, device_index, &info);
+    if (pr != TDFU_SUCCESS) {
+        LOG_ERROR("DFU probe failed: %s\n", tdfu_error_to_string(pr));
+        return -1;
+    }
+    LOG_INFO("DFU probe ok: %d alt setting(s), transfer size %u, DFU %x.%02x\n", info.alt_count, info.transfer_size,
+             (info.bcd_dfu >> 8) & 0xff, info.bcd_dfu & 0xff);
+    for (int i = 0; i < info.alt_count; i++)
+        LOG_INFO("  alt %d: \"%s\"\n", info.alts[i].alt, info.alts[i].name);
+
+    if (alt_name && alt_name[0]) {
+        int a = tdfu_dfu_find_alt(&info, alt_name);
+        if (a < 0)
+            LOG_ERROR("DFU alt \"%s\" not found\n", alt_name);
+        return a;
+    }
+    if (info.alt_count == 1)
+        return info.alts[0].alt;
+    LOG_ERROR("Device exposes %d alt settings - select one in Settings\n", info.alt_count);
+    return -1;
+}
+
+tdfu_error_t tdfu_web_dfu_download(int device_index, const char *alt_name, const char *path) {
+    int alt = web_dfu_resolve_alt(device_index, alt_name);
+    if (alt < 0)
+        return TDFU_ERROR_INVALID_PARAMETER;
+    return tdfu_dfu_download(&g_manager, device_index, alt, path);
+}
+
+tdfu_error_t tdfu_web_dfu_upload(int device_index, const char *alt_name, const char *path, uint32_t size) {
+    int alt = web_dfu_resolve_alt(device_index, alt_name);
+    if (alt < 0)
+        return TDFU_ERROR_INVALID_PARAMETER;
+    return tdfu_dfu_upload(&g_manager, device_index, alt, path, size);
+}
+#endif /* __EMSCRIPTEN__ */
