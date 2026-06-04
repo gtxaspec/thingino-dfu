@@ -57,4 +57,13 @@ tdfu_error_t tdfu_dfu_download(usb_manager_t *manager, int device_index, int alt
  */
 tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, const char *path, uint32_t size);
 
+/**
+ * Bootstrap a device from the Ingenic bootrom (a108:c309) into U-Boot DFU mode:
+ * detect the SoC variant (probe program, or force_cpu), USB-boot the matching
+ * DFU-capable SPL + U-Boot from <firmware_dir>/dfu/<variant>/, and start it.
+ * The device then re-enumerates as a DFU gadget (a108:4d44).
+ */
+tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const char *firmware_dir,
+                                const char *force_cpu);
+
 #endif /* TDFU_DFU_H */

@@ -452,3 +452,115 @@ tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, 
     dfu_close_device(dev, info.interface);
     return r;
 }
+
+/* ====================================================================== */
+/* Bootrom -> DFU bootstrap (port of tools/t31-usbboot.py)                 */
+/* ====================================================================== */
+
+/* Per-variant USB-boot load parameters. Defaults are the XBurst1 (T31)
+ * values from t31-usbboot.py. XBurst2 SoCs (T40/T41/A1) load a larger SPL
+ * and may need a separate DDR-config blob + exec_size hint - fill these in
+ * per SoC (verified against the mainline U-Boot) as firmware/dfu is
+ * populated. */
+typedef struct {
+    uint32_t spl_addr;
+    uint32_t spl_entry;
+    uint32_t uboot_addr;
+    uint32_t uboot_entry;
+    uint32_t exec_size; /* extra SET_DATA_LENGTH before START1 (XBurst2); 0 = skip */
+} dfu_boot_params_t;
+
+static dfu_boot_params_t dfu_boot_params_for(tdfu_variant_t variant) {
+    /* XBurst1 default (t31-usbboot.py): SPL at 0x80001000, entry past the
+     * 0x800 signature, U-Boot at 0x80100000. */
+    dfu_boot_params_t p = {0x80001000, 0x80001800, 0x80100000, 0x80100000, 0};
+    (void)variant;
+    return p;
+}
+
+tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const char *firmware_dir,
+                                const char *force_cpu) {
+    tdfu_device_info_t *devs = NULL;
+    int n = 0;
+    usb_device_t *dev = NULL;
+    uint8_t *spl = NULL, *uboot = NULL;
+    size_t spl_len = 0, uboot_len = 0;
+    char spl_path[512], uboot_path[512];
+    tdfu_variant_t variant;
+    const char *name;
+    const char *root = firmware_dir ? firmware_dir : "./firmware";
+    dfu_boot_params_t p;
+
+    tdfu_error_t r = usb_manager_find_devices(manager, &devs, &n);
+    if (r != TDFU_SUCCESS)
+        return r;
+    if (device_index < 0 || device_index >= n) {
+        free(devs);
+        return TDFU_ERROR_DEVICE_NOT_FOUND;
+    }
+    r = usb_manager_open_device(manager, &devs[device_index], &dev);
+    free(devs);
+    if (r != TDFU_SUCCESS)
+        return r;
+    usb_device_claim_interface(dev);
+
+    /* 1) Determine the SoC variant: forced, or the bootrom probe program. */
+    if (force_cpu) {
+        variant = tdfu_variant_from_string(force_cpu);
+    } else {
+        r = protocol_detect_soc(dev, &variant);
+        if (r != TDFU_SUCCESS) {
+            LOG_ERROR("SoC auto-detect failed; pass --cpu <variant>\n");
+            usb_device_close(dev);
+            free(dev);
+            return r;
+        }
+    }
+    name = variant_to_firmware_dir(variant);
+    LOG_INFO("DFU bootstrap: SoC %s\n", name);
+
+    /* 2) Load the DFU-capable SPL + U-Boot for this variant. */
+    snprintf(spl_path, sizeof(spl_path), "%s/dfu/%s/spl.bin", root, name);
+    snprintf(uboot_path, sizeof(uboot_path), "%s/dfu/%s/uboot.bin", root, name);
+    r = load_file(spl_path, &spl, &spl_len);
+    if (r != TDFU_SUCCESS) {
+        LOG_ERROR("Missing DFU SPL: %s\n", spl_path);
+        goto out;
+    }
+    r = load_file(uboot_path, &uboot, &uboot_len);
+    if (r != TDFU_SUCCESS) {
+        LOG_ERROR("Missing DFU U-Boot: %s\n", uboot_path);
+        goto out;
+    }
+
+    /* 3) USB-boot sequence (mirrors t31-usbboot.py). */
+    p = dfu_boot_params_for(variant);
+    LOG_INFO("stage1 SPL: %zu bytes -> 0x%08x (entry 0x%08x)\n", spl_len, p.spl_addr, p.spl_entry);
+    r = bootstrap_load_data_to_memory(dev, spl, spl_len, p.spl_addr);
+    if (r != TDFU_SUCCESS)
+        goto out;
+    if (p.exec_size)
+        protocol_set_data_length(dev, p.exec_size);
+    r = protocol_prog_stage1(dev, p.spl_entry);
+    if (r != TDFU_SUCCESS)
+        goto out;
+
+    /* stage1 brings up clk+DDR and returns to the bootrom; let it settle. */
+    tdfu_sleep_milliseconds(1000);
+
+    LOG_INFO("stage2 U-Boot: %zu bytes -> 0x%08x (entry 0x%08x)\n", uboot_len, p.uboot_addr, p.uboot_entry);
+    r = bootstrap_load_data_to_memory(dev, uboot, uboot_len, p.uboot_addr);
+    if (r != TDFU_SUCCESS)
+        goto out;
+    protocol_flush_cache(dev);
+    protocol_prog_stage2(dev, p.uboot_entry); /* tolerates the re-enumeration error */
+    LOG_INFO("U-Boot starting; device will re-enumerate in DFU mode\n");
+    r = TDFU_SUCCESS;
+
+out:
+    free(spl);
+    free(uboot);
+    usb_device_close(dev);
+    free(dev);
+    return r;
+}

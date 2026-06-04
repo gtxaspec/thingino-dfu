@@ -311,6 +311,8 @@ tdfu_error_t firmware_load_from_dir(tdfu_variant_t variant, const char *firmware
                                         firmware_files_t *firmware);
 tdfu_error_t firmware_load_from_files(tdfu_variant_t variant, const char *config_file, const char *spl_file,
                                           const char *uboot_file, firmware_files_t *firmware);
+/* Map a variant to its firmware sub-directory name (shared by cloner + dfu paths). */
+const char *variant_to_firmware_dir(tdfu_variant_t variant);
 void firmware_cleanup(firmware_files_t *firmware);
 tdfu_error_t load_file(const char *filename, uint8_t **data, size_t *size);
 tdfu_error_t firmware_file_check_readable(const char *path);

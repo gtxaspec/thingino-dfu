@@ -395,6 +395,17 @@ int main(int argc, char *argv[]) {
 
     /* DFU mode: device is already running U-Boot's `dfu` command */
     if (options.dfu) {
+        /* --dfu -b: bootstrap a bootrom device into U-Boot DFU mode */
+        if (options.bootstrap) {
+            result = tdfu_dfu_bootstrap(&manager, options.device_index, options.firmware_dir, options.force_cpu);
+            usb_manager_cleanup(&manager);
+            if (result != TDFU_SUCCESS) {
+                LOG_ERROR("DFU bootstrap failed: %s\n", tdfu_error_to_string(result));
+                return EXIT_DEVICE_ERROR;
+            }
+            printf("Re-run with --dfu -l / -w / -r once the DFU device enumerates.\n");
+            return 0;
+        }
         tdfu_dfu_info_t dfu_info;
         result = tdfu_dfu_probe(&manager, options.device_index, &dfu_info);
         if (result != TDFU_SUCCESS) {

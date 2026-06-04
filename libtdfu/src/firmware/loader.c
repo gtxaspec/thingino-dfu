@@ -24,7 +24,7 @@
  * Map processor variant to firmware directory name.
  * Most variants map 1:1, but some share firmware directories.
  */
-static const char *variant_to_firmware_dir(tdfu_variant_t variant) {
+const char *variant_to_firmware_dir(tdfu_variant_t variant) {
     switch (variant) {
     case TDFU_VARIANT_A1:
         return "a1_n_ne_x";
