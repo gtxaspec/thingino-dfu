@@ -135,67 +135,90 @@ static tdfu_error_t dfu_poll_until_ready(usb_device_t *dev, uint16_t iface, dfu_
 /* Descriptor parsing + device discovery                                  */
 /* ====================================================================== */
 
-/* Extract wTransferSize/bmAttributes/bcdDFUVersion from a DFU functional
- * descriptor (type 0x21) if present in the given extra-descriptor blob. */
-static bool dfu_parse_func_desc(const uint8_t *extra, int len, tdfu_dfu_info_t *info) {
-    while (len >= 2) {
-        uint8_t blen = extra[0];
-        uint8_t btype = extra[1];
-        if (blen < 2 || blen > len)
+/* Standard GET_DESCRIPTOR (device-to-host, standard, device). Returns the
+ * number of bytes read, or -1. Uses only control transfers, so it works over
+ * native libusb and the WebUSB shim alike. */
+static int dfu_get_descriptor(usb_device_t *dev, uint8_t type, uint8_t index, uint16_t langid, uint8_t *buf,
+                              uint16_t len) {
+    int got = 0;
+    tdfu_error_t r =
+        usb_device_control_transfer(dev, 0x80, 0x06, (uint16_t)((type << 8) | index), langid, buf, len, &got);
+    return (r == TDFU_SUCCESS) ? got : -1;
+}
+
+/* Read a USB string descriptor (index) as ASCII (best-effort from UTF-16LE). */
+static void dfu_get_string(usb_device_t *dev, uint8_t index, char *out, size_t outsz) {
+    out[0] = '\0';
+    if (!index)
+        return;
+    uint8_t buf[256];
+    int n = dfu_get_descriptor(dev, 0x03 /* STRING */, index, 0x0409, buf, sizeof(buf));
+    if (n < 2 || buf[1] != 0x03)
+        return;
+    int chars = (buf[0] - 2) / 2;
+    size_t o = 0;
+    for (int i = 0; i < chars && (size_t)(2 + i * 2 + 1) < (size_t)n && o + 1 < outsz; i++) {
+        uint16_t ch = (uint16_t)buf[2 + i * 2] | ((uint16_t)buf[2 + i * 2 + 1] << 8);
+        out[o++] = (ch && ch < 0x80) ? (char)ch : '?';
+    }
+    out[o] = '\0';
+}
+
+/* Read the full active configuration descriptor (including class-specific
+ * descriptors like the DFU functional descriptor) into buf. Returns length. */
+static int dfu_read_config(usb_device_t *dev, uint8_t *buf, uint16_t cap) {
+    uint8_t hdr[9];
+    if (dfu_get_descriptor(dev, 0x02 /* CONFIGURATION */, 0, 0, hdr, sizeof(hdr)) < 4)
+        return -1;
+    uint16_t total = (uint16_t)hdr[2] | ((uint16_t)hdr[3] << 8);
+    if (total < 4 || total > cap)
+        return -1;
+    int n = dfu_get_descriptor(dev, 0x02, 0, 0, buf, total);
+    return (n >= 4) ? n : -1;
+}
+
+/* Does this raw config descriptor expose a DFU interface (class 0xFE/sub 1)? */
+static bool dfu_config_is_dfu(const uint8_t *cfg, int total) {
+    for (int pos = 0; pos + 2 <= total;) {
+        uint8_t blen = cfg[pos];
+        if (blen < 2 || pos + blen > total)
             break;
-        if (btype == DFU_FUNC_DESC_TYPE && blen >= 9) {
-            info->attributes = extra[2];
-            info->transfer_size = (uint16_t)extra[5] | ((uint16_t)extra[6] << 8);
-            info->bcd_dfu = (uint16_t)extra[7] | ((uint16_t)extra[8] << 8);
+        if (cfg[pos + 1] == 0x04 /* INTERFACE */ && blen >= 9 && cfg[pos + 5] == DFU_INTERFACE_CLASS &&
+            cfg[pos + 6] == DFU_INTERFACE_SUBCLASS)
             return true;
-        }
-        extra += blen;
-        len -= blen;
+        pos += blen;
     }
     return false;
 }
 
 static tdfu_error_t dfu_read_info(usb_device_t *dev, tdfu_dfu_info_t *info) {
     memset(info, 0, sizeof(*info));
-    info->transfer_size = 1024; /* conservative default if no functional descriptor */
+    info->transfer_size = 1024; /* default if no functional descriptor is present */
 
-    struct libusb_config_descriptor *cfg = NULL;
-    if (libusb_get_active_config_descriptor(dev->device, &cfg) != 0 || !cfg) {
-        /* Fall back to the first config descriptor when the kernel has not
-         * set an active configuration on the gadget. */
-        if (libusb_get_config_descriptor(dev->device, 0, &cfg) != 0 || !cfg)
-            return TDFU_ERROR_PROTOCOL;
-    }
+    uint8_t cfg[1024];
+    int total = dfu_read_config(dev, cfg, sizeof(cfg));
+    if (total < 4)
+        return TDFU_ERROR_PROTOCOL;
 
-    bool found_func = false;
-    for (int i = 0; i < cfg->bNumInterfaces && info->alt_count < TDFU_DFU_MAX_ALTS; i++) {
-        const struct libusb_interface *itf = &cfg->interface[i];
-        for (int j = 0; j < itf->num_altsetting && info->alt_count < TDFU_DFU_MAX_ALTS; j++) {
-            const struct libusb_interface_descriptor *id = &itf->altsetting[j];
-            if (id->bInterfaceClass != DFU_INTERFACE_CLASS || id->bInterfaceSubClass != DFU_INTERFACE_SUBCLASS)
-                continue;
-
-            info->interface = id->bInterfaceNumber;
+    /* Walk the raw config descriptor: collect DFU alt-settings (+ names) and
+     * the DFU functional descriptor (wTransferSize / bcdDFU). */
+    for (int pos = 0; pos + 2 <= total;) {
+        uint8_t blen = cfg[pos], btype = cfg[pos + 1];
+        if (blen < 2 || pos + blen > total)
+            break;
+        if (btype == 0x04 /* INTERFACE */ && blen >= 9 && cfg[pos + 5] == DFU_INTERFACE_CLASS &&
+            cfg[pos + 6] == DFU_INTERFACE_SUBCLASS && info->alt_count < TDFU_DFU_MAX_ALTS) {
+            info->interface = cfg[pos + 2];
             tdfu_dfu_alt_t *a = &info->alts[info->alt_count++];
-            a->alt = id->bAlternateSetting;
-            a->name[0] = '\0';
-            if (id->iInterface) {
-                unsigned char s[64];
-                int n = libusb_get_string_descriptor_ascii(dev->handle, id->iInterface, s, sizeof(s));
-                if (n > 0) {
-                    if (n >= (int)sizeof(a->name))
-                        n = sizeof(a->name) - 1;
-                    memcpy(a->name, s, n);
-                    a->name[n] = '\0';
-                }
-            }
-            if (!found_func)
-                found_func = dfu_parse_func_desc(id->extra, id->extra_length, info);
+            a->alt = cfg[pos + 3];
+            dfu_get_string(dev, cfg[pos + 8] /* iInterface */, a->name, sizeof(a->name));
+        } else if (btype == DFU_FUNC_DESC_TYPE && blen >= 9) {
+            info->attributes = cfg[pos + 2];
+            info->transfer_size = (uint16_t)cfg[pos + 5] | ((uint16_t)cfg[pos + 6] << 8);
+            info->bcd_dfu = (uint16_t)cfg[pos + 7] | ((uint16_t)cfg[pos + 8] << 8);
         }
+        pos += blen;
     }
-    if (!found_func)
-        dfu_parse_func_desc(cfg->extra, cfg->extra_length, info);
-    libusb_free_config_descriptor(cfg);
 
     if (info->alt_count == 0) {
         LOG_ERROR("No DFU interface found - is the device in U-Boot DFU mode?\n");
@@ -206,8 +229,10 @@ static tdfu_error_t dfu_read_info(usb_device_t *dev, tdfu_dfu_info_t *info) {
     return TDFU_SUCCESS;
 }
 
-/* Open the index-th USB device that exposes a DFU interface (like dfu-util,
- * we match the DFU interface descriptor, not a specific VID/PID). */
+/* Open the index-th Ingenic device that exposes a DFU interface. Restricted to
+ * Ingenic VIDs (so we never open unrelated USB devices), and the DFU interface
+ * is confirmed by reading the config descriptor over a control transfer - the
+ * same path works on native libusb and the WebUSB shim. */
 static tdfu_error_t dfu_open_device(usb_manager_t *manager, int index, usb_device_t **out) {
     if (!manager || !manager->context)
         return TDFU_ERROR_INIT_FAILED;
@@ -218,63 +243,44 @@ static tdfu_error_t dfu_open_device(usb_manager_t *manager, int index, usb_devic
         return TDFU_ERROR_INIT_FAILED;
 
     LOG_DEBUG("dfu_open_device: scanning %zd USB devices for a DFU interface\n", cnt);
-    libusb_device *target = NULL;
+    usb_device_t *found = NULL;
     int match = 0;
-    for (ssize_t i = 0; i < cnt && !target; i++) {
-        struct libusb_config_descriptor *cfg = NULL;
-        int rc = libusb_get_active_config_descriptor(list[i], &cfg);
-        if (rc != 0 || !cfg) {
-            /* The "active config" query fails when the kernel has not set a
-             * configuration (common for a driverless DFU gadget); fall back
-             * to the first config descriptor. */
-            rc = libusb_get_config_descriptor(list[i], 0, &cfg);
-            if (rc != 0 || !cfg) {
-                LOG_DEBUG("  [%zd] no config descriptor (%s)\n", i, libusb_error_name(rc));
-                continue;
+    for (ssize_t i = 0; i < cnt && !found; i++) {
+        struct libusb_device_descriptor dd;
+        if (libusb_get_device_descriptor(list[i], &dd) != 0)
+            continue;
+        if (dd.idVendor != 0x601A && dd.idVendor != 0xA108)
+            continue;
+
+        libusb_device_handle *handle = NULL;
+        if (libusb_open(list[i], &handle) != 0 || !handle)
+            continue;
+
+        usb_device_t probe = {0};
+        probe.handle = handle;
+        probe.context = manager->context;
+        uint8_t cfg[512];
+        int n = dfu_read_config(&probe, cfg, sizeof(cfg));
+        if (n >= 4 && dfu_config_is_dfu(cfg, n) && match++ == index) {
+            usb_device_t *dev = (usb_device_t *)calloc(1, sizeof(*dev));
+            if (!dev) {
+                libusb_close(handle);
+                libusb_free_device_list(list, 1);
+                return TDFU_ERROR_MEMORY;
             }
-        }
-        bool is_dfu = false;
-        for (int a = 0; a < cfg->bNumInterfaces && !is_dfu; a++) {
-            for (int b = 0; b < cfg->interface[a].num_altsetting; b++) {
-                const struct libusb_interface_descriptor *id = &cfg->interface[a].altsetting[b];
-                if (id->bInterfaceClass == DFU_INTERFACE_CLASS && id->bInterfaceSubClass == DFU_INTERFACE_SUBCLASS) {
-                    is_dfu = true;
-                    break;
-                }
-            }
-        }
-        libusb_free_config_descriptor(cfg);
-        if (is_dfu) {
-            if (match == index)
-                target = list[i];
-            match++;
+            dev->handle = handle;
+            dev->context = manager->context;
+            dev->closed = false;
+            found = dev;
+        } else {
+            libusb_close(handle);
         }
     }
-
-    if (!target) {
-        libusb_free_device_list(list, 1);
-        return TDFU_ERROR_DEVICE_NOT_FOUND;
-    }
-
-    libusb_device_handle *handle = NULL;
-    int rc = libusb_open(target, &handle);
     libusb_free_device_list(list, 1);
-    if (rc != 0 || !handle) {
-        LOG_ERROR("Failed to open DFU device: %s\n", libusb_error_name(rc));
-        return TDFU_ERROR_OPEN_FAILED;
-    }
-    libusb_set_auto_detach_kernel_driver(handle, 1);
 
-    usb_device_t *dev = (usb_device_t *)calloc(1, sizeof(*dev));
-    if (!dev) {
-        libusb_close(handle);
-        return TDFU_ERROR_MEMORY;
-    }
-    dev->handle = handle;
-    dev->device = libusb_get_device(handle);
-    dev->context = manager->context;
-    dev->closed = false;
-    *out = dev;
+    if (!found)
+        return TDFU_ERROR_DEVICE_NOT_FOUND;
+    *out = found;
     return TDFU_SUCCESS;
 }
 
@@ -288,17 +294,18 @@ static void dfu_close_device(usb_device_t *dev, int iface) {
     free(dev);
 }
 
+/* SET_INTERFACE (host-to-device, standard, interface) to select the alt. */
+static tdfu_error_t dfu_set_interface(usb_device_t *dev, uint16_t iface, uint16_t alt) {
+    return usb_device_control_transfer(dev, 0x01, 0x0B, alt, iface, NULL, 0, NULL);
+}
+
 /* Set the device configuration (the driverless DFU gadget often has none set,
  * which makes claim fail), claim the DFU interface, and select the alt. */
 static tdfu_error_t dfu_claim_alt(usb_device_t *dev, int iface, int alt) {
-    struct libusb_config_descriptor *cfg = NULL;
+    uint8_t hdr[9];
     int cfgval = 1;
-    if (libusb_get_active_config_descriptor(dev->device, &cfg) == 0 && cfg)
-        cfgval = cfg->bConfigurationValue;
-    else if (libusb_get_config_descriptor(dev->device, 0, &cfg) == 0 && cfg)
-        cfgval = cfg->bConfigurationValue;
-    if (cfg)
-        libusb_free_config_descriptor(cfg);
+    if (dfu_get_descriptor(dev, 0x02, 0, 0, hdr, sizeof(hdr)) >= 6)
+        cfgval = hdr[5]; /* bConfigurationValue */
 
     int cur = 0;
     if (libusb_get_configuration(dev->handle, &cur) != 0 || cur != cfgval)
@@ -309,7 +316,7 @@ static tdfu_error_t dfu_claim_alt(usb_device_t *dev, int iface, int alt) {
         return TDFU_ERROR_OPEN_FAILED;
     }
     /* Selecting the alt is a no-op for the default alt 0; only fatal otherwise. */
-    if (libusb_set_interface_alt_setting(dev->handle, iface, alt) != 0 && alt != 0) {
+    if (dfu_set_interface(dev, (uint16_t)iface, (uint16_t)alt) != TDFU_SUCCESS && alt != 0) {
         LOG_ERROR("Failed to select DFU alt setting %d\n", alt);
         return TDFU_ERROR_PROTOCOL;
     }
