@@ -1,6 +1,91 @@
 # thingino-dfu
 
-USB flashing tool for Ingenic SoC devices. Bootstraps a device over USB (DDR init, SPL, U-Boot), then reads or writes SPI NOR flash. Automatically detects the SoC variant, no manual configuration needed.
+USB flashing tool for Ingenic SoC devices (T10-T41, A1). It boots a device from its USB bootrom into U-Boot, then reads or writes the on-board SPI flash. The SoC variant is auto-detected - no manual configuration needed.
+
+Two backends are supported:
+
+- **DFU (default, preferred)** - drives mainline U-Boot's standard USB DFU mode.
+- **Cloner (legacy)** - reimplements Ingenic's vendor USB-boot flash protocol.
+
+> **Why DFU is the preferred method**
+>
+> DFU is a real USB standard - the [USB Device Firmware Upgrade 1.1](https://www.usb.org/sites/default/files/DFU_1.1.pdf) class - and mainline (and thingino) U-Boot implements it natively through the `dfu` command. The device exposes its flash as named partitions (DFU alt-settings, defined by U-Boot's `dfu_alt_info`), and the host simply moves bytes to or from them. The **device side owns** the medium (SPI NOR / NAND / MMC / MTD), the DDR bring-up, and the partition layout.
+>
+> That makes DFU portable (any DFU host works, including `dfu-util`), future-proof, and free of reverse-engineered, per-SoC flash protocols. The **cloner** backend is the older reverse-engineered vendor path - the host does DDR init, JEDEC flash detection, and drives the raw read/write protocol itself. It's kept for bring-up and for devices that don't yet run a DFU-capable U-Boot.
+
+## Backends
+
+### DFU (default)
+
+The device runs U-Boot's `dfu` command and enumerates as a standard USB DFU 1.1 gadget. The host does two things:
+
+1. **Bootstrap** (`-b`): USB-boots a DFU-capable SPL + U-Boot onto the device from its bootrom. The device then re-enumerates as a DFU gadget.
+2. **Transfer**: lists the alt-settings (partitions named by `dfu_alt_info`) and uploads (reads) or downloads (writes) to them.
+
+Plain DFU 1.1, no DfuSe (ST) extension. Because it's standard DFU, the medium and partition layout are entirely a device-side concern - the host only moves bytes.
+
+### Cloner (legacy)
+
+`--cloner` selects the reverse-engineered Ingenic vendor protocol. The host performs DDR init (generated dynamically from a compiled-in chip database - no vendor `ddr.bin` needed), auto-detects the flash chip via JEDEC ID, and drives the raw read/write protocol itself. Useful for bring-up or where a DFU U-Boot isn't available.
+
+## Usage
+
+```
+# DFU (default) - device runs U-Boot's `dfu` command:
+thingino-dfu -b                              # Bootrom -> U-Boot DFU mode (auto-detect SoC)
+thingino-dfu -l                              # List DFU alt-settings (partitions)
+thingino-dfu --alt rootfs -w rootfs.bin      # Write a partition via DFU
+thingino-dfu --alt u-boot -r uboot.bin       # Read a partition via DFU
+
+# Cloner (legacy) - vendor USB-boot flash protocol:
+thingino-dfu --cloner -i 0 -b -w firmware.bin   # Bootstrap + write whole flash
+thingino-dfu --list-cpus                     # Show supported CPU targets
+```
+
+The SoC is auto-detected by reading hardware ID registers from the bootrom. Use `--cpu <variant>` to override if needed.
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `-l, --list` | List connected Ingenic USB devices (or DFU alt-settings, in DFU mode) |
+| `-i, --index <n>` | Device index (default: 0) |
+| `-b, --bootstrap` | Bootstrap device (bootrom -> U-Boot) |
+| `-w, --write <file>` | Write firmware to flash |
+| `-r, --read <file>` | Read firmware from flash |
+| `--alt <name/num>` | DFU alt-setting (partition) to target |
+| `--cloner` | Use the legacy cloner backend (default: DFU) |
+| `--cpu <variant>` | Override SoC variant (default: auto-detect) |
+| `--spl <file>` / `--uboot <file>` | Use a specific SPL / U-Boot for bootstrap (skips SoC detection) |
+| `--firmware-dir <dir>` | Firmware root directory (default: `./firmware`) |
+| `--wait` | Wait for the device to appear before acting |
+| `--host <addr>` | Connect to a remote `dfu-remote` daemon |
+| `-v, --verbose` | Verbose output |
+| `-d, --debug` | Debug output |
+
+Cloner-only options: `--flash-chip <name>` (override JEDEC auto-detect), `--chunk-size <bytes>`, `--erase`, `--reboot`, `--skip-ddr`.
+
+## Supported Platforms
+
+| SoC | Arch | DDR | Bootstrap | Write | Read | Auto-Detect |
+|-----|------|-----|-----------|-------|------|-------------|
+| T10 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
+| T20 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
+| T21 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
+| T23 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
+| T30 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
+| T31 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
+| T31A | xburst1 | DDR3 | Tested | Tested | Tested | Yes |
+| T32 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
+| T40 | xburst2 | DDR2 | Tested | Tested | Tested | Yes |
+| T41 | xburst2 | DDR3 | Tested | Tested | Tested | Yes |
+| A1 | xburst2 | DDR3 | Tested | Tested | Tested | Yes |
+
+## SoC Auto-Detection
+
+Both backends auto-detect the SoC during bootstrap: the tool uploads a tiny MIPS program to the device's bootrom that reads hardware ID registers (SoC ID, EFUSE sub-type) and returns the exact chip variant. For DFU this selects the right DFU-capable U-Boot; for cloner it also drives DDR type selection (DDR2 vs DDR3).
+
+Detected sub-variants include: T31X, T31N, T31A, T31AL, T31ZX, T32LQ, T40N, T40NN, T40XP, T41NQ, A1, and more.
 
 ## Build
 
@@ -38,9 +123,7 @@ cd web
 bash build.sh
 ```
 
-Output: `web/dist/tdfu.js` + `web/dist/tdfu.wasm`. Serve `web/` with any HTTP server and open in Chrome/Edge. Copy `firmware/` to `web/public/firmware/` for the bootstrap binaries.
-
-The web flasher compiles the entire C library to WebAssembly and replaces libusb with a WebUSB shim. Supports detect, bootstrap, read, and write directly from the browser — no install required. Requires HTTPS or localhost.
+Output: `web/dist/`. Serve it with any HTTPS server and open in Chrome/Edge (WebUSB requires a secure context). The web flasher compiles the entire C library to WebAssembly and replaces libusb with a WebUSB shim, so detect, bootstrap, read, and write all run in the browser - no install required. DFU is the default backend; an Advanced panel lets you supply a custom SPL + U-Boot for the bootstrap.
 
 ### Android
 
@@ -51,119 +134,60 @@ cd android
 ./gradlew assembleRelease
 ```
 
-APK output: `android/app/build/outputs/apk/release/app-release.apk`
-
-The Android app supports both local USB (via USB OTG) and remote mode (connecting to a `dfu-remote` daemon over TCP).
+APK: `android/app/build/outputs/apk/release/app-release.apk`. The app supports local USB (via USB OTG) and remote mode (connecting to a `dfu-remote` daemon over TCP); the backend (DFU / cloner) is chosen in Settings.
 
 ### Install
 
 ```
 sudo make install                    # install to /usr/local
-make install PREFIX=/opt/thingino   # custom prefix
+make install PREFIX=/opt/thingino    # custom prefix
 sudo make uninstall                  # remove
 ```
 
 Output binaries:
-- Linux: `build/cli/thingino-dfu`
+- Linux: `build/cli/thingino-dfu`, `build/dfu-remote/dfu-remote`
 - ARM64: `build-aarch64/cli/thingino-dfu`
 - Windows: `build-win64/cli/thingino-dfu.exe` + `libusb-1.0.dll`
 - Android: `android/app/build/outputs/apk/release/app-release.apk`
-- Web: `web/dist/tdfu.js` + `web/dist/tdfu.wasm` (serve with any HTTP server)
-
-## Usage
-
-```
-# DFU is the default backend (device runs U-Boot's `dfu` command):
-thingino-dfu -b                              # Bootrom -> U-Boot DFU mode (auto-detect SoC)
-thingino-dfu -l                              # List DFU alt-settings
-thingino-dfu --alt rootfs -w rootfs.bin      # Flash an alt-setting via DFU
-thingino-dfu --alt u-boot -r uboot.bin       # Read an alt-setting via DFU
-
-# Legacy cloner backend (vendor USB-boot flash protocol):
-thingino-dfu --cloner -i 0 -b -w firmware.bin   # Bootstrap + write
-thingino-dfu --list-cpus                     # Show supported CPU targets
-```
-
-The SoC is auto-detected by reading hardware ID registers from the bootrom. Use `--cpu <variant>` to override if needed.
-
-### Options
-
-| Option | Description |
-|--------|-------------|
-| `-l, --list` | List connected Ingenic USB devices |
-| `-i, --index <n>` | Device index (default: 0) |
-| `-b, --bootstrap` | Bootstrap device (DDR + SPL + U-Boot) |
-| `-w, --write <file>` | Write firmware to flash |
-| `-r, --read <file>` | Read firmware from flash |
-| `--cloner` | Use the legacy cloner backend (default: DFU) |
-| `--alt <name/num>` | DFU alt-setting to target |
-| `--cpu <variant>` | Override SoC variant (default: auto-detect) |
-| `--flash-chip <name>` | Override flash chip (default: auto-detect via JEDEC) |
-| `--chunk-size <bytes>` | Write chunk size (default: 128KB) |
-| `--erase` | Erase flash before writing |
-| `--reboot` | Reboot device after write |
-| `--skip-ddr` | Skip DDR configuration |
-| `--firmware-dir <dir>` | Firmware root directory (default: `./firmware`) |
-| `--host <addr>` | Connect to remote dfu-remote daemon |
-| `-v, --verbose` | Verbose output |
-| `-d, --debug` | Debug output |
-
-## Supported Platforms
-
-| SoC | Arch | DDR | Bootstrap | Write | Read | Auto-Detect |
-|-----|------|-----|-----------|-------|------|-------------|
-| T10 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
-| T20 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
-| T21 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
-| T23 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
-| T30 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
-| T31 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
-| T31A | xburst1 | DDR3 | Tested | Tested | Tested | Yes |
-| T32 | xburst1 | DDR2 | Tested | Tested | Tested | Yes |
-| T40 | xburst2 | DDR2 | Tested | Tested | Tested | Yes |
-| T41 | xburst2 | DDR3 | Tested | Tested | Tested | Yes |
-| A1 | xburst2 | DDR3 | Tested | Tested | Tested | Yes |
-
-All DDR configuration is generated dynamically from a compiled-in chip database (36 chips). No vendor `ddr.bin` files needed.
-
-## SoC Auto-Detection
-
-The tool uploads a tiny MIPS program to the device's bootrom that reads hardware ID registers (SoC ID, EFUSE sub-type) and returns the exact chip variant. This enables correct DDR type selection (DDR2 vs DDR3) without manual configuration.
-
-Detected sub-variants include: T31X, T31N, T31A, T31AL, T31ZX, T32LQ, T40N, T40NN, T40XP, T41NQ, A1, and more.
-
-## Windows Setup
-
-1. If the Ingenic vendor USB driver is installed, remove it first via Device Manager
-2. Connect the device in USB boot mode
-3. Install the WinUSB driver using [Zadig](https://zadig.akeo.ie/). Select the "Ingenic USB Boot Device" and install WinUSB
-4. Run `thingino-dfu.exe -i 0 -b`
-
-**Important:** The Ingenic vendor driver (libusb0.sys) is not compatible and must be removed before installing WinUSB via Zadig.
-
-## Flash Chip Detection
-
-The flash chip is auto-detected via JEDEC ID after bootstrap. The tool includes a database of 49 SPI NOR chips. Use `--flash-chip <name>` to override if auto-detection fails or the chip is not in the database.
+- Web: `web/dist/` (serve with any HTTPS server)
 
 ## Remote Mode
 
-For headless setups (e.g., an Orange Pi connected to devices via USB):
+For headless setups (e.g. an Orange Pi connected to devices via USB):
 
-1. Run `dfu-remote` on the USB host machine
-2. Use `--host <addr>` from anywhere on the network
+1. Run `dfu-remote` on the USB host machine.
+2. Use `--host <addr>` from anywhere on the network.
 
-Protocol uses TCP port 5050. Both the daemon and client work on all platforms (Linux, macOS, Windows).
+Remote defaults to DFU as well (`--cloner` for the legacy backend). Protocol uses TCP port 5050. Both the daemon and client work on all platforms (Linux, macOS, Windows, Android).
 
-## Hardware Databases
+## Windows Setup
 
-All chip data is compiled in, no config files at runtime:
+1. If the Ingenic vendor USB driver is installed, remove it first via Device Manager.
+2. Connect the device in USB boot mode.
+3. Install the WinUSB driver using [Zadig](https://zadig.akeo.ie/): select the "Ingenic USB Boot Device" and install WinUSB.
+4. Run `thingino-dfu.exe -i 0 -b`.
+
+**Important:** The Ingenic vendor driver (`libusb0.sys`) is not compatible and must be removed before installing WinUSB via Zadig.
+
+## Firmware
+
+SPL + U-Boot binaries used for bootstrap live under `firmware/`:
+
+- **DFU:** `firmware/dfu/<family>/{spl,uboot}.bin` - DFU-capable mainline U-Boot (the device runs `dfu` after boot).
+- **Cloner:** `firmware/cloner/<platform>/{spl,uboot}.bin` - the vendor burner loader.
+
+The DFU images are built from [gtxaspec/u-boot](https://github.com/gtxaspec/u-boot) (the `isvp_<soc>_usbboot` defconfigs).
+
+## Hardware Databases (cloner backend)
+
+All chip data is compiled in, no config files at runtime - the cloner backend uses these for DDR bring-up and flash detection:
 
 - **DDR chips:** 36 entries (DDR2, DDR3, LPDDR2)
-- **SPI NOR flash:** 49 entries
+- **SPI NOR flash:** 49 entries (JEDEC-ID matched)
 - **NAND flash:** 12 entries
 - **Platform configs:** 19 processors
 
-SPL and U-Boot binaries are loaded from `firmware/cloner/<platform>/spl.bin` and `uboot.bin`.
+(DFU doesn't need these - the device's own U-Boot owns DDR and the flash medium.)
 
 ## Technical Details
 
