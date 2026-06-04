@@ -223,13 +223,15 @@ jobs:
           path: artifacts
 
       - name: Create release
-        uses: softprops/action-gh-release@v2.6.1
-        with:
-          files: |
-            artifacts/thingino-dfu-linux-x86_64/*.tar.gz
-            artifacts/thingino-dfu-linux-aarch64/*.tar.gz
-            artifacts/thingino-dfu-windows-x64/*.zip
-            artifacts/thingino-dfu-macos-universal/*.tar.gz
-            artifacts/thingino-dfu-android/*.apk
-            artifacts/thingino-dfu-web/*.tar.gz
-          generate_release_notes: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            artifacts/thingino-dfu-linux-x86_64/*.tar.gz \
+            artifacts/thingino-dfu-linux-aarch64/*.tar.gz \
+            artifacts/thingino-dfu-windows-x64/*.zip \
+            artifacts/thingino-dfu-macos-universal/*.tar.gz \
+            artifacts/thingino-dfu-android/*.apk \
+            artifacts/thingino-dfu-web/*.tar.gz \
+            --generate-notes
