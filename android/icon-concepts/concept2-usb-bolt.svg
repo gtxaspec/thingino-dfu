@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Concept 2: USB symbol with flash bolt — dark bg, darkorange -->
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#161B22"/>
+      <stop offset="100%" stop-color="#0D1117"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg2)"/>
+  <!-- USB trident symbol -->
+  <!-- Main vertical stem -->
+  <line x1="256" y1="380" x2="256" y2="140" stroke="#C9D1D9" stroke-width="14" stroke-linecap="round"/>
+  <!-- Arrow head at top -->
+  <polygon points="256,120 230,160 282,160" fill="#C9D1D9"/>
+  <!-- Left branch (circle terminal) -->
+  <path d="M256,260 Q200,260 200,200" fill="none" stroke="#C9D1D9" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="200" cy="192" r="16" fill="none" stroke="#C9D1D9" stroke-width="10"/>
+  <!-- Right branch (square terminal) -->
+  <path d="M256,300 Q320,300 320,240" fill="none" stroke="#C9D1D9" stroke-width="10" stroke-linecap="round"/>
+  <rect x="306" y="218" width="28" height="28" fill="#C9D1D9" rx="4"/>
+  <!-- Base circle -->
+  <circle cx="256" cy="392" r="20" fill="none" stroke="#C9D1D9" stroke-width="10"/>
+  <!-- Flash bolt overlay -->
+  <polygon points="290,170 240,270 275,270 245,340 310,230 270,230" fill="#FF8C00" opacity="0.9"/>
+</svg>

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Concept 6: Two overlapping chips — cloning -->
+  <defs>
+    <linearGradient id="bg6" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#161B22"/>
+      <stop offset="100%" stop-color="#0D1117"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg6)"/>
+  <!-- Back chip (source - gray) -->
+  <rect x="180" y="100" width="200" height="180" rx="16" fill="none" stroke="#484F58" stroke-width="8"/>
+  <!-- Back chip pins -->
+  <line x1="232" y1="100" x2="232" y2="72" stroke="#484F58" stroke-width="6" stroke-linecap="round"/>
+  <line x1="280" y1="100" x2="280" y2="72" stroke="#484F58" stroke-width="6" stroke-linecap="round"/>
+  <line x1="328" y1="100" x2="328" y2="72" stroke="#484F58" stroke-width="6" stroke-linecap="round"/>
+  <line x1="380" y1="152" x2="412" y2="152" stroke="#484F58" stroke-width="6" stroke-linecap="round"/>
+  <line x1="380" y1="200" x2="412" y2="200" stroke="#484F58" stroke-width="6" stroke-linecap="round"/>
+  <line x1="380" y1="248" x2="412" y2="248" stroke="#484F58" stroke-width="6" stroke-linecap="round"/>
+  <!-- Arrow between chips -->
+  <line x1="208" y1="260" x2="240" y2="296" stroke="#FF8C00" stroke-width="10" stroke-linecap="round"/>
+  <polygon points="248,308 228,288 252,284" fill="#FF8C00"/>
+  <!-- Front chip (target - orange) -->
+  <rect x="132" y="232" width="200" height="180" rx="16" fill="#161B22" stroke="#FF8C00" stroke-width="8"/>
+  <!-- Front chip pins -->
+  <line x1="132" y1="284" x2="100" y2="284" stroke="#FF8C00" stroke-width="6" stroke-linecap="round"/>
+  <line x1="132" y1="332" x2="100" y2="332" stroke="#FF8C00" stroke-width="6" stroke-linecap="round"/>
+  <line x1="132" y1="380" x2="100" y2="380" stroke="#FF8C00" stroke-width="6" stroke-linecap="round"/>
+  <line x1="184" y1="412" x2="184" y2="444" stroke="#FF8C00" stroke-width="6" stroke-linecap="round"/>
+  <line x1="232" y1="412" x2="232" y2="444" stroke="#FF8C00" stroke-width="6" stroke-linecap="round"/>
+  <line x1="280" y1="412" x2="280" y2="444" stroke="#FF8C00" stroke-width="6" stroke-linecap="round"/>
+  <!-- Checkmark inside front chip -->
+  <polyline points="180,326 212,358 272,290" fill="none" stroke="#FF8C00" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

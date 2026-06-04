@@ -237,7 +237,7 @@ static int extract_asset_to_file(JNIEnv *env, jobject asset_manager_obj,
 /* ========================================================================== */
 
 JNIEXPORT void JNICALL
-Java_com_thingino_cloner_ClonerBridge_nativeSetCallback(
+Java_com_thingino_dfu_ClonerBridge_nativeSetCallback(
         JNIEnv *env, jclass clazz, jobject callback) {
     (void)clazz;
 
@@ -263,7 +263,7 @@ Java_com_thingino_cloner_ClonerBridge_nativeSetCallback(
 /* ========================================================================== */
 
 JNIEXPORT jstring JNICALL
-Java_com_thingino_cloner_ClonerBridge_nativeDetectSoc(
+Java_com_thingino_dfu_ClonerBridge_nativeDetectSoc(
         JNIEnv *env, jclass clazz, jint fd) {
     (void)clazz;
 
@@ -329,7 +329,7 @@ Java_com_thingino_cloner_ClonerBridge_nativeDetectSoc(
 /* ========================================================================== */
 
 JNIEXPORT jint JNICALL
-Java_com_thingino_cloner_ClonerBridge_nativeBootstrap(
+Java_com_thingino_dfu_ClonerBridge_nativeBootstrap(
         JNIEnv *env, jclass clazz, jint fd, jstring variant_str,
         jstring firmware_dir_str, jobject asset_manager) {
     (void)clazz;
@@ -452,7 +452,7 @@ Java_com_thingino_cloner_ClonerBridge_nativeBootstrap(
 /* ========================================================================== */
 
 JNIEXPORT jint JNICALL
-Java_com_thingino_cloner_ClonerBridge_nativeReadFirmware(
+Java_com_thingino_dfu_ClonerBridge_nativeReadFirmware(
         JNIEnv *env, jclass clazz, jint fd, jstring variant_str,
         jstring output_file_str, jstring firmware_dir_str, jobject asset_manager) {
     (void)clazz;
@@ -726,7 +726,7 @@ read_err:
 /* ========================================================================== */
 
 JNIEXPORT jint JNICALL
-Java_com_thingino_cloner_ClonerBridge_nativeWriteFirmware(
+Java_com_thingino_dfu_ClonerBridge_nativeWriteFirmware(
         JNIEnv *env, jclass clazz, jint fd, jstring variant_str,
         jstring input_file_str, jstring firmware_dir_str, jobject asset_manager) {
     (void)clazz;
@@ -941,7 +941,7 @@ write_err:
 /* ========================================================================== */
 
 JNIEXPORT void JNICALL
-Java_com_thingino_cloner_ClonerBridge_nativeSetDebug(
+Java_com_thingino_dfu_ClonerBridge_nativeSetDebug(
         JNIEnv *env, jclass clazz, jboolean enabled) {
     (void)env;
     (void)clazz;

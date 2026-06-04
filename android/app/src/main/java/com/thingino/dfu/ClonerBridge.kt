@@ -1,4 +1,4 @@
-package com.thingino.cloner
+package com.thingino.dfu
 
 import android.content.res.AssetManager
 

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Concept 9: Chip with USB connector shape -->
+  <defs>
+    <linearGradient id="bg9" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#161B22"/>
+      <stop offset="100%" stop-color="#0D1117"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg9)"/>
+  <!-- Chip body -->
+  <rect x="136" y="168" width="240" height="220" rx="20" fill="none" stroke="#FF8C00" stroke-width="8"/>
+  <!-- Chip pins - left -->
+  <line x1="136" y1="220" x2="100" y2="220" stroke="#FF8C00" stroke-width="7" stroke-linecap="round"/>
+  <line x1="136" y1="268" x2="100" y2="268" stroke="#FF8C00" stroke-width="7" stroke-linecap="round"/>
+  <line x1="136" y1="316" x2="100" y2="316" stroke="#FF8C00" stroke-width="7" stroke-linecap="round"/>
+  <line x1="136" y1="364" x2="100" y2="364" stroke="#FF8C00" stroke-width="7" stroke-linecap="round"/>
+  <!-- Chip pins - right -->
+  <line x1="376" y1="220" x2="412" y2="220" stroke="#FF8C00" stroke-width="7" stroke-linecap="round"/>
+  <line x1="376" y1="268" x2="412" y2="268" stroke="#FF8C00" stroke-width="7" stroke-linecap="round"/>
+  <line x1="376" y1="316" x2="412" y2="316" stroke="#FF8C00" stroke-width="7" stroke-linecap="round"/>
+  <line x1="376" y1="364" x2="412" y2="364" stroke="#FF8C00" stroke-width="7" stroke-linecap="round"/>
+  <!-- USB-A connector coming from top into chip -->
+  <rect x="216" y="60" width="80" height="108" rx="6" fill="none" stroke="#FF8C00" stroke-width="8"/>
+  <rect x="232" y="76" width="48" height="52" rx="4" fill="#FF8C00" opacity="0.3"/>
+  <!-- Connection line from USB to chip -->
+  <line x1="256" y1="168" x2="256" y2="168" stroke="#FF8C00" stroke-width="8"/>
+  <!-- Inner die mark -->
+  <rect x="180" y="212" width="152" height="132" rx="8" fill="none" stroke="#FF8C00" stroke-width="3" opacity="0.3"/>
+  <!-- Pin 1 dot -->
+  <circle cx="196" cy="228" r="6" fill="#FF8C00" opacity="0.6"/>
+</svg>

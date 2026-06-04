@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Concept 8: Chip with binary 01 — firmware data -->
+  <defs>
+    <linearGradient id="bg8" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#161B22"/>
+      <stop offset="100%" stop-color="#0D1117"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg8)"/>
+  <!-- Chip body -->
+  <rect x="120" y="120" width="272" height="272" rx="24" fill="none" stroke="#FF8C00" stroke-width="8"/>
+  <!-- Chip pins -->
+  <line x1="188" y1="120" x2="188" y2="80" stroke="#FF8C00" stroke-width="8" stroke-linecap="round"/>
+  <line x1="256" y1="120" x2="256" y2="80" stroke="#FF8C00" stroke-width="8" stroke-linecap="round"/>
+  <line x1="324" y1="120" x2="324" y2="80" stroke="#FF8C00" stroke-width="8" stroke-linecap="round"/>
+  <line x1="188" y1="392" x2="188" y2="432" stroke="#FF8C00" stroke-width="8" stroke-linecap="round"/>
+  <line x1="256" y1="392" x2="256" y2="432" stroke="#FF8C00" stroke-width="8" stroke-linecap="round"/>
+  <line x1="324" y1="392" x2="324" y2="432" stroke="#FF8C00" stroke-width="8" stroke-linecap="round"/>
+  <line x1="120" y1="188" x2="80" y2="188" stroke="#FF8C00" stroke-width="8" stroke-linecap="round"/>
+  <line x1="120" y1="256" x2="80" y2="256" stroke="#FF8C00" stroke-width="8" stroke-linecap="round"/>
+  <line x1="120" y1="324" x2="80" y2="324" stroke="#FF8C00" stroke-width="8" stroke-linecap="round"/>
+  <line x1="392" y1="188" x2="432" y2="188" stroke="#FF8C00" stroke-width="8" stroke-linecap="round"/>
+  <line x1="392" y1="256" x2="432" y2="256" stroke="#FF8C00" stroke-width="8" stroke-linecap="round"/>
+  <line x1="392" y1="324" x2="432" y2="324" stroke="#FF8C00" stroke-width="8" stroke-linecap="round"/>
+  <!-- Binary text inside -->
+  <text x="256" y="248" text-anchor="middle" font-family="monospace" font-size="72" font-weight="bold" fill="#FF8C00">01</text>
+  <text x="256" y="316" text-anchor="middle" font-family="monospace" font-size="72" font-weight="bold" fill="#FF8C00" opacity="0.5">10</text>
+</svg>

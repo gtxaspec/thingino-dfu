@@ -1,4 +1,4 @@
-package com.thingino.cloner
+package com.thingino.dfu
 
 import java.io.InputStream
 import java.io.OutputStream

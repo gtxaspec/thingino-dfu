@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Concept 1: Chip with flash bolt — dark bg, darkorange accent -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#161B22"/>
+      <stop offset="100%" stop-color="#0D1117"/>
+    </linearGradient>
+  </defs>
+  <!-- Background rounded square -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- Chip body -->
+  <rect x="136" y="136" width="240" height="240" rx="24" fill="none" stroke="#FF8C00" stroke-width="12"/>
+  <!-- Chip pins - top -->
+  <line x1="200" y1="136" x2="200" y2="96" stroke="#FF8C00" stroke-width="10" stroke-linecap="round"/>
+  <line x1="256" y1="136" x2="256" y2="96" stroke="#FF8C00" stroke-width="10" stroke-linecap="round"/>
+  <line x1="312" y1="136" x2="312" y2="96" stroke="#FF8C00" stroke-width="10" stroke-linecap="round"/>
+  <!-- Chip pins - bottom -->
+  <line x1="200" y1="376" x2="200" y2="416" stroke="#FF8C00" stroke-width="10" stroke-linecap="round"/>
+  <line x1="256" y1="376" x2="256" y2="416" stroke="#FF8C00" stroke-width="10" stroke-linecap="round"/>
+  <line x1="312" y1="376" x2="312" y2="416" stroke="#FF8C00" stroke-width="10" stroke-linecap="round"/>
+  <!-- Chip pins - left -->
+  <line x1="136" y1="200" x2="96" y2="200" stroke="#FF8C00" stroke-width="10" stroke-linecap="round"/>
+  <line x1="136" y1="256" x2="96" y2="256" stroke="#FF8C00" stroke-width="10" stroke-linecap="round"/>
+  <line x1="136" y1="312" x2="96" y2="312" stroke="#FF8C00" stroke-width="10" stroke-linecap="round"/>
+  <!-- Chip pins - right -->
+  <line x1="376" y1="200" x2="416" y2="200" stroke="#FF8C00" stroke-width="10" stroke-linecap="round"/>
+  <line x1="376" y1="256" x2="416" y2="256" stroke="#FF8C00" stroke-width="10" stroke-linecap="round"/>
+  <line x1="376" y1="312" x2="416" y2="312" stroke="#FF8C00" stroke-width="10" stroke-linecap="round"/>
+  <!-- Flash bolt in center -->
+  <polygon points="272,180 224,272 264,272 240,332 288,240 248,240" fill="#FF8C00"/>
+</svg>

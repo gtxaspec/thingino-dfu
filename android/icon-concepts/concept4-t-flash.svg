@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Concept 4: "T" lettermark with flash accent — thingino branding -->
+  <defs>
+    <linearGradient id="bg4" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#161B22"/>
+      <stop offset="100%" stop-color="#0D1117"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg4)"/>
+  <!-- Large "T" -->
+  <rect x="128" y="128" width="256" height="40" rx="8" fill="#C9D1D9"/>
+  <rect x="228" y="128" width="56" height="256" rx="8" fill="#C9D1D9"/>
+  <!-- Flash bolt cutting through the T -->
+  <polygon points="296,160 236,276 272,276 244,384 316,252 276,252" fill="#FF8C00"/>
+  <!-- Subtle chip pins on edges -->
+  <line x1="180" y1="40" x2="180" y2="80" stroke="#FF8C00" stroke-width="6" stroke-linecap="round" opacity="0.4"/>
+  <line x1="256" y1="40" x2="256" y2="80" stroke="#FF8C00" stroke-width="6" stroke-linecap="round" opacity="0.4"/>
+  <line x1="332" y1="40" x2="332" y2="80" stroke="#FF8C00" stroke-width="6" stroke-linecap="round" opacity="0.4"/>
+  <line x1="180" y1="432" x2="180" y2="472" stroke="#FF8C00" stroke-width="6" stroke-linecap="round" opacity="0.4"/>
+  <line x1="256" y1="432" x2="256" y2="472" stroke="#FF8C00" stroke-width="6" stroke-linecap="round" opacity="0.4"/>
+  <line x1="332" y1="432" x2="332" y2="472" stroke="#FF8C00" stroke-width="6" stroke-linecap="round" opacity="0.4"/>
+</svg>

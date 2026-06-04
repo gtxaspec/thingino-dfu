@@ -1,4 +1,4 @@
-package com.thingino.cloner
+package com.thingino.dfu
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -21,7 +21,7 @@ class UsbHelper(private val context: Context) {
 
     companion object {
         private const val TAG = "UsbHelper"
-        const val ACTION_USB_PERMISSION = "com.thingino.cloner.USB_PERMISSION"
+        const val ACTION_USB_PERMISSION = "com.thingino.dfu.USB_PERMISSION"
 
         // Ingenic USB VID/PID pairs
         private val INGENIC_DEVICES = listOf(

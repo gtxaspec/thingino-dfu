@@ -1,4 +1,4 @@
-package com.thingino.cloner
+package com.thingino.dfu
 
 import android.content.Intent
 import android.content.SharedPreferences
@@ -33,7 +33,7 @@ import java.util.Locale
 class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, ClonerBridge.NativeCallback {
 
     companion object {
-        private const val TAG = "ThinginoCloner"
+        private const val TAG = "ThinginoDfu"
         private const val PREFS_NAME = "cloner_prefs"
         private const val PREF_HOST = "remote_host"
         private const val PREF_PORT = "remote_port"
@@ -168,7 +168,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, ClonerBridge
         // Set up native callback
         ClonerBridge.nativeSetCallback(this)
 
-        appendLog("Thingino Cloner ready.\n")
+        appendLog("Thingino DFU ready.\n")
         appendLog("Connect a device via USB OTG or remote daemon.\n")
 
         // Check if launched from USB device attach intent

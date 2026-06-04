@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ThinginoCloner"
+rootProject.name = "ThinginoDfu"
 include(":app")

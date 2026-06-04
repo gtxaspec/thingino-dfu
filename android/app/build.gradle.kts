@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.thingino.cloner"
+    namespace = "com.thingino.dfu"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.thingino.cloner"
+        applicationId = "com.thingino.dfu"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

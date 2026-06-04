@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Thingino Cloner</string>
+    <string name="app_name">Thingino DFU</string>
     <string name="status_disconnected">No device connected</string>
     <string name="btn_read">READ</string>
     <string name="btn_write">WRITE</string>
