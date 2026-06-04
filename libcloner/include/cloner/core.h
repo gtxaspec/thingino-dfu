@@ -38,8 +38,8 @@ void cloner_free_device_list(cloner_device_list_t *list);
  *
  * @param device_index  Index in most recent discovery result
  * @param variant       Processor variant (determines firmware paths)
- * @param firmware_dir  Directory containing firmwares/<platform>/
- *                      (NULL = "./firmwares")
+ * @param firmware_dir  Firmware root directory, contains cloner/<platform>/
+ *                      (NULL = "./firmware")
  * @param progress      Optional progress callback (NULL = no progress)
  * @param user_data     Passed to progress callback
  */

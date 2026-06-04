@@ -137,12 +137,12 @@ add_subdirectory(cloner-remote)
 add_subdirectory(tests)
 
 # Install targets
-# Binaries and firmwares install to the same directory so that the binary
-# can find firmwares/ relative to its own location via /proc/self/exe.
+# Binaries and firmware install to the same directory so that the binary
+# can find firmware/ relative to its own location via /proc/self/exe.
 # Default: /usr/local/lib/thingino-cloner/  (override with -DCLONER_INSTALL_DIR=)
 set(CLONER_INSTALL_DIR "lib/thingino-cloner" CACHE STRING "Install directory for cloner binaries and firmware")
 install(TARGETS thingino-cloner cloner-remote RUNTIME DESTINATION ${CLONER_INSTALL_DIR})
-install(DIRECTORY firmwares/ DESTINATION ${CLONER_INSTALL_DIR}/firmwares)
+install(DIRECTORY firmware/ DESTINATION ${CLONER_INSTALL_DIR}/firmware)
 
 # Symlinks in bin/ for convenience
 install(CODE "

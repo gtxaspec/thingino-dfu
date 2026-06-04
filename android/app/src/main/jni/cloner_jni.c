@@ -366,7 +366,7 @@ Java_com_thingino_cloner_ClonerBridge_nativeBootstrap(
     char spl_asset[256], uboot_asset[256];
     char spl_path[512], uboot_path[512];
 
-    /* The firmware directory structure is: firmwares/<variant>/spl.bin, uboot.bin
+    /* The firmware directory structure is: firmware/cloner/<variant>/spl.bin, uboot.bin
      * We need to map variant names to directory names (some share dirs) */
     const char *fw_subdir = variant_name;
     /* Handle variants that share firmware directories */
@@ -378,8 +378,8 @@ Java_com_thingino_cloner_ClonerBridge_nativeBootstrap(
         fw_subdir = "a1_n_ne_x";
     }
 
-    snprintf(spl_asset, sizeof(spl_asset), "firmwares/%s/spl.bin", fw_subdir);
-    snprintf(uboot_asset, sizeof(uboot_asset), "firmwares/%s/uboot.bin", fw_subdir);
+    snprintf(spl_asset, sizeof(spl_asset), "firmware/cloner/%s/spl.bin", fw_subdir);
+    snprintf(uboot_asset, sizeof(uboot_asset), "firmware/cloner/%s/uboot.bin", fw_subdir);
     snprintf(spl_path, sizeof(spl_path), "%s/%s_spl.bin", fw_dir_cstr, fw_subdir);
     snprintf(uboot_path, sizeof(uboot_path), "%s/%s_uboot.bin", fw_dir_cstr, fw_subdir);
 
@@ -508,8 +508,8 @@ Java_com_thingino_cloner_ClonerBridge_nativeReadFirmware(
 
         char spl_asset[256], uboot_asset[256];
         char spl_path[512], uboot_path[512];
-        snprintf(spl_asset, sizeof(spl_asset), "firmwares/%s/spl.bin", fw_subdir);
-        snprintf(uboot_asset, sizeof(uboot_asset), "firmwares/%s/uboot.bin", fw_subdir);
+        snprintf(spl_asset, sizeof(spl_asset), "firmware/cloner/%s/spl.bin", fw_subdir);
+        snprintf(uboot_asset, sizeof(uboot_asset), "firmware/cloner/%s/uboot.bin", fw_subdir);
         snprintf(spl_path, sizeof(spl_path), "%s/%s_spl.bin", fw_dir_cstr, fw_subdir);
         snprintf(uboot_path, sizeof(uboot_path), "%s/%s_uboot.bin", fw_dir_cstr, fw_subdir);
 
@@ -775,8 +775,8 @@ Java_com_thingino_cloner_ClonerBridge_nativeWriteFirmware(
 
         char spl_asset[256], uboot_asset[256];
         char spl_path[512], uboot_path[512];
-        snprintf(spl_asset, sizeof(spl_asset), "firmwares/%s/spl.bin", fw_subdir);
-        snprintf(uboot_asset, sizeof(uboot_asset), "firmwares/%s/uboot.bin", fw_subdir);
+        snprintf(spl_asset, sizeof(spl_asset), "firmware/cloner/%s/spl.bin", fw_subdir);
+        snprintf(uboot_asset, sizeof(uboot_asset), "firmware/cloner/%s/uboot.bin", fw_subdir);
         snprintf(spl_path, sizeof(spl_path), "%s/%s_spl.bin", fw_dir_cstr, fw_subdir);
         snprintf(uboot_path, sizeof(uboot_path), "%s/%s_uboot.bin", fw_dir_cstr, fw_subdir);
 

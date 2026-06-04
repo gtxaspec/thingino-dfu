@@ -3,7 +3,7 @@
  *
  * Validates that DDR binaries generated from the chip database match
  * the vendor reference binaries byte-for-byte. Reference binaries
- * are loaded from firmwares/<platform>/ddr.bin files.
+ * are loaded from firmware/cloner/<platform>/ddr.bin files.
  */
 
 #include <stdio.h>
@@ -135,9 +135,9 @@ int main(void) {
 
     test_database_lookup();
 
-    test_fidb_section("t20", "firmwares/t20/ddr.bin");
-    test_fidb_section("t31", "firmwares/t31x/ddr.bin");
-    test_fidb_section("a1", "firmwares/a1_n_ne_x/ddr.bin");
+    test_fidb_section("t20", "firmware/cloner/t20/ddr.bin");
+    test_fidb_section("t31", "firmware/cloner/t31x/ddr.bin");
+    test_fidb_section("a1", "firmware/cloner/a1_n_ne_x/ddr.bin");
 
     printf("\n=== Results: %d passed, %d failed, %d skipped ===\n",
            tests_passed, tests_failed, tests_skipped);

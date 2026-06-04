@@ -27,7 +27,7 @@ bundle-win64: win64
 	cp $(BUILD_WIN64)/cli/thingino-cloner.exe dist/thingino-cloner-windows-x64/
 	cp $(BUILD_WIN64)/cloner-remote/cloner-remote.exe dist/thingino-cloner-windows-x64/
 	cp $(BUILD_WIN64)/cli/libusb-1.0.dll dist/thingino-cloner-windows-x64/
-	cp -r firmwares dist/thingino-cloner-windows-x64/
+	cp -r firmware dist/thingino-cloner-windows-x64/
 	cd dist && zip -r thingino-cloner-windows-x64.zip thingino-cloner-windows-x64
 	rm -rf dist/thingino-cloner-windows-x64
 	@echo "Created dist/thingino-cloner-windows-x64.zip"
@@ -39,8 +39,8 @@ install: all
 	install -d $(DESTDIR)$(LIBDIR)
 	install -m 755 $(BUILD_DIR)/cli/thingino-cloner $(DESTDIR)$(LIBDIR)/
 	[ -f $(BUILD_DIR)/cloner-remote/cloner-remote ] && install -m 755 $(BUILD_DIR)/cloner-remote/cloner-remote $(DESTDIR)$(LIBDIR)/ || true
-	install -d $(DESTDIR)$(LIBDIR)/firmwares
-	cp -r firmwares/* $(DESTDIR)$(LIBDIR)/firmwares/
+	install -d $(DESTDIR)$(LIBDIR)/firmware
+	cp -r firmware/* $(DESTDIR)$(LIBDIR)/firmware/
 	install -d $(DESTDIR)$(BINDIR)
 	ln -sf ../lib/thingino-cloner/thingino-cloner $(DESTDIR)$(BINDIR)/thingino-cloner
 	[ -f $(DESTDIR)$(LIBDIR)/cloner-remote ] && ln -sf ../lib/thingino-cloner/cloner-remote $(DESTDIR)$(BINDIR)/cloner-remote || true

@@ -545,7 +545,7 @@ Each SoC variant has a `platform_profile_t` that controls protocol behavior. Ret
 
 ## Vendor Firmware
 
-The SPL and U-Boot binaries in `firmwares/` are extracted from Ingenic's proprietary cloner tool. These run on the target SoC during the firmware stage and implement the flash read/write protocol.
+The SPL and U-Boot binaries in `firmware/cloner/` are extracted from Ingenic's proprietary cloner tool. These run on the target SoC during the firmware stage and implement the flash read/write protocol.
 
 - **Source:** Ingenic cloner 2.5.43 (T10/T20/T21/T23/T30/T31/T31A/T40/T41/A1)
 - **T32 exception:** Uses firmware from cloner 2.5.49 (different struct arguments in U-Boot burner)

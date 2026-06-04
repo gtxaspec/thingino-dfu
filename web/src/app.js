@@ -129,15 +129,16 @@ function showDeviceInfo(soc, stage, vid, pid) {
  */
 async function loadFirmwareFileToMemFS(variant) {
     var dir = variantToFirmwareDir(variant);
-    var basePath = './firmwares/' + dir;
+    var basePath = './firmware/cloner/' + dir;
 
     // Create directories in MEMFS
-    try { Module.FS.mkdir('./firmwares'); } catch (e) { /* exists */ }
+    try { Module.FS.mkdir('./firmware'); } catch (e) { /* exists */ }
+    try { Module.FS.mkdir('./firmware/cloner'); } catch (e) { /* exists */ }
     try { Module.FS.mkdir(basePath); } catch (e) { /* exists */ }
 
     var files = ['spl.bin', 'uboot.bin'];
     for (var i = 0; i < files.length; i++) {
-        var url = 'firmware/' + dir + '/' + files[i];
+        var url = 'firmware/cloner/' + dir + '/' + files[i];
         var memPath = basePath + '/' + files[i];
 
         console.log('Fetching ' + url + '...');
@@ -346,7 +347,7 @@ async function doBootstrap() {
         showProgress(30, 'Bootstrapping device...');
 
         // Call cloner_bootstrap(device_index=0, variant, firmware_dir=NULL, progress=NULL, user_data=NULL)
-        // firmware_dir NULL means default "./firmwares"
+        // firmware_dir NULL means default "./firmware"
         var result = await wasmCall('cloner_bootstrap', 'number',
             ['number', 'number', 'number', 'number', 'number'],
             [0, detectedVariant, 0, 0, 0]);

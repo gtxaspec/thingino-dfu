@@ -28,10 +28,10 @@ functional interfaces required to communicate with Ingenic SoC hardware.
 Functional interfaces are not copyrightable (Lotus v. Borland, Oracle v. Google).
 
 ================================================================================
-3. Firmware Binaries (firmwares/)
+3. Firmware Binaries (firmware/cloner/)
 ================================================================================
 
-The SPL (Secondary Program Loader) and U-Boot binaries in the firmwares/
+The SPL (Secondary Program Loader) and U-Boot binaries in the firmware/cloner/
 directory are compiled from Ingenic's fork of Das U-Boot, which is licensed
 under the GNU General Public License version 2 (GPL-2.0). These binaries are
 redistributed under the terms of GPL-2.0.

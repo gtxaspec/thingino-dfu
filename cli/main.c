@@ -39,7 +39,7 @@ typedef struct {
     bool skip_ddr;
     uint32_t chunk_size; // Flash write chunk size (default: 131072)
     char *force_cpu;     // Force specific CPU variant (e.g., "a1", "t31x", "t31zx")
-    char *firmware_dir;  // Firmware directory (default: ./firmwares)
+    char *firmware_dir;  // Firmware root directory (default: ./firmware)
     char *remote_host;   // Remote daemon host (NULL = local mode)
     int remote_port;     // Remote daemon port (default: 5050)
     char *auth_token;    // Auth token for remote daemon
@@ -65,7 +65,7 @@ void print_usage(const char *program_name) {
     printf("      --config <file>       Custom DDR configuration file\n");
     printf("      --spl <file>          Custom SPL file\n");
     printf("      --uboot <file>        Custom U-Boot file\n");
-    printf("      --firmware-dir <dir>  Firmware directory (default: ./firmwares)\n");
+    printf("      --firmware-dir <dir>  Firmware root directory (default: ./firmware)\n");
     printf("      --host <addr>         Connect to remote cloner-remote daemon\n");
     printf("      --port <port>         Remote daemon port (default: 5050)\n");
     printf("      --token <secret>      Auth token for remote daemon\n");
@@ -288,7 +288,7 @@ int main(int argc, char *argv[]) {
         char *last_sep = strrchr(exe_path, '\\');
         if (last_sep)
             *last_sep = '\0';
-        snprintf(default_fw_dir, sizeof(default_fw_dir), "%s\\firmwares", exe_path);
+        snprintf(default_fw_dir, sizeof(default_fw_dir), "%s\\firmware", exe_path);
     }
 #else
     {
@@ -297,9 +297,9 @@ int main(int argc, char *argv[]) {
         if (len > 0) {
             exe_path[len] = '\0';
             char *dir = dirname(exe_path);
-            snprintf(default_fw_dir, sizeof(default_fw_dir), "%s/firmwares", dir);
+            snprintf(default_fw_dir, sizeof(default_fw_dir), "%s/firmware", dir);
         } else {
-            snprintf(default_fw_dir, sizeof(default_fw_dir), "./firmwares");
+            snprintf(default_fw_dir, sizeof(default_fw_dir), "./firmware");
         }
     }
 #endif

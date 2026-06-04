@@ -365,7 +365,7 @@ const char *remote_detect_variant(int device_index) {
  *   [4:uboot_len][uboot_data][4:uboot_crc32]
  */
 int remote_bootstrap(int device_index, const char *cpu_variant, const char *firmware_dir) {
-    const char *fw_dir = firmware_dir ? firmware_dir : "./firmwares";
+    const char *fw_dir = firmware_dir ? firmware_dir : "./firmware";
     const char *fw_subdir = variant_to_fw_dir(cpu_variant);
 
     /* Generate DDR config dynamically (same as local mode) */

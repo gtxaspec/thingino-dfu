@@ -38,7 +38,7 @@ cd web
 bash build.sh
 ```
 
-Output: `web/dist/cloner.js` + `web/dist/cloner.wasm`. Serve `web/` with any HTTP server and open in Chrome/Edge. Copy `firmwares/` to `web/public/firmware/` for the bootstrap binaries.
+Output: `web/dist/cloner.js` + `web/dist/cloner.wasm`. Serve `web/` with any HTTP server and open in Chrome/Edge. Copy `firmware/` to `web/public/firmware/` for the bootstrap binaries.
 
 The web flasher compiles the entire C library to WebAssembly and replaces libusb with a WebUSB shim. Supports detect, bootstrap, read, and write directly from the browser — no install required. Requires HTTPS or localhost.
 
@@ -97,7 +97,7 @@ The SoC is auto-detected by reading hardware ID registers from the bootrom. Use 
 | `--erase` | Erase flash before writing |
 | `--reboot` | Reboot device after write |
 | `--skip-ddr` | Skip DDR configuration |
-| `--firmware-dir <dir>` | Firmware directory (default: `./firmwares`) |
+| `--firmware-dir <dir>` | Firmware root directory (default: `./firmware`) |
 | `--host <addr>` | Connect to remote cloner-remote daemon |
 | `-v, --verbose` | Verbose output |
 | `-d, --debug` | Debug output |
@@ -157,7 +157,7 @@ All chip data is compiled in, no config files at runtime:
 - **NAND flash:** 12 entries
 - **Platform configs:** 19 processors
 
-SPL and U-Boot binaries are loaded from `firmwares/<platform>/spl.bin` and `uboot.bin`.
+SPL and U-Boot binaries are loaded from `firmware/cloner/<platform>/spl.bin` and `uboot.bin`.
 
 ## Technical Details
 

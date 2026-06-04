@@ -267,7 +267,7 @@ cloner_error_t cloner_write_firmware(int device_index, const uint8_t *firmware, 
         false,          /* verbose */
         false,          /* skip_ddr */
         NULL, NULL, NULL, /* config/spl/uboot files */
-        "./firmwares",  /* firmware_dir */
+        "./firmware",  /* firmware_dir */
         0               /* chunk_size (default) */
     );
 

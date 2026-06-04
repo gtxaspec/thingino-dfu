@@ -33,7 +33,7 @@ jobs:
           mkdir -p dist/thingino-cloner-linux-x86_64
           cp build/cli/thingino-cloner dist/thingino-cloner-linux-x86_64/
           [ -f build/cloner-remote/cloner-remote ] && cp build/cloner-remote/cloner-remote dist/thingino-cloner-linux-x86_64/ || true
-          cp -r firmwares dist/thingino-cloner-linux-x86_64/
+          cp -r firmware dist/thingino-cloner-linux-x86_64/
           cd dist && tar czf thingino-cloner-linux-x86_64.tar.gz thingino-cloner-linux-x86_64
 
       - uses: actions/upload-artifact@v7
@@ -65,7 +65,7 @@ jobs:
           mkdir -p dist/thingino-cloner-linux-aarch64
           cp build/cli/thingino-cloner dist/thingino-cloner-linux-aarch64/
           [ -f build/cloner-remote/cloner-remote ] && cp build/cloner-remote/cloner-remote dist/thingino-cloner-linux-aarch64/ || true
-          cp -r firmwares dist/thingino-cloner-linux-aarch64/
+          cp -r firmware dist/thingino-cloner-linux-aarch64/
           cd dist && tar czf thingino-cloner-linux-aarch64.tar.gz thingino-cloner-linux-aarch64
 
       - uses: actions/upload-artifact@v7
@@ -92,7 +92,7 @@ jobs:
           cp build-win64/cli/thingino-cloner.exe dist/thingino-cloner-windows-x64/
           cp build-win64/cloner-remote/cloner-remote.exe dist/thingino-cloner-windows-x64/
           cp build-win64/cli/libusb-1.0.dll dist/thingino-cloner-windows-x64/
-          cp -r firmwares dist/thingino-cloner-windows-x64/
+          cp -r firmware dist/thingino-cloner-windows-x64/
           cd dist && zip -r thingino-cloner-windows-x64.zip thingino-cloner-windows-x64
 
       - uses: actions/upload-artifact@v7
@@ -132,7 +132,7 @@ jobs:
         run: |
           mkdir -p dist/thingino-cloner-macos-universal
           cp build/cli/thingino-cloner dist/thingino-cloner-macos-universal/
-          cp -r firmwares dist/thingino-cloner-macos-universal/
+          cp -r firmware dist/thingino-cloner-macos-universal/
           cd dist && tar czf thingino-cloner-macos-universal.tar.gz thingino-cloner-macos-universal
 
       - uses: actions/upload-artifact@v7
@@ -196,9 +196,9 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          rm -rf app/src/main/assets/firmwares
+          rm -rf app/src/main/assets/firmware
           mkdir -p app/src/main/assets
-          cp -r ../firmwares app/src/main/assets/firmwares
+          cp -r ../firmware app/src/main/assets/firmware
           ./gradlew assembleRelease
 
       - name: Package

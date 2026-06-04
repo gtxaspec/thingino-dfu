@@ -10,11 +10,11 @@
 // ============================================================================
 // FIRMWARE LOADER IMPLEMENTATION
 // ============================================================================
-// Loads SPL/U-Boot from files at <firmware_dir>/<platform>/spl.bin etc.
+// Loads SPL/U-Boot from files at <firmware_dir>/cloner/<platform>/spl.bin etc.
 // DDR configuration generated from chip database or reference binaries.
 
 // Default firmware directory
-#define DEFAULT_FIRMWARE_DIR "./firmwares"
+#define DEFAULT_FIRMWARE_DIR "./firmware"
 
 // ============================================================================
 // VARIANT TO FIRMWARE DIRECTORY MAPPING
@@ -65,7 +65,7 @@ static thingino_error_t firmware_generate_ddr_config(processor_variant_t variant
     const char *fw_dir_name = variant_to_firmware_dir(variant);
     const char *base = firmware_dir ? firmware_dir : DEFAULT_FIRMWARE_DIR;
     char ddr_path[512];
-    snprintf(ddr_path, sizeof(ddr_path), "%s/%s/ddr.bin", base, fw_dir_name);
+    snprintf(ddr_path, sizeof(ddr_path), "%s/cloner/%s/ddr.bin", base, fw_dir_name);
 
     thingino_error_t result = load_file(ddr_path, config_buffer, config_size);
     if (result == THINGINO_SUCCESS) {
@@ -132,10 +132,10 @@ thingino_error_t firmware_load_from_dir(processor_variant_t variant, const char 
         return result;
     }
 
-    // Build paths: <base_dir>/<platform>/spl.bin
+    // Build paths: <base_dir>/cloner/<platform>/spl.bin
     char spl_path[512], uboot_path[512];
-    snprintf(spl_path, sizeof(spl_path), "%s/%s/spl.bin", base_dir, fw_dir_name);
-    snprintf(uboot_path, sizeof(uboot_path), "%s/%s/uboot.bin", base_dir, fw_dir_name);
+    snprintf(spl_path, sizeof(spl_path), "%s/cloner/%s/spl.bin", base_dir, fw_dir_name);
+    snprintf(uboot_path, sizeof(uboot_path), "%s/cloner/%s/uboot.bin", base_dir, fw_dir_name);
 
     // Load SPL
     result = load_file(spl_path, &firmware->spl, &firmware->spl_size);
@@ -197,7 +197,7 @@ thingino_error_t firmware_load_from_files(processor_variant_t variant, const cha
     } else {
         const char *fw_dir_name = variant_to_firmware_dir(variant);
         char path[512];
-        snprintf(path, sizeof(path), "%s/%s/spl.bin", DEFAULT_FIRMWARE_DIR, fw_dir_name);
+        snprintf(path, sizeof(path), "%s/cloner/%s/spl.bin", DEFAULT_FIRMWARE_DIR, fw_dir_name);
         thingino_error_t result = load_file(path, &firmware->spl, &firmware->spl_size);
         if (result != THINGINO_SUCCESS) {
             LOG_ERROR("Failed to load SPL: %s\n", path);
@@ -216,7 +216,7 @@ thingino_error_t firmware_load_from_files(processor_variant_t variant, const cha
     } else {
         const char *fw_dir_name = variant_to_firmware_dir(variant);
         char path[512];
-        snprintf(path, sizeof(path), "%s/%s/uboot.bin", DEFAULT_FIRMWARE_DIR, fw_dir_name);
+        snprintf(path, sizeof(path), "%s/cloner/%s/uboot.bin", DEFAULT_FIRMWARE_DIR, fw_dir_name);
         thingino_error_t result = load_file(path, &firmware->uboot, &firmware->uboot_size);
         if (result != THINGINO_SUCCESS) {
             LOG_ERROR("Failed to load U-Boot: %s\n", path);

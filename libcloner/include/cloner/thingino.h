@@ -231,7 +231,7 @@ typedef struct {
     const char *config_file;  // Custom DDR config file path (NULL = use default)
     const char *spl_file;     // Custom SPL file path (NULL = use default)
     const char *uboot_file;   // Custom U-Boot file path (NULL = use default)
-    const char *firmware_dir; // Firmware directory (NULL = "./firmwares")
+    const char *firmware_dir; // Firmware root directory (NULL = "./firmware")
 } bootstrap_config_t;
 
 // Bootstrap progress

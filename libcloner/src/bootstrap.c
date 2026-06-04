@@ -77,7 +77,7 @@ thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t
         result = firmware_load_from_files(device->info.variant, config->config_file, config->spl_file,
                                           config->uboot_file, &fw);
     } else {
-        DEBUG_PRINT("Using firmware from: %s\n", config->firmware_dir ? config->firmware_dir : "./firmwares");
+        DEBUG_PRINT("Using firmware from: %s\n", config->firmware_dir ? config->firmware_dir : "./firmware");
         result = firmware_load_from_dir(device->info.variant, config->firmware_dir, &fw);
     }
 

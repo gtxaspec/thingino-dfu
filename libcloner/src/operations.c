@@ -183,7 +183,7 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
         LOG_INFO("Device is in bootrom stage. Bootstrapping to firmware stage first...\n\n");
 
         bootstrap_config_t bootstrap_config = {
-            .firmware_dir = "./firmwares", .sdram_address = 0x80000000, .timeout = 5000};
+            .firmware_dir = "./firmware", .sdram_address = 0x80000000, .timeout = 5000};
 
         result = bootstrap_device(device, &bootstrap_config);
         if (result != THINGINO_SUCCESS) {

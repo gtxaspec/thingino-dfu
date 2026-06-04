@@ -274,8 +274,8 @@ if (strcasecmp(str, "new_soc") == 0) return VARIANT_NEW_SOC;
 
 Place vendor SPL and U-Boot in:
 ```
-firmwares/new_soc/spl.bin
-firmwares/new_soc/uboot.bin
+firmware/cloner/new_soc/spl.bin
+firmware/cloner/new_soc/uboot.bin
 ```
 
 These are extracted from the Ingenic vendor cloner tool for the target SoC.

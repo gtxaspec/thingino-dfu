@@ -585,7 +585,7 @@ static void print_usage(const char *name) {
     printf("Usage: %s [options]\n\n", name);
     printf("Options:\n");
     printf("  -p, --port <port>         Listen port (default: %d)\n", CLONER_DEFAULT_PORT);
-    printf("  --firmware-dir <dir>      Firmware directory (default: ./firmwares)\n");
+    printf("  --firmware-dir <dir>      Firmware root directory (default: ./firmware)\n");
     printf("  --token <secret>          Require auth token from clients\n");
     printf("  -d, --debug               Enable debug output\n");
     printf("  -h, --help                Show this help\n");
@@ -599,7 +599,7 @@ static const char *resolve_firmware_dir(const char *argv0) {
     if (len > 0 && len < sizeof(buf)) {
         char *sep = strrchr(buf, '\\');
         if (sep) {
-            snprintf(sep + 1, sizeof(buf) - (sep + 1 - buf), "firmwares");
+            snprintf(sep + 1, sizeof(buf) - (sep + 1 - buf), "firmware");
             return buf;
         }
     }
@@ -609,13 +609,13 @@ static const char *resolve_firmware_dir(const char *argv0) {
         buf[len] = '\0';
         char *sep = strrchr(buf, '/');
         if (sep) {
-            snprintf(sep + 1, sizeof(buf) - (sep + 1 - buf), "firmwares");
+            snprintf(sep + 1, sizeof(buf) - (sep + 1 - buf), "firmware");
             return buf;
         }
     }
 #endif
     (void)argv0;
-    return "./firmwares";
+    return "./firmware";
 }
 
 int main(int argc, char **argv) {
