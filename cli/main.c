@@ -367,15 +367,20 @@ int main(int argc, char *argv[]) {
     // Set global debug flag based on CLI options
     g_debug_enabled = options.debug;
 
-    // Remote mode: dispatch to dfu-remote daemon
+    // Remote mode: dispatch to dfu-remote daemon (DFU by default, --cloner for legacy)
     if (options.remote_host) {
         int port = options.remote_port > 0 ? options.remote_port : TDFU_DEFAULT_PORT;
         if (remote_connect(options.remote_host, port, options.auth_token) < 0)
             return EXIT_PROTOCOL_ERROR;
+        remote_set_cloner(options.cloner);
 
         int rc = 0;
+        /* Variant detection probes a bootrom; it's needed for cloner operations
+         * and for DFU bootstrap, but NOT for a DFU read/write (those target an
+         * already-running U-Boot DFU gadget, which has no SoC variant). */
         const char *cpu = options.force_cpu;
-        if (!cpu) {
+        bool need_variant = options.cloner || options.bootstrap;
+        if (need_variant && !cpu) {
             cpu = remote_detect_variant(options.device_index);
             if (cpu) {
                 printf("Auto-detected remote device: %s\n", cpu);

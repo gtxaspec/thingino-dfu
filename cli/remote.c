@@ -47,6 +47,11 @@ static uint32_t remote_crc32(const uint8_t *data, size_t len) {
 }
 
 static int remote_fd = -1;
+static bool g_remote_cloner = false; /* select cloner backend on the daemon */
+
+void remote_set_cloner(bool on) {
+    g_remote_cloner = on;
+}
 
 /* Map variant name to firmware directory name (mirrors loader.c) */
 static const char *variant_to_fw_dir(const char *variant) {
@@ -174,7 +179,7 @@ static int send_command(uint8_t cmd, const void *payload, uint32_t len) {
     tdfu_msg_header_t hdr = {
         .magic = tdfu_htonl(TDFU_PROTO_MAGIC),
         .version = TDFU_PROTO_VERSION,
-        .command = cmd,
+        .command = (uint8_t)(g_remote_cloner ? (cmd | TDFU_CMD_CLONER_FLAG) : cmd),
         .payload_len = tdfu_htonl(len),
     };
     if (net_send_all(remote_fd, &hdr, sizeof(hdr)) < 0)
@@ -365,6 +370,36 @@ const char *remote_detect_variant(int device_index) {
  *   [4:uboot_len][uboot_data][4:uboot_crc32]
  */
 int remote_bootstrap(int device_index, const char *cpu_variant, const char *firmware_dir) {
+    if (!g_remote_cloner) {
+        /* DFU backend: the daemon USB-boots firmware/dfu/<soc>/ itself, so the
+         * client sends only device index + variant (no DDR/SPL/U-Boot upload). */
+        size_t vlen = cpu_variant ? strlen(cpu_variant) : 0;
+        if (vlen > 63)
+            vlen = 63;
+        uint8_t payload[2 + 64];
+        payload[0] = (uint8_t)device_index;
+        payload[1] = (uint8_t)vlen;
+        if (vlen)
+            memcpy(payload + 2, cpu_variant, vlen);
+        if (send_command(CMD_BOOTSTRAP, payload, 2 + vlen) < 0)
+            return -1;
+        uint8_t st = 0;
+        uint8_t *resp = NULL;
+        uint32_t rl = 0;
+        if (recv_response(&st, &resp, &rl) < 0) {
+            fprintf(stderr, "Lost connection during bootstrap\n");
+            return -1;
+        }
+        if (st != RESP_OK) {
+            fprintf(stderr, "Bootstrap failed: %s\n", resp ? (char *)resp : "unknown");
+            free(resp);
+            return -1;
+        }
+        printf("Bootstrap completed successfully (remote DFU)\n");
+        free(resp);
+        return 0;
+    }
+
     const char *fw_dir = firmware_dir ? firmware_dir : "./firmware";
     const char *fw_subdir = variant_to_fw_dir(cpu_variant);
 
@@ -514,7 +549,9 @@ int remote_write_firmware(int device_index, const char *cpu_variant, const char 
 
     uint32_t fw_crc = remote_crc32(fw_data, fw_len);
 
-    size_t variant_len = strlen(cpu_variant);
+    /* variant is optional (DFU write passes none - the daemon resolves the alt) */
+    const char *variant = cpu_variant ? cpu_variant : "";
+    size_t variant_len = strlen(variant);
     size_t payload_len = 2 + variant_len + 4 + fw_len + 4;
     uint8_t *payload = malloc(payload_len);
     if (!payload) {
@@ -525,7 +562,7 @@ int remote_write_firmware(int device_index, const char *cpu_variant, const char 
     uint8_t *p = payload;
     *p++ = (uint8_t)device_index;
     *p++ = (uint8_t)variant_len;
-    memcpy(p, cpu_variant, variant_len);
+    memcpy(p, variant, variant_len);
     p += variant_len;
     write_be32(p, fw_len);
     p += 4;

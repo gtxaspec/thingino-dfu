@@ -33,6 +33,11 @@ enum {
     CMD_CANCEL = 0x06,    /* abort current operation */
 };
 
+/* The high bit of `command` selects the backend: clear = DFU (default), set =
+ * legacy cloner. Mask it off to recover the CMD_* code. */
+#define TDFU_CMD_CLONER_FLAG 0x80
+#define TDFU_CMD_MASK        0x7F
+
 /* Response status */
 enum {
     RESP_OK = 0x00,

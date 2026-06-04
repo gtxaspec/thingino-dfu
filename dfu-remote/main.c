@@ -13,6 +13,7 @@
 
 #include "tdfu/tdfu.h"
 #include "tdfu/protocol.h"
+#include "tdfu/dfu.h"
 #include "platform.h"
 
 #include <stdio.h>
@@ -198,7 +199,18 @@ static uint32_t read_be32(const uint8_t *p) {
  *
  * Payload: [1:device_idx][1:variant_len][N:variant]
  */
-static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len, const char *firmware_dir) {
+/* Resolve which DFU alt to target for a remote read/write. Single-alt gadgets
+ * (the common Ingenic "flash" case) resolve automatically; otherwise the first
+ * alt is used. Returns the alt number, or -1 if the gadget isn't present. */
+static int dfu_pick_alt(usb_manager_t *manager, int device_index) {
+    tdfu_dfu_info_t info;
+    if (tdfu_dfu_probe(manager, device_index, &info) != TDFU_SUCCESS)
+        return -1;
+    return info.alt_count > 0 ? info.alts[0].alt : -1;
+}
+
+static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len, const char *firmware_dir,
+                            bool use_cloner) {
     if (len < 2)
         return send_error(client_fd, "payload too short");
 
@@ -224,8 +236,15 @@ static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len,
         return send_error(client_fd, "USB init failed");
 
     g_log_client_fd = client_fd;
-    tdfu_error_t result = tdfu_op_bootstrap(&manager, device_index, variant_str, g_debug_enabled, false, NULL,
-                                                  NULL, NULL, firmware_dir);
+    tdfu_error_t result;
+    if (use_cloner) {
+        result = tdfu_op_bootstrap(&manager, device_index, variant_str, g_debug_enabled, false, NULL, NULL, NULL,
+                                   firmware_dir);
+    } else {
+        /* DFU: bootrom -> U-Boot DFU gadget, images from firmware/dfu/<soc>/ */
+        result = tdfu_dfu_bootstrap(&manager, device_index, firmware_dir, variant_str[0] ? variant_str : NULL, NULL,
+                                    NULL);
+    }
     g_log_client_fd = -1;
 
     usb_manager_cleanup(&manager);
@@ -247,7 +266,8 @@ static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len,
  *   [1:device_idx][1:variant_len][N:variant]
  *   [4:fw_len][fw_data][4:crc32]
  */
-static int handle_write(int client_fd, const uint8_t *payload, uint32_t len, const char *firmware_dir) {
+static int handle_write(int client_fd, const uint8_t *payload, uint32_t len, const char *firmware_dir,
+                        bool use_cloner) {
     if (len < 2)
         return send_error(client_fd, "payload too short");
 
@@ -315,9 +335,16 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len, con
     }
 
     g_log_client_fd = client_fd;
-    tdfu_error_t result =
-        tdfu_op_write_firmware(&manager, device_index, tmpfile, variant_str, NULL, false, false, false,
-                                 g_debug_enabled, false, NULL, NULL, NULL, firmware_dir, 0);
+    tdfu_error_t result;
+    if (use_cloner) {
+        result = tdfu_op_write_firmware(&manager, device_index, tmpfile, variant_str, NULL, false, false, false,
+                                        g_debug_enabled, false, NULL, NULL, NULL, firmware_dir, 0);
+    } else {
+        /* DFU: download to the gadget's (single/first) alt setting. */
+        int alt = dfu_pick_alt(&manager, device_index);
+        result = (alt < 0) ? TDFU_ERROR_DEVICE_NOT_FOUND
+                           : tdfu_dfu_download(&manager, device_index, alt, tmpfile);
+    }
     g_log_client_fd = -1;
 
     remove(tmpfile);
@@ -338,7 +365,7 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len, con
  *
  * Payload: [1:device_idx][1:variant_len][N:variant]
  */
-static int handle_read(int client_fd, const uint8_t *payload, uint32_t len) {
+static int handle_read(int client_fd, const uint8_t *payload, uint32_t len, bool use_cloner) {
     if (len < 2)
         return send_error(client_fd, "payload too short");
 
@@ -381,7 +408,15 @@ static int handle_read(int client_fd, const uint8_t *payload, uint32_t len) {
     g_state = "reading";
     g_cancel = 0;
     g_log_client_fd = client_fd;
-    tdfu_error_t result = tdfu_op_read_firmware(&manager, device_index, tmpfile, force_cpu, NULL);
+    tdfu_error_t result;
+    if (use_cloner) {
+        result = tdfu_op_read_firmware(&manager, device_index, tmpfile, force_cpu, NULL);
+    } else {
+        /* DFU: upload the gadget's (single/first) alt setting. */
+        int alt = dfu_pick_alt(&manager, device_index);
+        result = (alt < 0) ? TDFU_ERROR_DEVICE_NOT_FOUND
+                           : tdfu_dfu_upload(&manager, device_index, alt, tmpfile, 0);
+    }
     g_log_client_fd = -1;
     usb_manager_cleanup(&manager);
 
@@ -542,18 +577,20 @@ static void handle_client(int client_fd, const char *firmware_dir) {
         }
 
         int rc = 0;
-        switch (hdr.command) {
+        /* High bit of command = backend: set means legacy cloner, clear = DFU. */
+        bool use_cloner = (hdr.command & TDFU_CMD_CLONER_FLAG) != 0;
+        switch (hdr.command & TDFU_CMD_MASK) {
         case CMD_DISCOVER:
             rc = handle_discover(client_fd);
             break;
         case CMD_BOOTSTRAP:
-            rc = handle_bootstrap(client_fd, payload, payload_len, firmware_dir);
+            rc = handle_bootstrap(client_fd, payload, payload_len, firmware_dir, use_cloner);
             break;
         case CMD_WRITE:
-            rc = handle_write(client_fd, payload, payload_len, firmware_dir);
+            rc = handle_write(client_fd, payload, payload_len, firmware_dir, use_cloner);
             break;
         case CMD_READ:
-            rc = handle_read(client_fd, payload, payload_len);
+            rc = handle_read(client_fd, payload, payload_len, use_cloner);
             break;
         case CMD_STATUS:
             rc = handle_status(client_fd);
