@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -579,10 +580,12 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                 newFd, detectedSoc, outputFile.absolutePath, cacheDir, assetManager,
                 useDfu || isDfuGadget
             )
+            val hash = if (result == 0) runCatching { sha256Hex(outputFile) }.getOrNull() else null
 
             withContext(Dispatchers.Main) {
                 if (result == 0) {
                     appendLog("Read complete: ${outputFile.name}\n")
+                    hash?.let { appendLog("SHA256: $it\n") }
                     updateStatus("Read complete!")
                 } else {
                     appendLog("Read failed (error $result)\n")
@@ -615,11 +618,13 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
         lifecycleScope.launch(Dispatchers.IO) {
             val data = client.readFirmware(selectedDeviceIndex, detectedSoc)
+            val hash = if (data != null) runCatching { sha256Hex(data) }.getOrNull() else null
 
             withContext(Dispatchers.Main) {
                 if (data != null) {
                     outputFile.writeBytes(data)
                     appendLog("Read complete: ${outputFile.name} (${data.size / 1024} KB)\n")
+                    hash?.let { appendLog("SHA256: $it\n") }
                     updateStatus("Read complete!")
                 } else {
                     appendLog("Read failed\n")
@@ -840,4 +845,22 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             logScroll.fullScroll(View.FOCUS_DOWN)
         }
     }
+
+    /** Lowercase hex SHA-256 of a file, read in chunks. Call off the UI thread. */
+    private fun sha256Hex(file: File): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buf = ByteArray(65536)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                md.update(buf, 0, n)
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /** Lowercase hex SHA-256 of an in-memory buffer. */
+    private fun sha256Hex(data: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(data).joinToString("") { "%02x".format(it) }
 }

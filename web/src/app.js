@@ -101,6 +101,25 @@ function hideProgress() {
     document.getElementById('progress').classList.add('d-none');
 }
 
+/* Hex SHA-256 of a byte buffer via Web Crypto (available in the secure context
+ * the flasher runs in). */
+async function sha256Hex(data) {
+    var digest = await crypto.subtle.digest('SHA-256', data);
+    var bytes = new Uint8Array(digest);
+    var hex = '';
+    for (var i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, '0');
+    return hex;
+}
+
+/* Log "SHA256: ..." for a just-saved buffer; quietly skip if unavailable. */
+async function logSha256(data) {
+    try {
+        log('SHA256: ' + await sha256Hex(data));
+    } catch (e) {
+        console.warn('sha256 failed', e);
+    }
+}
+
 /* ------------------------------------------------------------------ */
 /*  UI State                                                           */
 /* ------------------------------------------------------------------ */
@@ -719,6 +738,7 @@ async function doRead() {
 
         showProgress(100, 'Read complete');
         log('Firmware saved as firmware_dump.bin');
+        await logSha256(data);
         setTimeout(hideProgress, 1500);
         setState('done');
     } catch (e) {
@@ -863,6 +883,7 @@ async function doDfuRead() {
         var a = document.createElement('a'); a.href = url; a.download = 'firmware_dump.bin'; a.click();
         URL.revokeObjectURL(url);
         showProgress(100, 'Read complete'); log('Firmware saved as firmware_dump.bin');
+        await logSha256(data);
         setTimeout(hideProgress, 1500); setState('done');
     } catch (e) {
         log('DFU read error: ' + e.message, 'error'); console.error(e); hideProgress(); setState('error');
