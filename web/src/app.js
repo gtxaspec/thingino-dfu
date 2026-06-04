@@ -120,6 +120,15 @@ async function logSha256(data) {
     }
 }
 
+/* Unique dump filename matching the Android app: firmware_<SOC>_<yyyyMMdd_HHmm>.bin */
+function readFilename() {
+    var soc = (detectedVariantName || '').toUpperCase() || 'DFU';
+    var d = new Date();
+    var p = function(n) { return String(n).padStart(2, '0'); };
+    var ts = '' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes());
+    return 'firmware_' + soc + '_' + ts + '.bin';
+}
+
 /* ------------------------------------------------------------------ */
 /*  UI State                                                           */
 /* ------------------------------------------------------------------ */
@@ -730,14 +739,15 @@ async function doRead() {
         // Create download
         var blob = new Blob([data], { type: 'application/octet-stream' });
         var url = URL.createObjectURL(blob);
+        var fname = readFilename();
         var a = document.createElement('a');
         a.href = url;
-        a.download = 'firmware_dump.bin';
+        a.download = fname;
         a.click();
         URL.revokeObjectURL(url);
 
         showProgress(100, 'Read complete');
-        log('Firmware saved as firmware_dump.bin');
+        log('Firmware saved as ' + fname);
         await logSha256(data);
         setTimeout(hideProgress, 1500);
         setState('done');
@@ -880,9 +890,10 @@ async function doDfuRead() {
         log('Read ' + data.length + ' bytes from flash (DFU)');
         var blob = new Blob([data], { type: 'application/octet-stream' });
         var url = URL.createObjectURL(blob);
-        var a = document.createElement('a'); a.href = url; a.download = 'firmware_dump.bin'; a.click();
+        var fname = readFilename();
+        var a = document.createElement('a'); a.href = url; a.download = fname; a.click();
         URL.revokeObjectURL(url);
-        showProgress(100, 'Read complete'); log('Firmware saved as firmware_dump.bin');
+        showProgress(100, 'Read complete'); log('Firmware saved as ' + fname);
         await logSha256(data);
         setTimeout(hideProgress, 1500); setState('done');
     } catch (e) {
