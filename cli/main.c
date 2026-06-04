@@ -47,6 +47,7 @@ typedef struct {
     char *flash_chip;    // Override flash chip name (default: auto-detect)
     bool cloner;         // Use the legacy cloner backend (default backend is DFU)
     char *alt;           // DFU alt-setting: name or number
+    bool wait;           // Wait for the required device to appear before proceeding
 } cli_options_t;
 
 void print_usage(const char *program_name) {
@@ -77,6 +78,7 @@ void print_usage(const char *program_name) {
     printf("      --list-cpus           List supported CPU targets for --cpu\n");
     printf("      --cloner              Use the legacy cloner backend (default: DFU)\n");
     printf("      --alt <name|num>      DFU alt-setting to target\n");
+    printf("      --wait                Wait for the required device to appear, then proceed\n");
     printf("\nExamples (DFU is the default backend):\n");
     printf("  thingino-dfu -b                                 # Bootrom -> U-Boot DFU (auto-detect SoC)\n");
     printf("  thingino-dfu -l                                 # List DFU alt-settings\n");
@@ -155,6 +157,8 @@ tdfu_error_t parse_arguments(int argc, char *argv[], cli_options_t *options) {
             options->firmware_dir = argv[++i];
         } else if (strcmp(argv[i], "--cloner") == 0) {
             options->cloner = true;
+        } else if (strcmp(argv[i], "--wait") == 0) {
+            options->wait = true;
         } else if (strcmp(argv[i], "--alt") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires an alt setting (name or number)\n", argv[i]);
@@ -293,6 +297,35 @@ tdfu_error_t list_devices(usb_manager_t *manager) {
  * moved to libtdfu/src/operations.c as tdfu_op_bootstrap(),
  * tdfu_op_read_firmware(), tdfu_op_write_firmware(). */
 
+/* Block until the device the operation needs appears (for --wait). want_gadget
+ * waits for the U-Boot DFU gadget (a108:4d44); otherwise it waits for a bootrom/
+ * firmware device. Polls every 500ms, indefinitely (Ctrl-C to abort). */
+static void wait_for_device(usb_manager_t *manager, bool want_gadget) {
+    bool announced = false;
+    for (;;) {
+        bool present;
+        if (want_gadget) {
+            present = tdfu_dfu_gadget_present(manager);
+        } else {
+            tdfu_device_info_t *devs = NULL;
+            int n = 0;
+            present = (usb_manager_find_devices(manager, &devs, &n) == TDFU_SUCCESS && n > 0);
+            free(devs);
+        }
+        if (present) {
+            if (announced)
+                LOG_INFO("Device found.\n");
+            return;
+        }
+        if (!announced) {
+            LOG_INFO("Waiting for %s to appear (Ctrl-C to abort)...\n",
+                     want_gadget ? "U-Boot DFU gadget" : "device");
+            announced = true;
+        }
+        tdfu_sleep_milliseconds(500);
+    }
+}
+
 int main(int argc, char *argv[]) {
     fprintf(stderr, "thingino-dfu %s (%s)\n", VERSION, GIT_HASH);
 
@@ -393,12 +426,18 @@ int main(int argc, char *argv[]) {
 
     int exit_code = 0;
 
+    /* --wait: block until the needed device shows up. DFU bootstrap and cloner
+     * need a bootrom/firmware device; DFU read/write/list needs the gadget. */
+    if (options.wait)
+        wait_for_device(&manager, !options.cloner && !options.bootstrap);
+
     /* DFU mode: device is already running U-Boot's `dfu` command */
     /* DFU is the default backend; --cloner selects the legacy cloner path. */
     if (!options.cloner) {
         /* -b: bootstrap a bootrom device into U-Boot DFU mode */
         if (options.bootstrap) {
-            result = tdfu_dfu_bootstrap(&manager, options.device_index, options.firmware_dir, options.force_cpu);
+            result = tdfu_dfu_bootstrap(&manager, options.device_index, options.firmware_dir, options.force_cpu,
+                                        options.spl_file, options.uboot_file);
             usb_manager_cleanup(&manager);
             if (result != TDFU_SUCCESS) {
                 LOG_ERROR("DFU bootstrap failed: %s\n", tdfu_error_to_string(result));

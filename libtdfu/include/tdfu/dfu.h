@@ -59,11 +59,20 @@ tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, 
 
 /**
  * Bootstrap a device from the Ingenic bootrom (a108:c309) into U-Boot DFU mode:
- * detect the SoC variant (probe program, or force_cpu), USB-boot the matching
- * DFU-capable SPL + U-Boot from <firmware_dir>/dfu/<variant>/, and start it.
- * The device then re-enumerates as a DFU gadget (a108:4d44).
+ * USB-boot a DFU-capable SPL + U-Boot and start it; the device then re-enumerates
+ * as a DFU gadget (a108:4d44).
+ *
+ * If spl_override and uboot_override are both non-empty, those exact files are
+ * used and SoC detection is skipped (like t31-usbboot.py). Otherwise the SoC is
+ * detected (probe program, or force_cpu) and the images are loaded from
+ * <firmware_dir>/dfu/<variant>/{spl,uboot}.bin. spl_override/uboot_override may
+ * be NULL.
  */
 tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const char *firmware_dir,
-                                const char *force_cpu);
+                                const char *force_cpu, const char *spl_override, const char *uboot_override);
+
+/* Non-destructive check for the presence of the U-Boot DFU gadget (a108:4d44).
+ * Safe to poll - does not open, probe, or reset any device. */
+bool tdfu_dfu_gadget_present(usb_manager_t *manager);
 
 #endif /* TDFU_DFU_H */

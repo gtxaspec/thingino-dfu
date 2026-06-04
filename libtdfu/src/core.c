@@ -379,7 +379,7 @@ tdfu_error_t tdfu_set_device_variant(int device_index, tdfu_variant_t variant) {
  * g_manager. They take alt-setting names (or "") to avoid marshalling the
  * tdfu_dfu_info_t struct across the JS boundary. */
 tdfu_error_t tdfu_web_dfu_bootstrap(int device_index, const char *firmware_dir, const char *force_cpu) {
-    return tdfu_dfu_bootstrap(&g_manager, device_index, firmware_dir, force_cpu);
+    return tdfu_dfu_bootstrap(&g_manager, device_index, firmware_dir, force_cpu, NULL, NULL);
 }
 
 static int web_dfu_resolve_alt(int device_index, const char *alt_name) {

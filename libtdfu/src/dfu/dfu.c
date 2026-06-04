@@ -395,6 +395,29 @@ static tdfu_error_t dfu_claim_alt(usb_device_t *dev, int iface, int alt) {
 /* Public API                                                              */
 /* ====================================================================== */
 
+/* Lightweight, non-destructive presence check for the U-Boot DFU gadget
+ * (a108:4d44): a VID:PID device-list scan only - no open, no probe, no reset -
+ * so it is safe to poll (e.g. for --wait) without disturbing a bootrom that may
+ * also be present. */
+bool tdfu_dfu_gadget_present(usb_manager_t *manager) {
+    if (!manager || !manager->initialized)
+        return false;
+    libusb_device **list = NULL;
+    ssize_t cnt = libusb_get_device_list(manager->context, &list);
+    if (cnt < 0)
+        return false;
+    bool found = false;
+    for (ssize_t i = 0; i < cnt && !found; i++) {
+        struct libusb_device_descriptor dd;
+        if (libusb_get_device_descriptor(list[i], &dd) != 0)
+            continue;
+        if ((dd.idVendor == 0x601A || dd.idVendor == 0xA108) && dd.idProduct == 0x4D44)
+            found = true;
+    }
+    libusb_free_device_list(list, 1);
+    return found;
+}
+
 static tdfu_error_t dfu_probe_impl(usb_manager_t *manager, int device_index, tdfu_dfu_info_t *info) {
     usb_device_t *dev = NULL;
     tdfu_error_t r = dfu_open_device(manager, device_index, &dev);
@@ -667,7 +690,7 @@ static const char *dfu_variant_dir(tdfu_variant_t v) {
 }
 
 tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const char *firmware_dir,
-                                const char *force_cpu) {
+                                const char *force_cpu, const char *spl_override, const char *uboot_override) {
     tdfu_device_info_t *devs = NULL;
     int n = 0;
     usb_device_t *dev = NULL;
@@ -675,8 +698,8 @@ tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const 
     size_t spl_len = 0, uboot_len = 0;
     char spl_path[512], uboot_path[512];
     tdfu_variant_t variant;
-    const char *name;
     const char *root = firmware_dir ? firmware_dir : "./firmware";
+    bool explicit_files = spl_override && spl_override[0] && uboot_override && uboot_override[0];
 
     tdfu_error_t r = usb_manager_find_devices(manager, &devs, &n);
     if (r != TDFU_SUCCESS)
@@ -691,24 +714,31 @@ tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const 
         return r;
     usb_device_claim_interface(dev);
 
-    /* 1) Determine the SoC variant: forced, or the bootrom probe program. */
-    if (force_cpu) {
-        variant = tdfu_variant_from_string(force_cpu);
+    /* Resolve the SPL + U-Boot images. Explicit --spl/--uboot override the
+     * firmware-dir lookup and skip SoC detection entirely (like t31-usbboot.py);
+     * otherwise detect the SoC and pick firmware/dfu/<soc>/{spl,uboot}.bin. */
+    if (explicit_files) {
+        snprintf(spl_path, sizeof(spl_path), "%s", spl_override);
+        snprintf(uboot_path, sizeof(uboot_path), "%s", uboot_override);
+        LOG_INFO("DFU bootstrap: --spl %s + --uboot %s\n", spl_path, uboot_path);
     } else {
-        r = protocol_detect_soc(dev, &variant);
-        if (r != TDFU_SUCCESS) {
-            LOG_ERROR("SoC auto-detect failed; pass --cpu <variant>\n");
-            usb_device_close(dev);
-            free(dev);
-            return r;
+        if (force_cpu) {
+            variant = tdfu_variant_from_string(force_cpu);
+        } else {
+            r = protocol_detect_soc(dev, &variant);
+            if (r != TDFU_SUCCESS) {
+                LOG_ERROR("SoC auto-detect failed; pass --cpu <variant> (or --spl + --uboot)\n");
+                usb_device_close(dev);
+                free(dev);
+                return r;
+            }
         }
+        const char *name = dfu_variant_dir(variant);
+        LOG_INFO("DFU bootstrap: SoC %s\n", name);
+        snprintf(spl_path, sizeof(spl_path), "%s/dfu/%s/spl.bin", root, name);
+        snprintf(uboot_path, sizeof(uboot_path), "%s/dfu/%s/uboot.bin", root, name);
     }
-    name = dfu_variant_dir(variant);
-    LOG_INFO("DFU bootstrap: SoC %s\n", name);
 
-    /* 2) Load the DFU-capable SPL + U-Boot for this variant. */
-    snprintf(spl_path, sizeof(spl_path), "%s/dfu/%s/spl.bin", root, name);
-    snprintf(uboot_path, sizeof(uboot_path), "%s/dfu/%s/uboot.bin", root, name);
     r = load_file(spl_path, &spl, &spl_len);
     if (r != TDFU_SUCCESS) {
         LOG_ERROR("Missing DFU SPL: %s\n", spl_path);
