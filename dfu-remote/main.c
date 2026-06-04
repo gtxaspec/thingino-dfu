@@ -102,11 +102,11 @@ static int net_recv_all(int fd, void *buf, size_t len) {
 }
 
 static int send_response(int fd, uint8_t status, const void *payload, uint32_t len) {
-    cloner_resp_header_t hdr = {
-        .magic = cloner_htonl(CLONER_PROTO_MAGIC),
-        .version = CLONER_PROTO_VERSION,
+    tdfu_resp_header_t hdr = {
+        .magic = tdfu_htonl(TDFU_PROTO_MAGIC),
+        .version = TDFU_PROTO_VERSION,
         .status = status,
-        .payload_len = cloner_htonl(len),
+        .payload_len = tdfu_htonl(len),
     };
     if (net_send_all(fd, &hdr, sizeof(hdr)) < 0)
         return -1;
@@ -141,17 +141,17 @@ static void daemon_log_hook(const char *msg, size_t len) {
 
 static int handle_discover(int client_fd) {
     usb_manager_t manager = {0};
-    if (usb_manager_init(&manager) != THINGINO_SUCCESS) {
+    if (usb_manager_init(&manager) != TDFU_SUCCESS) {
         return send_error(client_fd, "USB init failed");
     }
 
-    device_info_t *devices = NULL;
+    tdfu_device_info_t *devices = NULL;
     int count = 0;
     usb_manager_find_devices(&manager, &devices, &count);
 
     /* Build response: array of device entries */
-    size_t resp_len = count * sizeof(cloner_device_entry_t);
-    cloner_device_entry_t *entries = calloc(count, sizeof(cloner_device_entry_t));
+    size_t resp_len = count * sizeof(tdfu_device_entry_t);
+    tdfu_device_entry_t *entries = calloc(count, sizeof(tdfu_device_entry_t));
     if (!entries && count > 0) {
         free(devices);
         usb_manager_cleanup(&manager);
@@ -161,19 +161,19 @@ static int handle_discover(int client_fd) {
     for (int i = 0; i < count; i++) {
         entries[i].bus = devices[i].bus;
         entries[i].address = devices[i].address;
-        entries[i].vendor = cloner_htons(devices[i].vendor);
-        entries[i].product = cloner_htons(devices[i].product);
+        entries[i].vendor = tdfu_htons(devices[i].vendor);
+        entries[i].product = tdfu_htons(devices[i].product);
         entries[i].stage = devices[i].stage;
         entries[i].variant = devices[i].variant;
 
         /* For bootrom devices, run SoC auto-detect to get true variant */
         if (devices[i].stage == 0) {
             usb_device_t *dev = NULL;
-            if (usb_manager_open_device(&manager, &devices[i], &dev) == THINGINO_SUCCESS) {
-                processor_variant_t detected = VARIANT_T31X;
-                if (protocol_detect_soc(dev, &detected) == THINGINO_SUCCESS) {
+            if (usb_manager_open_device(&manager, &devices[i], &dev) == TDFU_SUCCESS) {
+                tdfu_variant_t detected = TDFU_VARIANT_T31X;
+                if (protocol_detect_soc(dev, &detected) == TDFU_SUCCESS) {
                     entries[i].variant = (uint8_t)detected;
-                    DEBUG_PRINT("Discover: device %d auto-detected as %s\n", i, processor_variant_to_string(detected));
+                    DEBUG_PRINT("Discover: device %d auto-detected as %s\n", i, tdfu_variant_to_string(detected));
                 }
                 usb_device_close(dev);
             }
@@ -220,20 +220,20 @@ static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len,
     printf("Bootstrap request: device=%d, cpu=%s, firmware_dir=%s\n", device_index, variant_str, firmware_dir);
 
     usb_manager_t manager = {0};
-    if (usb_manager_init(&manager) != THINGINO_SUCCESS)
+    if (usb_manager_init(&manager) != TDFU_SUCCESS)
         return send_error(client_fd, "USB init failed");
 
     g_log_client_fd = client_fd;
-    thingino_error_t result = cloner_op_bootstrap(&manager, device_index, variant_str, g_debug_enabled, false, NULL,
+    tdfu_error_t result = tdfu_op_bootstrap(&manager, device_index, variant_str, g_debug_enabled, false, NULL,
                                                   NULL, NULL, firmware_dir);
     g_log_client_fd = -1;
 
     usb_manager_cleanup(&manager);
 
     g_state = "idle";
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         char msg[128];
-        snprintf(msg, sizeof(msg), "bootstrap failed: %s", thingino_error_to_string(result));
+        snprintf(msg, sizeof(msg), "bootstrap failed: %s", tdfu_error_to_string(result));
         return send_error(client_fd, msg);
     }
 
@@ -309,14 +309,14 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len, con
     }
 
     usb_manager_t manager = {0};
-    if (usb_manager_init(&manager) != THINGINO_SUCCESS) {
+    if (usb_manager_init(&manager) != TDFU_SUCCESS) {
         remove(tmpfile);
         return send_error(client_fd, "USB init failed");
     }
 
     g_log_client_fd = client_fd;
-    thingino_error_t result =
-        cloner_op_write_firmware(&manager, device_index, tmpfile, variant_str, NULL, false, false, false,
+    tdfu_error_t result =
+        tdfu_op_write_firmware(&manager, device_index, tmpfile, variant_str, NULL, false, false, false,
                                  g_debug_enabled, false, NULL, NULL, NULL, firmware_dir, 0);
     g_log_client_fd = -1;
 
@@ -324,9 +324,9 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len, con
     usb_manager_cleanup(&manager);
 
     g_state = "idle";
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         char msg[128];
-        snprintf(msg, sizeof(msg), "write failed: %s", thingino_error_to_string(result));
+        snprintf(msg, sizeof(msg), "write failed: %s", tdfu_error_to_string(result));
         return send_error(client_fd, msg);
     }
 
@@ -373,7 +373,7 @@ static int handle_read(int client_fd, const uint8_t *payload, uint32_t len) {
 #endif
 
     usb_manager_t manager = {0};
-    if (usb_manager_init(&manager) != THINGINO_SUCCESS) {
+    if (usb_manager_init(&manager) != TDFU_SUCCESS) {
         remove(tmpfile);
         return send_error(client_fd, "USB init failed");
     }
@@ -381,15 +381,15 @@ static int handle_read(int client_fd, const uint8_t *payload, uint32_t len) {
     g_state = "reading";
     g_cancel = 0;
     g_log_client_fd = client_fd;
-    thingino_error_t result = cloner_op_read_firmware(&manager, device_index, tmpfile, force_cpu, NULL);
+    tdfu_error_t result = tdfu_op_read_firmware(&manager, device_index, tmpfile, force_cpu, NULL);
     g_log_client_fd = -1;
     usb_manager_cleanup(&manager);
 
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         remove(tmpfile);
         g_state = "idle";
         char msg[128];
-        snprintf(msg, sizeof(msg), "read failed: %s", thingino_error_to_string(result));
+        snprintf(msg, sizeof(msg), "read failed: %s", tdfu_error_to_string(result));
         return send_error(client_fd, msg);
     }
 
@@ -467,7 +467,7 @@ static int handle_cancel(int client_fd) {
 
 static void handle_client(int client_fd, const char *firmware_dir) {
     printf("Client connected\n");
-    g_cloner_log_hook = daemon_log_hook;
+    g_tdfu_log_hook = daemon_log_hook;
 
     /* Authentication handshake if token is configured */
     if (g_auth_token) {
@@ -479,8 +479,8 @@ static void handle_client(int client_fd, const char *firmware_dir) {
         }
         uint32_t raw_magic;
         memcpy(&raw_magic, auth_hdr, 4);
-        uint32_t magic = cloner_ntohl(raw_magic);
-        if (magic != CLONER_PROTO_MAGIC || auth_hdr[4] != CLONER_PROTO_VERSION) {
+        uint32_t magic = tdfu_ntohl(raw_magic);
+        if (magic != TDFU_PROTO_MAGIC || auth_hdr[4] != TDFU_PROTO_VERSION) {
             send_error(client_fd, "auth: bad handshake");
             return;
         }
@@ -509,21 +509,21 @@ static void handle_client(int client_fd, const char *firmware_dir) {
     }
 
     while (g_running) {
-        cloner_msg_header_t hdr;
+        tdfu_msg_header_t hdr;
         if (net_recv_all(client_fd, &hdr, sizeof(hdr)) < 0)
             break;
 
-        if (cloner_ntohl(hdr.magic) != CLONER_PROTO_MAGIC) {
+        if (tdfu_ntohl(hdr.magic) != TDFU_PROTO_MAGIC) {
             send_error(client_fd, "bad magic");
             break;
         }
-        if (hdr.version != CLONER_PROTO_VERSION) {
+        if (hdr.version != TDFU_PROTO_VERSION) {
             send_error(client_fd, "version mismatch");
             break;
         }
 
-        uint32_t payload_len = cloner_ntohl(hdr.payload_len);
-        if (payload_len > CLONER_MAX_PAYLOAD) {
+        uint32_t payload_len = tdfu_ntohl(hdr.payload_len);
+        if (payload_len > TDFU_MAX_PAYLOAD) {
             send_error(client_fd, "payload too large");
             break;
         }
@@ -571,7 +571,7 @@ static void handle_client(int client_fd, const char *firmware_dir) {
             break;
     }
 
-    g_cloner_log_hook = NULL;
+    g_tdfu_log_hook = NULL;
     g_log_client_fd = -1;
     printf("Client disconnected\n");
 }
@@ -584,7 +584,7 @@ static void print_usage(const char *name) {
     printf("dfu-remote - thingino-dfu remote daemon\n");
     printf("Usage: %s [options]\n\n", name);
     printf("Options:\n");
-    printf("  -p, --port <port>         Listen port (default: %d)\n", CLONER_DEFAULT_PORT);
+    printf("  -p, --port <port>         Listen port (default: %d)\n", TDFU_DEFAULT_PORT);
     printf("  --firmware-dir <dir>      Firmware root directory (default: ./firmware)\n");
     printf("  --token <secret>          Require auth token from clients\n");
     printf("  -d, --debug               Enable debug output\n");
@@ -619,7 +619,7 @@ static const char *resolve_firmware_dir(const char *argv0) {
 }
 
 int main(int argc, char **argv) {
-    int port = CLONER_DEFAULT_PORT;
+    int port = TDFU_DEFAULT_PORT;
     const char *firmware_dir = resolve_firmware_dir(argv[0]);
 
     for (int i = 1; i < argc; i++) {

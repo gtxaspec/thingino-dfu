@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(cloner_jni C)
+project(tdfu_jni C)
 
 # Path to libcloner sources (relative to this CMakeLists.txt)
 # CMAKE_CURRENT_SOURCE_DIR = android/app/src/main/jni/
@@ -144,12 +144,12 @@ set(LIBCLONER_SOURCES
 )
 
 # ---------------------------------------------------------------------------
-# JNI shared library: cloner_jni
+# JNI shared library: tdfu_jni
 # Contains the JNI bridge code + all libcloner sources compiled in.
 # Statically links libusb.
 # ---------------------------------------------------------------------------
-add_library(cloner_jni SHARED
-    cloner_jni.c
+add_library(tdfu_jni SHARED
+    tdfu_jni.c
     ${LIBCLONER_SOURCES}
 )
 
@@ -158,7 +158,7 @@ add_library(cloner_jni SHARED
 # - LIBUSB_SRC_DIR provides "libusbi.h" (internal, needed by libusb itself)
 # - LIBCLONER_DIR/include provides <cloner/...> and <thingino.h>
 # - LIBCLONER_DIR/src/* provide internal headers (ddr, firmware, flash, platform)
-target_include_directories(cloner_jni PRIVATE
+target_include_directories(tdfu_jni PRIVATE
     "${LIBUSB_COMPAT_DIR}"
     "${LIBUSB_SRC_DIR}"
     "${LIBCLONER_DIR}/include"
@@ -169,21 +169,21 @@ target_include_directories(cloner_jni PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}"
 )
 
-target_link_libraries(cloner_jni
+target_link_libraries(tdfu_jni
     usb1.0
     log
     android
 )
 
-target_compile_definitions(cloner_jni PRIVATE
+target_compile_definitions(tdfu_jni PRIVATE
     ANDROID
     _GNU_SOURCE
 )
 
 # Reduce binary size: strip unused symbols
-set_target_properties(cloner_jni PROPERTIES
+set_target_properties(tdfu_jni PROPERTIES
     C_VISIBILITY_PRESET hidden
 )
 
 # 16KB page size alignment (required for Android 15+ / API 35)
-target_link_options(cloner_jni PRIVATE "LINKER:-z,max-page-size=16384")
+target_link_options(tdfu_jni PRIVATE "LINKER:-z,max-page-size=16384")

@@ -92,7 +92,7 @@ static void print_supported_cpus(void) {
     }
 }
 
-thingino_error_t parse_arguments(int argc, char *argv[], cli_options_t *options) {
+tdfu_error_t parse_arguments(int argc, char *argv[], cli_options_t *options) {
     // Initialize options
     memset(options, 0, sizeof(cli_options_t));
     options->device_index = 0;
@@ -112,63 +112,63 @@ thingino_error_t parse_arguments(int argc, char *argv[], cli_options_t *options)
         } else if (strcmp(argv[i], "-r") == 0 || strcmp(argv[i], "--read") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a filename\n", argv[i]);
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->read_firmware = true;
             options->output_file = argv[++i];
         } else if (strcmp(argv[i], "-w") == 0 || strcmp(argv[i], "--write") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a filename\n", argv[i]);
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->write_firmware = true;
             options->input_file = argv[++i];
         } else if (strcmp(argv[i], "--config") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a filename\n", argv[i]);
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->config_file = argv[++i];
         } else if (strcmp(argv[i], "--spl") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a filename\n", argv[i]);
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->spl_file = argv[++i];
         } else if (strcmp(argv[i], "--uboot") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a filename\n", argv[i]);
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->uboot_file = argv[++i];
         } else if (strcmp(argv[i], "--firmware-dir") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a directory path\n", argv[i]);
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->firmware_dir = argv[++i];
         } else if (strcmp(argv[i], "--host") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a hostname\n", argv[i]);
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->remote_host = argv[++i];
         } else if (strcmp(argv[i], "--port") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a port number\n", argv[i]);
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->remote_port = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--token") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a token string\n", argv[i]);
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->auth_token = argv[++i];
         } else if (strcmp(argv[i], "--flash-chip") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a chip name\n", argv[i]);
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->flash_chip = argv[++i];
         } else if (strcmp(argv[i], "--list-cpus") == 0) {
@@ -183,7 +183,7 @@ thingino_error_t parse_arguments(int argc, char *argv[], cli_options_t *options)
         } else if (strcmp(argv[i], "--chunk-size") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a size (e.g. 256K, 1M, 131072)\n", argv[i]);
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
             {
                 char *endptr;
@@ -196,59 +196,59 @@ thingino_error_t parse_arguments(int argc, char *argv[], cli_options_t *options)
                     endptr++;
                 if (*endptr != '\0' || val == 0 || val > 0xFFFFFFFFUL) {
                     printf("Error: invalid chunk-size value\n");
-                    return THINGINO_ERROR_INVALID_PARAMETER;
+                    return TDFU_ERROR_INVALID_PARAMETER;
                 }
                 options->chunk_size = (uint32_t)val;
             }
         } else if (strcmp(argv[i], "--cpu") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a CPU variant (e.g., a1, t31x, t31zx)\n", argv[i]);
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->force_cpu = argv[++i];
         } else if (strcmp(argv[i], "-i") == 0 || strcmp(argv[i], "--index") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires a device index\n", argv[i]);
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
             options->device_index = atoi(argv[++i]);
             if (options->device_index < 0) {
                 printf("Error: device index must be >= 0\n");
-                return THINGINO_ERROR_INVALID_PARAMETER;
+                return TDFU_ERROR_INVALID_PARAMETER;
             }
         } else {
             printf("Error: Unknown option %s\n", argv[i]);
             print_usage(argv[0]);
-            return THINGINO_ERROR_INVALID_PARAMETER;
+            return TDFU_ERROR_INVALID_PARAMETER;
         }
     }
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t list_devices(usb_manager_t *manager) {
+tdfu_error_t list_devices(usb_manager_t *manager) {
     printf("Scanning for Ingenic devices...\n\n");
 
-    device_info_t *devices;
+    tdfu_device_info_t *devices;
     int device_count;
-    thingino_error_t result = usb_manager_find_devices(manager, &devices, &device_count);
-    if (result != THINGINO_SUCCESS) {
-        printf("Failed to list devices: %s\n", thingino_error_to_string(result));
+    tdfu_error_t result = usb_manager_find_devices(manager, &devices, &device_count);
+    if (result != TDFU_SUCCESS) {
+        printf("Failed to list devices: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
     if (device_count == 0) {
         printf("No Ingenic devices found\n");
-        return THINGINO_SUCCESS;
+        return TDFU_SUCCESS;
     }
 
     /* Auto-detect SoC for bootrom devices */
     for (int i = 0; i < device_count; i++) {
-        if (devices[i].stage == STAGE_BOOTROM) {
+        if (devices[i].stage == TDFU_STAGE_BOOTROM) {
             usb_device_t *dev = NULL;
-            if (usb_manager_open_device(manager, &devices[i], &dev) == THINGINO_SUCCESS) {
-                processor_variant_t detected = VARIANT_T31X;
-                if (protocol_detect_soc(dev, &detected) == THINGINO_SUCCESS) {
+            if (usb_manager_open_device(manager, &devices[i], &dev) == TDFU_SUCCESS) {
+                tdfu_variant_t detected = TDFU_VARIANT_T31X;
+                if (protocol_detect_soc(dev, &detected) == TDFU_SUCCESS) {
                     devices[i].variant = detected;
                 }
                 usb_device_close(dev);
@@ -261,20 +261,20 @@ thingino_error_t list_devices(usb_manager_t *manager) {
     printf("------|-----|------|---------|---------|----------|--------\n");
 
     for (int i = 0; i < device_count; i++) {
-        device_info_t *dev = &devices[i];
-        const char *soc = dev->stage == STAGE_BOOTROM ? processor_variant_to_string(dev->variant) : "-";
+        tdfu_device_info_t *dev = &devices[i];
+        const char *soc = dev->stage == TDFU_STAGE_BOOTROM ? tdfu_variant_to_string(dev->variant) : "-";
         printf("  %3d | %3d | %4d | 0x%04X  | 0x%04X  | %-8s | %s\n", i, dev->bus, dev->address, dev->vendor,
-               dev->product, device_stage_to_string(dev->stage), soc);
+               dev->product, tdfu_stage_to_string(dev->stage), soc);
     }
 
     printf("\n");
     free(devices);
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /* bootstrap_device_by_index, read_firmware_from_device, write_firmware_from_file
- * moved to libcloner/src/operations.c as cloner_op_bootstrap(),
- * cloner_op_read_firmware(), cloner_op_write_firmware(). */
+ * moved to libcloner/src/operations.c as tdfu_op_bootstrap(),
+ * tdfu_op_read_firmware(), tdfu_op_write_firmware(). */
 
 int main(int argc, char *argv[]) {
     fprintf(stderr, "thingino-dfu %s (%s)\n", VERSION, GIT_HASH);
@@ -305,8 +305,8 @@ int main(int argc, char *argv[]) {
 #endif
 
     cli_options_t options;
-    thingino_error_t result = parse_arguments(argc, argv, &options);
-    if (result != THINGINO_SUCCESS) {
+    tdfu_error_t result = parse_arguments(argc, argv, &options);
+    if (result != TDFU_SUCCESS) {
         return 1;
     }
 
@@ -319,7 +319,7 @@ int main(int argc, char *argv[]) {
 
     // Remote mode: dispatch to dfu-remote daemon
     if (options.remote_host) {
-        int port = options.remote_port > 0 ? options.remote_port : CLONER_DEFAULT_PORT;
+        int port = options.remote_port > 0 ? options.remote_port : TDFU_DEFAULT_PORT;
         if (remote_connect(options.remote_host, port, options.auth_token) < 0)
             return EXIT_PROTOCOL_ERROR;
 
@@ -369,8 +369,8 @@ int main(int argc, char *argv[]) {
 
     usb_manager_t manager;
     result = usb_manager_init(&manager);
-    if (result != THINGINO_SUCCESS) {
-        printf("Failed to initialize USB: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        printf("Failed to initialize USB: %s\n", tdfu_error_to_string(result));
         return EXIT_DEVICE_ERROR;
     }
 
@@ -380,17 +380,17 @@ int main(int argc, char *argv[]) {
     if (options.list_devices) {
         result = list_devices(&manager);
         usb_manager_cleanup(&manager);
-        return result != THINGINO_SUCCESS ? EXIT_DEVICE_ERROR : 0;
+        return result != TDFU_SUCCESS ? EXIT_DEVICE_ERROR : 0;
     }
 
     /* Bootstrap (required for all device operations from bootrom) */
     const char *detected_cpu = options.force_cpu;
     if (options.bootstrap) {
         result =
-            cloner_op_bootstrap(&manager, options.device_index, options.force_cpu, options.verbose, options.skip_ddr,
+            tdfu_op_bootstrap(&manager, options.device_index, options.force_cpu, options.verbose, options.skip_ddr,
                                 options.config_file, options.spl_file, options.uboot_file, options.firmware_dir);
-        if (result != THINGINO_SUCCESS) {
-            LOG_ERROR("Bootstrap failed: %s\n", thingino_error_to_string(result));
+        if (result != TDFU_SUCCESS) {
+            LOG_ERROR("Bootstrap failed: %s\n", tdfu_error_to_string(result));
             usb_manager_cleanup(&manager);
             return EXIT_DEVICE_ERROR;
         }
@@ -398,25 +398,25 @@ int main(int argc, char *argv[]) {
          * Retrieve it so we can pass it to write/read operations, which
          * otherwise can't auto-detect (device is now in firmware stage). */
         if (!detected_cpu) {
-            detected_cpu = cloner_get_last_detected_variant();
+            detected_cpu = tdfu_get_last_detected_variant();
         }
     }
 
     /* Write firmware */
     if (options.write_firmware && options.input_file) {
-        result = cloner_op_write_firmware(
+        result = tdfu_op_write_firmware(
             &manager, options.device_index, options.input_file, detected_cpu, options.flash_chip, options.no_erase,
             options.reboot_after, options.bootstrap, options.verbose, options.skip_ddr, options.config_file,
             options.spl_file, options.uboot_file, options.firmware_dir, options.chunk_size);
-        if (result != THINGINO_SUCCESS)
+        if (result != TDFU_SUCCESS)
             exit_code = EXIT_TRANSFER_ERROR;
     }
 
     /* Read firmware */
     if (options.read_firmware && options.output_file) {
-        result = cloner_op_read_firmware(&manager, options.device_index, options.output_file, detected_cpu,
+        result = tdfu_op_read_firmware(&manager, options.device_index, options.output_file, detected_cpu,
                                          options.flash_chip);
-        if (result != THINGINO_SUCCESS)
+        if (result != TDFU_SUCCESS)
             exit_code = EXIT_TRANSFER_ERROR;
     }
 

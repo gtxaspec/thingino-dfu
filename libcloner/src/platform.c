@@ -15,6 +15,6 @@ void platform_sleep_ms(uint32_t ms) {
 #ifdef _WIN32
     Sleep(ms);
 #else
-    thingino_sleep_milliseconds(ms);
+    tdfu_sleep_milliseconds(ms);
 #endif
 }

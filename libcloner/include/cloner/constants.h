@@ -5,8 +5,8 @@
  * Sources: USB packet captures, protocol analysis, and empirical testing.
  */
 
-#ifndef CLONER_CONSTANTS_H
-#define CLONER_CONSTANTS_H
+#ifndef TDFU_CONSTANTS_H
+#define TDFU_CONSTANTS_H
 
 /* ------------------------------------------------------------------ */
 /* DDR binary format sizes (FIDB + RDD)                                */
@@ -98,4 +98,4 @@
 #define FLASH_PARTITION_MARKER_SIZE   172
 #define FLASH_DESCRIPTOR_PAYLOAD_SIZE 984
 
-#endif /* CLONER_CONSTANTS_H */
+#endif /* TDFU_CONSTANTS_H */

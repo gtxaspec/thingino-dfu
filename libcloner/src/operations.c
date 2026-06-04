@@ -17,28 +17,28 @@
  * pass it to subsequent read/write operations. */
 static const char *g_last_detected_variant = NULL;
 
-const char *cloner_get_last_detected_variant(void) {
+const char *tdfu_get_last_detected_variant(void) {
     return g_last_detected_variant;
 }
 
 /*
  * Poll for a device at the given index, sleeping between attempts.
- * Returns THINGINO_SUCCESS once the device is found.
+ * Returns TDFU_SUCCESS once the device is found.
  */
-static thingino_error_t wait_for_device(usb_manager_t *manager, int index, device_info_t **devices, int *device_count) {
+static tdfu_error_t wait_for_device(usb_manager_t *manager, int index, tdfu_device_info_t **devices, int *device_count) {
     bool first = true;
 
     for (;;) {
         *devices = NULL;
         *device_count = 0;
 
-        thingino_error_t result = usb_manager_find_devices(manager, devices, device_count);
+        tdfu_error_t result = usb_manager_find_devices(manager, devices, device_count);
 
-        if (result == THINGINO_SUCCESS && *device_count > 0 && index < *device_count) {
+        if (result == TDFU_SUCCESS && *device_count > 0 && index < *device_count) {
             if (!first) {
                 LOG_INFO("\n");
             }
-            return THINGINO_SUCCESS;
+            return TDFU_SUCCESS;
         }
 
         if (first) {
@@ -59,18 +59,18 @@ static thingino_error_t wait_for_device(usb_manager_t *manager, int index, devic
 /* Bootstrap a device by index                                                */
 /* ==========================================================================*/
 
-thingino_error_t cloner_op_bootstrap(usb_manager_t *manager, int index, const char *force_cpu, bool verbose,
+tdfu_error_t tdfu_op_bootstrap(usb_manager_t *manager, int index, const char *force_cpu, bool verbose,
                                      bool skip_ddr, const char *config_file, const char *spl_file,
                                      const char *uboot_file, const char *firmware_dir) {
     /* Get devices (wait if needed) */
-    device_info_t *devices;
+    tdfu_device_info_t *devices;
     int device_count;
-    thingino_error_t result = wait_for_device(manager, index, &devices, &device_count);
+    tdfu_error_t result = wait_for_device(manager, index, &devices, &device_count);
 
     /* Show device info */
-    device_info_t *device_info = &devices[index];
+    tdfu_device_info_t *device_info = &devices[index];
     LOG_INFO("Bootstrapping device [%d]: %s %s (Bus %03d Address %03d)\n", index,
-             processor_variant_to_string(device_info->variant), device_stage_to_string(device_info->stage),
+             tdfu_variant_to_string(device_info->variant), tdfu_stage_to_string(device_info->stage),
              device_info->bus, device_info->address);
     LOG_INFO("  Vendor: 0x%04x, Product: 0x%04x\n", device_info->vendor, device_info->product);
 
@@ -78,22 +78,22 @@ thingino_error_t cloner_op_bootstrap(usb_manager_t *manager, int index, const ch
     DEBUG_PRINT("Opening device...\n");
     usb_device_t *device;
     result = usb_manager_open_device(manager, device_info, &device);
-    if (result != THINGINO_SUCCESS) {
-        LOG_INFO("Failed to open device: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        LOG_INFO("Failed to open device: %s\n", tdfu_error_to_string(result));
         free(devices);
         return result;
     }
     DEBUG_PRINT("Device opened successfully\n");
     DEBUG_PRINT("Device variant from manager: %d (%s)\n", device_info->variant,
-                processor_variant_to_string(device_info->variant));
+                tdfu_variant_to_string(device_info->variant));
     DEBUG_PRINT("Device variant from opened device: %d (%s)\n", device->info.variant,
-                processor_variant_to_string(device->info.variant));
+                tdfu_variant_to_string(device->info.variant));
 
     /* Determine CPU variant: use --cpu override, or auto-detect from hardware */
     if (force_cpu) {
-        processor_variant_t forced_variant = string_to_processor_variant(force_cpu);
-        LOG_INFO("Forcing CPU variant to: %s (was: %s)\n", processor_variant_to_string(forced_variant),
-                 processor_variant_to_string(device->info.variant));
+        tdfu_variant_t forced_variant = tdfu_variant_from_string(force_cpu);
+        LOG_INFO("Forcing CPU variant to: %s (was: %s)\n", tdfu_variant_to_string(forced_variant),
+                 tdfu_variant_to_string(device->info.variant));
         device->info.variant = forced_variant;
     } else {
         /* Auto-detect SoC by uploading a tiny MIPS program via VR_PROG_STAGE1.
@@ -101,17 +101,17 @@ thingino_error_t cloner_op_bootstrap(usb_manager_t *manager, int index, const ch
          * STAGE1 is one-shot on some SoCs (T32), so after detect we do a USB
          * reset to restart the bootrom's state machine and clear the flag. */
         LOG_INFO("Auto-detecting SoC...\n");
-        processor_variant_t detected = VARIANT_T31X;
-        if (protocol_detect_soc(device, &detected) == THINGINO_SUCCESS) {
+        tdfu_variant_t detected = TDFU_VARIANT_T31X;
+        if (protocol_detect_soc(device, &detected) == TDFU_SUCCESS) {
             device->info.variant = detected;
-            LOG_INFO("  Detected: %s\n", processor_variant_to_string(detected));
+            LOG_INFO("  Detected: %s\n", tdfu_variant_to_string(detected));
         } else {
             LOG_WARN("SoC auto-detect failed, using CPU magic fallback\n");
         }
     }
 
     /* Save detected variant for subsequent operations */
-    g_last_detected_variant = processor_variant_to_string(device->info.variant);
+    g_last_detected_variant = tdfu_variant_to_string(device->info.variant);
 
     /* Create bootstrap config */
     bootstrap_config_t config = {
@@ -127,8 +127,8 @@ thingino_error_t cloner_op_bootstrap(usb_manager_t *manager, int index, const ch
 
     /* Run bootstrap */
     result = bootstrap_device(device, &config);
-    if (result != THINGINO_SUCCESS) {
-        LOG_INFO("Bootstrap failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        LOG_INFO("Bootstrap failed: %s\n", tdfu_error_to_string(result));
     } else {
         LOG_INFO("Bootstrap completed successfully!\n");
     }
@@ -145,33 +145,33 @@ thingino_error_t cloner_op_bootstrap(usb_manager_t *manager, int index, const ch
 /* Read firmware from device                                                  */
 /* ========================================================================== */
 
-thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, const char *output_file,
+tdfu_error_t tdfu_op_read_firmware(usb_manager_t *manager, int index, const char *output_file,
                                          const char *force_cpu, const char *flash_chip_name) {
-    device_info_t *devices = NULL;
+    tdfu_device_info_t *devices = NULL;
     int device_count = 0;
-    thingino_error_t result = wait_for_device(manager, index, &devices, &device_count);
-    if (result != THINGINO_SUCCESS) {
+    tdfu_error_t result = wait_for_device(manager, index, &devices, &device_count);
+    if (result != TDFU_SUCCESS) {
         return result;
     }
 
     usb_device_t *device = NULL;
     result = usb_manager_open_device(manager, &devices[index], &device);
-    if (result != THINGINO_SUCCESS) {
-        LOG_INFO("Failed to open device: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        LOG_INFO("Failed to open device: %s\n", tdfu_error_to_string(result));
         free(devices);
         return result;
     }
 
     /* Apply CPU override, or auto-detect if in bootrom */
     if (force_cpu) {
-        processor_variant_t forced = string_to_processor_variant(force_cpu);
+        tdfu_variant_t forced = tdfu_variant_from_string(force_cpu);
         LOG_INFO("Forcing CPU variant to: %s (was: %s)\n", force_cpu,
-                 processor_variant_to_string(device->info.variant));
+                 tdfu_variant_to_string(device->info.variant));
         device->info.variant = forced;
-    } else if (devices[index].stage == STAGE_BOOTROM) {
+    } else if (devices[index].stage == TDFU_STAGE_BOOTROM) {
         LOG_INFO("Auto-detecting SoC...\n");
-        processor_variant_t detected = VARIANT_T31X;
-        if (protocol_detect_soc(device, &detected) == THINGINO_SUCCESS) {
+        tdfu_variant_t detected = TDFU_VARIANT_T31X;
+        if (protocol_detect_soc(device, &detected) == TDFU_SUCCESS) {
             device->info.variant = detected;
         } else {
             LOG_WARN("SoC auto-detect failed, using CPU magic fallback\n");
@@ -179,15 +179,15 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
     }
 
     /* Bootstrap if device is in bootrom stage */
-    if (devices[index].stage == STAGE_BOOTROM) {
+    if (devices[index].stage == TDFU_STAGE_BOOTROM) {
         LOG_INFO("Device is in bootrom stage. Bootstrapping to firmware stage first...\n\n");
 
         bootstrap_config_t bootstrap_config = {
             .firmware_dir = "./firmware", .sdram_address = 0x80000000, .timeout = 5000};
 
         result = bootstrap_device(device, &bootstrap_config);
-        if (result != THINGINO_SUCCESS) {
-            LOG_ERROR("Bootstrap failed: %s\n", thingino_error_to_string(result));
+        if (result != TDFU_SUCCESS) {
+            LOG_ERROR("Bootstrap failed: %s\n", tdfu_error_to_string(result));
             usb_device_close(device);
             free(device);
             free(devices);
@@ -203,16 +203,16 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
         free(devices);
         devices = NULL;
         result = usb_manager_find_devices(manager, &devices, &device_count);
-        if (result != THINGINO_SUCCESS || device_count == 0) {
+        if (result != TDFU_SUCCESS || device_count == 0) {
             LOG_ERROR("Device not found after bootstrap\n");
             if (devices)
                 free(devices);
-            return THINGINO_ERROR_DEVICE_NOT_FOUND;
+            return TDFU_ERROR_DEVICE_NOT_FOUND;
         }
 
         int found = -1;
         for (int i = 0; i < device_count; i++) {
-            if (devices[i].stage == STAGE_FIRMWARE) {
+            if (devices[i].stage == TDFU_STAGE_FIRMWARE) {
                 found = i;
                 break;
             }
@@ -229,17 +229,17 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
         if (found < 0) {
             LOG_ERROR("Device not in firmware stage after bootstrap\n");
             free(devices);
-            return THINGINO_ERROR_PROTOCOL;
+            return TDFU_ERROR_PROTOCOL;
         }
 
         result = usb_manager_open_device(manager, &devices[found], &device);
-        if (result != THINGINO_SUCCESS) {
+        if (result != TDFU_SUCCESS) {
             free(devices);
             return result;
         }
 
         if (force_cpu) {
-            device->info.variant = string_to_processor_variant(force_cpu);
+            device->info.variant = tdfu_variant_from_string(force_cpu);
         }
     }
 
@@ -252,7 +252,7 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
     LOG_INFO("\n");
 
     const platform_profile_t *profile = platform_get_profile(device->info.variant);
-    extern thingino_error_t protocol_read_flash_id(usb_device_t *, uint32_t *);
+    extern tdfu_error_t protocol_read_flash_id(usb_device_t *, uint32_t *);
     const spi_nor_chip_t *flash_chip = NULL;
 
     /* Manual chip override */
@@ -262,7 +262,7 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
             LOG_INFO("[ERROR] Unknown flash chip: %s\n", flash_chip_name);
             usb_device_close(device);
             free(device);
-            return THINGINO_ERROR_PROTOCOL;
+            return TDFU_ERROR_PROTOCOL;
         }
         LOG_INFO("  Flash chip (manual): %s (JEDEC 0x%06X, %u MB)\n", flash_chip->name, flash_chip->jedec_id,
                  flash_chip->size / (1024 * 1024));
@@ -271,8 +271,8 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
     /* Step 1: Send partition marker (ILOP) */
     LOG_INFO("Sending partition marker...\n");
     result = flash_partition_marker_send(device);
-    if (result != THINGINO_SUCCESS) {
-        LOG_INFO("[ERROR] Partition marker failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        LOG_INFO("[ERROR] Partition marker failed: %s\n", tdfu_error_to_string(result));
         usb_device_close(device);
         free(device);
         return result;
@@ -288,7 +288,7 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
     /* Step 2: Auto-detect flash chip via JEDEC ID */
     if (!flash_chip) {
         uint32_t jedec_id = 0;
-        if (protocol_read_flash_id(device, &jedec_id) == THINGINO_SUCCESS) {
+        if (protocol_read_flash_id(device, &jedec_id) == TDFU_SUCCESS) {
             flash_chip = spi_nor_find_by_id(jedec_id);
             if (flash_chip) {
                 LOG_INFO("  Flash chip (detected): %s (JEDEC 0x%06X, %u MB)\n", flash_chip->name, flash_chip->jedec_id,
@@ -303,7 +303,7 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
         LOG_INFO("[ERROR] Flash chip not detected. Use --flash-chip <name>\n");
         usb_device_close(device);
         free(device);
-        return THINGINO_ERROR_PROTOCOL;
+        return TDFU_ERROR_PROTOCOL;
     }
 
     /* Step 3: Generate and send READ descriptor (no erase).
@@ -321,7 +321,7 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
         uint8_t desc[FLASH_DESCRIPTOR_SIZE_XB2];
         flash_descriptor_create_xb2_read(flash_chip, desc);
         result = flash_descriptor_send_sized(device, desc, FLASH_DESCRIPTOR_SIZE_XB2);
-    } else if (device->info.variant == VARIANT_T32) {
+    } else if (device->info.variant == TDFU_VARIANT_T32) {
         uint8_t desc[FLASH_DESCRIPTOR_SIZE_T32];
         flash_descriptor_create_t32_read(flash_chip, desc);
         result = flash_descriptor_send_sized(device, desc, FLASH_DESCRIPTOR_SIZE_T32);
@@ -331,8 +331,8 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
         result = flash_descriptor_send(device, desc);
     }
 
-    if (result != THINGINO_SUCCESS) {
-        LOG_INFO("[ERROR] Failed to send read descriptor: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        LOG_INFO("[ERROR] Failed to send read descriptor: %s\n", tdfu_error_to_string(result));
         usb_device_close(device);
         free(device);
         return result;
@@ -343,8 +343,8 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
     /* Step 4: VR_FW_HANDSHAKE (0x11) - init read mode */
     LOG_INFO("Initializing read handshake...\n");
     result = firmware_handshake_init(device);
-    if (result != THINGINO_SUCCESS) {
-        LOG_INFO("[ERROR] Handshake init failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        LOG_INFO("[ERROR] Handshake init failed: %s\n", tdfu_error_to_string(result));
         usb_device_close(device);
         free(device);
         return result;
@@ -358,8 +358,8 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
     uint32_t firmware_size = 0;
     result = firmware_read_full(device, read_size, &firmware_data, &firmware_size);
 
-    if (result != THINGINO_SUCCESS) {
-        LOG_INFO("Failed to read firmware: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        LOG_INFO("Failed to read firmware: %s\n", tdfu_error_to_string(result));
         usb_device_close(device);
         free(device);
         return result;
@@ -374,7 +374,7 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
         free(firmware_data);
         usb_device_close(device);
         free(device);
-        return THINGINO_ERROR_FILE_IO;
+        return TDFU_ERROR_FILE_IO;
     }
 
     size_t bytes_written = fwrite(firmware_data, 1, firmware_size, file);
@@ -394,26 +394,26 @@ thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, cons
 
     usb_device_close(device);
     free(device);
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /* ========================================================================== */
 /* Write firmware from file to device                                         */
 /* ========================================================================== */
 
-thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_index, const char *firmware_file,
+tdfu_error_t tdfu_op_write_firmware(usb_manager_t *manager, int device_index, const char *firmware_file,
                                           const char *force_cpu, const char *flash_chip_name, bool no_erase,
                                           bool reboot_after, bool do_bootstrap, bool verbose, bool skip_ddr,
                                           const char *config_file, const char *spl_file, const char *uboot_file,
                                           const char *firmware_dir, uint32_t chunk_size) {
     if (!manager || !firmware_file) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     /* Validate firmware file exists and is readable before any device ops */
     {
-        thingino_error_t file_result = firmware_file_check_readable(firmware_file);
-        if (file_result != THINGINO_SUCCESS) {
+        tdfu_error_t file_result = firmware_file_check_readable(firmware_file);
+        if (file_result != TDFU_SUCCESS) {
             LOG_ERROR("Cannot open firmware file: %s\n", firmware_file);
             return file_result;
         }
@@ -426,18 +426,18 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
     LOG_INFO("\n");
 
     /* List devices (wait if needed) */
-    device_info_t *devices = NULL;
+    tdfu_device_info_t *devices = NULL;
     int device_count = 0;
-    thingino_error_t result = wait_for_device(manager, device_index, &devices, &device_count);
-    if (result != THINGINO_SUCCESS) {
+    tdfu_error_t result = wait_for_device(manager, device_index, &devices, &device_count);
+    if (result != TDFU_SUCCESS) {
         return result;
     }
 
     /* Open device */
     usb_device_t *device = NULL;
     result = usb_manager_open_device(manager, &devices[device_index], &device);
-    if (result != THINGINO_SUCCESS) {
-        LOG_ERROR("Error opening device: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        LOG_ERROR("Error opening device: %s\n", tdfu_error_to_string(result));
         free(devices);
         return result;
     }
@@ -445,34 +445,34 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
     LOG_INFO("Target Device:\n");
     LOG_INFO("  Index: %d\n", device_index);
     LOG_INFO("  Bus: %03d Address: %03d\n", devices[device_index].bus, devices[device_index].address);
-    LOG_INFO("  Variant: %s\n", processor_variant_to_string(devices[device_index].variant));
-    LOG_INFO("  Stage: %s\n", device_stage_to_string(devices[device_index].stage));
+    LOG_INFO("  Variant: %s\n", tdfu_variant_to_string(devices[device_index].variant));
+    LOG_INFO("  Stage: %s\n", tdfu_stage_to_string(devices[device_index].stage));
     LOG_INFO("\n");
 
     /* Apply CPU variant override, or auto-detect if in bootrom */
     if (force_cpu) {
-        processor_variant_t forced_variant = string_to_processor_variant(force_cpu);
-        const char *round_trip = processor_variant_to_string(forced_variant);
+        tdfu_variant_t forced_variant = tdfu_variant_from_string(force_cpu);
+        const char *round_trip = tdfu_variant_to_string(forced_variant);
         if (strcasecmp(round_trip, force_cpu) == 0) {
             LOG_INFO("Forcing CPU variant to: %s (was: %s)\n", force_cpu,
-                     processor_variant_to_string(device->info.variant));
+                     tdfu_variant_to_string(device->info.variant));
             device->info.variant = forced_variant;
         } else {
             LOG_WARN("Unknown CPU variant '%s', ignoring\n", force_cpu);
         }
-    } else if (devices[device_index].stage == STAGE_BOOTROM) {
+    } else if (devices[device_index].stage == TDFU_STAGE_BOOTROM) {
         LOG_INFO("Auto-detecting SoC...\n");
-        processor_variant_t detected = VARIANT_T31X;
-        if (protocol_detect_soc(device, &detected) == THINGINO_SUCCESS) {
+        tdfu_variant_t detected = TDFU_VARIANT_T31X;
+        if (protocol_detect_soc(device, &detected) == TDFU_SUCCESS) {
             device->info.variant = detected;
-            g_last_detected_variant = processor_variant_to_string(detected);
+            g_last_detected_variant = tdfu_variant_to_string(detected);
         } else {
             LOG_WARN("SoC auto-detect failed, using CPU magic fallback\n");
         }
     }
 
     /* Check if device needs bootstrap (skip if caller already bootstrapped) */
-    if (devices[device_index].stage == STAGE_BOOTROM && !do_bootstrap) {
+    if (devices[device_index].stage == TDFU_STAGE_BOOTROM && !do_bootstrap) {
         LOG_INFO("Device is in bootrom stage. Bootstrapping to firmware stage first...\n\n");
 
         bootstrap_config_t bootstrap_config = {.skip_ddr = skip_ddr,
@@ -485,8 +485,8 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
                                                .verbose = verbose};
 
         result = bootstrap_device(device, &bootstrap_config);
-        if (result != THINGINO_SUCCESS) {
-            LOG_ERROR("Bootstrap failed: %s\n", thingino_error_to_string(result));
+        if (result != TDFU_SUCCESS) {
+            LOG_ERROR("Bootstrap failed: %s\n", tdfu_error_to_string(result));
             usb_device_close(device);
             free(device);
             free(devices);
@@ -505,17 +505,17 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
         free(devices);
         devices = NULL;
         result = usb_manager_find_devices(manager, &devices, &device_count);
-        if (result != THINGINO_SUCCESS || device_count == 0) {
+        if (result != TDFU_SUCCESS || device_count == 0) {
             LOG_ERROR("Device not found after bootstrap\n");
             if (devices)
                 free(devices);
-            return THINGINO_ERROR_DEVICE_NOT_FOUND;
+            return TDFU_ERROR_DEVICE_NOT_FOUND;
         }
 
         /* Find the device again (it may have re-enumerated) */
         int found_index = -1;
         for (int i = 0; i < device_count; i++) {
-            if (devices[i].stage == STAGE_FIRMWARE) {
+            if (devices[i].stage == TDFU_STAGE_FIRMWARE) {
                 found_index = i;
                 break;
             }
@@ -524,13 +524,13 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
         if (found_index < 0) {
             LOG_ERROR("Device not in firmware stage after bootstrap\n");
             free(devices);
-            return THINGINO_ERROR_PROTOCOL;
+            return TDFU_ERROR_PROTOCOL;
         }
 
         /* Reopen device */
         result = usb_manager_open_device(manager, &devices[found_index], &device);
-        if (result != THINGINO_SUCCESS) {
-            LOG_ERROR("Failed to reopen device: %s\n", thingino_error_to_string(result));
+        if (result != TDFU_SUCCESS) {
+            LOG_ERROR("Failed to reopen device: %s\n", tdfu_error_to_string(result));
             free(devices);
             return result;
         }
@@ -541,10 +541,10 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
          * In firmware stage, T40/T41 both report "X2580" which maps to t31x.
          * The real variant was determined in bootrom stage via SoC ID registers. */
         if (!force_cpu && g_last_detected_variant) {
-            processor_variant_t restored = string_to_processor_variant(g_last_detected_variant);
+            tdfu_variant_t restored = tdfu_variant_from_string(g_last_detected_variant);
             if (restored != device->info.variant) {
                 LOG_INFO("Restoring detected variant: %s (was: %s)\n",
-                         g_last_detected_variant, processor_variant_to_string(device->info.variant));
+                         g_last_detected_variant, tdfu_variant_to_string(device->info.variant));
                 device->info.variant = restored;
             }
         }
@@ -554,14 +554,14 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
 
     /* Apply CPU variant override if specified */
     if (force_cpu) {
-        processor_variant_t forced_variant = string_to_processor_variant(force_cpu);
+        tdfu_variant_t forced_variant = tdfu_variant_from_string(force_cpu);
         /* Validate: round-trip the parsed variant back to string and compare.
-         * string_to_processor_variant returns T31X for unknown strings, so
+         * tdfu_variant_from_string returns T31X for unknown strings, so
          * we check the round-trip matches to distinguish real T31X from unknown. */
-        const char *round_trip = processor_variant_to_string(forced_variant);
+        const char *round_trip = tdfu_variant_to_string(forced_variant);
         if (strcasecmp(round_trip, force_cpu) == 0) {
             LOG_INFO("Forcing CPU variant to: %s (was: %s)\n", force_cpu,
-                     processor_variant_to_string(device->info.variant));
+                     tdfu_variant_to_string(device->info.variant));
             device->info.variant = forced_variant;
         } else {
             LOG_WARN("Unknown CPU variant '%s', ignoring\n", force_cpu);
@@ -572,15 +572,15 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
      * flash descriptor, and VR_INIT handshake. Dispatch via platform profile. */
     const platform_profile_t *fw_profile = platform_get_profile(device->info.variant);
 
-    if (device->info.stage == STAGE_FIRMWARE) {
+    if (device->info.stage == TDFU_STAGE_FIRMWARE) {
 
-        thingino_error_t prep_result = THINGINO_SUCCESS;
+        tdfu_error_t prep_result = TDFU_SUCCESS;
 
         if (no_erase)
             LOG_INFO("Erase disabled (--no-erase)\n");
         LOG_INFO("Preparing flash descriptor...\n");
 
-        extern thingino_error_t protocol_read_flash_id(usb_device_t *, uint32_t *);
+        extern tdfu_error_t protocol_read_flash_id(usb_device_t *, uint32_t *);
         const spi_nor_chip_t *flash_chip = NULL;
 
         if (flash_chip_name) {
@@ -590,7 +590,7 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
                 LOG_INFO("[ERROR] Unknown flash chip: %s\n", flash_chip_name);
                 usb_device_close(device);
                 free(device);
-                return THINGINO_ERROR_PROTOCOL;
+                return TDFU_ERROR_PROTOCOL;
             }
             LOG_INFO("  Flash chip (manual): %s (JEDEC 0x%06X)\n", flash_chip->name, flash_chip->jedec_id);
         }
@@ -605,13 +605,13 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
                 LOG_INFO("  Flash chip not specified, attempting auto-detect...\n");
                 /* Send partition marker to initialize SFC */
                 prep_result = flash_partition_marker_send_raw(device);
-                if (prep_result != THINGINO_SUCCESS) {
-                    LOG_INFO("[ERROR] Partition marker failed: %s\n", thingino_error_to_string(prep_result));
+                if (prep_result != TDFU_SUCCESS) {
+                    LOG_INFO("[ERROR] Partition marker failed: %s\n", tdfu_error_to_string(prep_result));
                     break;
                 }
                 /* Now try to read the actual JEDEC ID */
                 uint32_t jedec_id = 0;
-                if (protocol_read_flash_id(device, &jedec_id) == THINGINO_SUCCESS) {
+                if (protocol_read_flash_id(device, &jedec_id) == TDFU_SUCCESS) {
                     flash_chip = spi_nor_find_by_id(jedec_id);
                     if (flash_chip) {
                         LOG_INFO("  Flash chip (detected): %s (JEDEC 0x%06X, %u MB)\n", flash_chip->name,
@@ -619,12 +619,12 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
                     } else {
                         LOG_INFO("  JEDEC 0x%06X not in database\n", jedec_id);
                         LOG_INFO("[ERROR] Flash chip not detected. Use --flash-chip <name>\n");
-                        prep_result = THINGINO_ERROR_PROTOCOL;
+                        prep_result = TDFU_ERROR_PROTOCOL;
                         break;
                     }
                 } else {
                     LOG_INFO("[ERROR] Flash chip auto-detect failed. Use --flash-chip <name>\n");
-                    prep_result = THINGINO_ERROR_PROTOCOL;
+                    prep_result = TDFU_ERROR_PROTOCOL;
                     break;
                 }
             }
@@ -643,7 +643,7 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
              * 4. Generate and send full descriptor (972 bytes) with correct chip
              */
             prep_result = flash_partition_marker_send(device);
-            if (prep_result != THINGINO_SUCCESS)
+            if (prep_result != TDFU_SUCCESS)
                 break;
 
             /* Read ack after marker */
@@ -656,7 +656,7 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
             /* Auto-detect flash chip via JEDEC ID */
             if (!flash_chip) {
                 uint32_t jedec_id = 0;
-                if (protocol_read_flash_id(device, &jedec_id) == THINGINO_SUCCESS) {
+                if (protocol_read_flash_id(device, &jedec_id) == TDFU_SUCCESS) {
                     flash_chip = spi_nor_find_by_id(jedec_id);
                     if (flash_chip) {
                         LOG_INFO("  Flash chip (detected): %s (JEDEC 0x%06X)\n", flash_chip->name,
@@ -669,7 +669,7 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
 
             if (!flash_chip) {
                 LOG_INFO("[ERROR] Flash chip not detected. Use --flash-chip <name>\n");
-                prep_result = THINGINO_ERROR_PROTOCOL;
+                prep_result = TDFU_ERROR_PROTOCOL;
                 break;
             }
 
@@ -691,7 +691,7 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
                 if (no_erase)
                     flash_descriptor[12 + 0xC8 + 0x14] = 0x00;
                 prep_result = flash_descriptor_send_sized(device, flash_descriptor, FLASH_DESCRIPTOR_SIZE_XB2);
-            } else if (device->info.variant == VARIANT_T32) {
+            } else if (device->info.variant == TDFU_VARIANT_T32) {
                 /* T32: 976-byte descriptor with shifted SFC layout */
                 uint8_t flash_descriptor[FLASH_DESCRIPTOR_SIZE_T32];
                 flash_descriptor_create_t32(flash_chip, flash_descriptor);
@@ -705,7 +705,7 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
                     flash_descriptor[0xC8 + 0x14] = 0x00;
                 prep_result = flash_descriptor_send(device, flash_descriptor);
             }
-            if (prep_result != THINGINO_SUCCESS)
+            if (prep_result != TDFU_SUCCESS)
                 break;
 
             /* Erase wait is handled by writer.c (5s delay for A1) */
@@ -716,8 +716,8 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
             break;
         }
 
-        if (prep_result != THINGINO_SUCCESS) {
-            LOG_INFO("[ERROR] Failed to send flash descriptor: %s\n", thingino_error_to_string(prep_result));
+        if (prep_result != TDFU_SUCCESS) {
+            LOG_INFO("[ERROR] Failed to send flash descriptor: %s\n", tdfu_error_to_string(prep_result));
             usb_device_close(device);
             free(device);
             return prep_result;
@@ -727,8 +727,8 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
 
         /* VR_INIT - triggers SFC probe + erase */
         prep_result = firmware_handshake_init(device);
-        if (prep_result != THINGINO_SUCCESS) {
-            LOG_INFO("[ERROR] Failed to initialize firmware handshake: %s\n", thingino_error_to_string(prep_result));
+        if (prep_result != TDFU_SUCCESS) {
+            LOG_INFO("[ERROR] Failed to initialize firmware handshake: %s\n", tdfu_error_to_string(prep_result));
             usb_device_close(device);
             free(device);
             return prep_result;
@@ -742,8 +742,8 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
 
     result =
         write_firmware_to_device(device, firmware_file, NULL, no_erase, fw_profile->use_a1_handshake, chunk_size);
-    if (result != THINGINO_SUCCESS) {
-        LOG_ERROR("Firmware write failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        LOG_ERROR("Firmware write failed: %s\n", tdfu_error_to_string(result));
         usb_device_close(device);
         free(device);
         return result;
@@ -763,5 +763,5 @@ thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_ind
 
     usb_device_close(device);
     free(device);
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }

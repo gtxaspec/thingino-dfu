@@ -24,12 +24,12 @@
 
 /* Internal state */
 static usb_manager_t g_manager;
-static device_info_t *g_devices = NULL;
+static tdfu_device_info_t *g_devices = NULL;
 static int g_device_count = 0;
 static bool g_initialized = false;
 
 /* Helper: invoke progress callback if non-NULL */
-static void report_progress(cloner_progress_cb cb, void *ud, int percent, const char *stage, const char *msg) {
+static void report_progress(tdfu_progress_cb cb, void *ud, int percent, const char *stage, const char *msg) {
     if (cb)
         cb(percent, stage, msg, ud);
 }
@@ -46,19 +46,19 @@ static int write_temp_file(const char *dir, const char *name, const uint8_t *dat
     return written == len ? 0 : -1;
 }
 
-cloner_error_t cloner_init(void) {
+tdfu_error_t tdfu_init(void) {
     if (g_initialized)
-        return CLONER_OK;
+        return TDFU_SUCCESS;
 
-    thingino_error_t result = usb_manager_init(&g_manager);
-    if (result != THINGINO_SUCCESS)
-        return CLONER_ERR_USB_INIT;
+    tdfu_error_t result = usb_manager_init(&g_manager);
+    if (result != TDFU_SUCCESS)
+        return TDFU_ERROR_INIT_FAILED;
 
     g_initialized = true;
-    return CLONER_OK;
+    return TDFU_SUCCESS;
 }
 
-void cloner_cleanup(void) {
+void tdfu_cleanup(void) {
     free(g_devices);
     g_devices = NULL;
     g_device_count = 0;
@@ -68,38 +68,35 @@ void cloner_cleanup(void) {
     }
 }
 
-cloner_error_t cloner_discover_devices(cloner_device_list_t *list) {
+tdfu_error_t tdfu_discover_devices(tdfu_device_list_t *list) {
     if (!list)
-        return CLONER_ERR_PARAM;
+        return TDFU_ERROR_INVALID_PARAMETER;
     if (!g_initialized)
-        return CLONER_ERR_USB_INIT;
+        return TDFU_ERROR_INIT_FAILED;
 
     free(g_devices);
     g_devices = NULL;
     g_device_count = 0;
 
-    thingino_error_t result = usb_manager_find_devices(&g_manager, &g_devices, &g_device_count);
-    if (result != THINGINO_SUCCESS)
-        return CLONER_ERR_DEVICE;
+    tdfu_error_t result = usb_manager_find_devices(&g_manager, &g_devices, &g_device_count);
+    if (result != TDFU_SUCCESS)
+        return TDFU_ERROR_DEVICE_NOT_FOUND;
 
     list->count = g_device_count;
-    list->devices = calloc(g_device_count, sizeof(cloner_device_info_t));
+    list->devices = calloc(g_device_count, sizeof(tdfu_device_info_t));
     if (!list->devices && g_device_count > 0)
-        return CLONER_ERR_MEMORY;
+        return TDFU_ERROR_MEMORY;
 
+    /* Public list now uses the canonical tdfu_device_info_t, so discovery
+     * results copy directly (no field translation needed). */
     for (int i = 0; i < g_device_count; i++) {
-        list->devices[i].bus = g_devices[i].bus;
-        list->devices[i].address = g_devices[i].address;
-        list->devices[i].vendor_id = g_devices[i].vendor;
-        list->devices[i].product_id = g_devices[i].product;
-        list->devices[i].stage = (cloner_stage_t)g_devices[i].stage;
-        list->devices[i].variant = (cloner_variant_t)g_devices[i].variant;
+        list->devices[i] = g_devices[i];
     }
 
-    return CLONER_OK;
+    return TDFU_SUCCESS;
 }
 
-void cloner_free_device_list(cloner_device_list_t *list) {
+void tdfu_free_device_list(tdfu_device_list_t *list) {
     if (list) {
         free(list->devices);
         list->devices = NULL;
@@ -107,24 +104,24 @@ void cloner_free_device_list(cloner_device_list_t *list) {
     }
 }
 
-cloner_error_t cloner_bootstrap(int device_index, cloner_variant_t variant, const char *firmware_dir,
-                                cloner_progress_cb progress, void *user_data) {
+tdfu_error_t tdfu_bootstrap(int device_index, tdfu_variant_t variant, const char *firmware_dir,
+                                tdfu_progress_cb progress, void *user_data) {
 
     if (!g_initialized)
-        return CLONER_ERR_USB_INIT;
+        return TDFU_ERROR_INIT_FAILED;
     if (device_index < 0 || device_index >= g_device_count)
-        return CLONER_ERR_PARAM;
+        return TDFU_ERROR_INVALID_PARAMETER;
 
-    g_devices[device_index].variant = (processor_variant_t)variant;
+    g_devices[device_index].variant = (tdfu_variant_t)variant;
 
     report_progress(progress, user_data, 10, "bootstrap", "Opening device...");
 
     usb_device_t *device = NULL;
-    thingino_error_t result = usb_manager_open_device(&g_manager, &g_devices[device_index], &device);
-    if (result != THINGINO_SUCCESS)
-        return CLONER_ERR_DEVICE;
+    tdfu_error_t result = usb_manager_open_device(&g_manager, &g_devices[device_index], &device);
+    if (result != TDFU_SUCCESS)
+        return TDFU_ERROR_DEVICE_NOT_FOUND;
 
-    device->info.variant = (processor_variant_t)variant;
+    device->info.variant = (tdfu_variant_t)variant;
 
     report_progress(progress, user_data, 30, "bootstrap", "Loading firmware...");
 
@@ -139,34 +136,34 @@ cloner_error_t cloner_bootstrap(int device_index, cloner_variant_t variant, cons
     usb_device_close(device);
     free(device);
 
-    if (result != THINGINO_SUCCESS)
-        return CLONER_ERR_TRANSFER;
+    if (result != TDFU_SUCCESS)
+        return TDFU_ERROR_TRANSFER_FAILED;
 
     report_progress(progress, user_data, 100, "bootstrap", "Complete");
-    return CLONER_OK;
+    return TDFU_SUCCESS;
 }
 
-cloner_error_t cloner_bootstrap_with_data(int device_index, cloner_variant_t variant, const uint8_t *ddr,
+tdfu_error_t tdfu_bootstrap_with_data(int device_index, tdfu_variant_t variant, const uint8_t *ddr,
                                           size_t ddr_len, const uint8_t *spl, size_t spl_len, const uint8_t *uboot,
-                                          size_t uboot_len, cloner_progress_cb progress, void *user_data) {
+                                          size_t uboot_len, tdfu_progress_cb progress, void *user_data) {
 
     if (!g_initialized)
-        return CLONER_ERR_USB_INIT;
+        return TDFU_ERROR_INIT_FAILED;
     if (device_index < 0 || device_index >= g_device_count)
-        return CLONER_ERR_PARAM;
+        return TDFU_ERROR_INVALID_PARAMETER;
     if (!ddr || !spl || !uboot)
-        return CLONER_ERR_PARAM;
+        return TDFU_ERROR_INVALID_PARAMETER;
 
-    g_devices[device_index].variant = (processor_variant_t)variant;
+    g_devices[device_index].variant = (tdfu_variant_t)variant;
 
     report_progress(progress, user_data, 10, "bootstrap", "Opening device...");
 
     usb_device_t *device = NULL;
-    thingino_error_t result = usb_manager_open_device(&g_manager, &g_devices[device_index], &device);
-    if (result != THINGINO_SUCCESS)
-        return CLONER_ERR_DEVICE;
+    tdfu_error_t result = usb_manager_open_device(&g_manager, &g_devices[device_index], &device);
+    if (result != TDFU_SUCCESS)
+        return TDFU_ERROR_DEVICE_NOT_FOUND;
 
-    device->info.variant = (processor_variant_t)variant;
+    device->info.variant = (tdfu_variant_t)variant;
 
     report_progress(progress, user_data, 20, "bootstrap", "Writing firmware to temp...");
 
@@ -180,7 +177,7 @@ cloner_error_t cloner_bootstrap_with_data(int device_index, cloner_variant_t var
 #endif
         usb_device_close(device);
         free(device);
-        return CLONER_ERR_FILE;
+        return TDFU_ERROR_FILE_IO;
     }
 
     char ddr_path[512] = "", spl_path[512] = "", uboot_path[512] = "";
@@ -193,7 +190,7 @@ cloner_error_t cloner_bootstrap_with_data(int device_index, cloner_variant_t var
         rmdir(tmpdir);
         usb_device_close(device);
         free(device);
-        return CLONER_ERR_FILE;
+        return TDFU_ERROR_FILE_IO;
     }
 
     bootstrap_config_t config = {
@@ -214,34 +211,34 @@ cloner_error_t cloner_bootstrap_with_data(int device_index, cloner_variant_t var
     usb_device_close(device);
     free(device);
 
-    if (result != THINGINO_SUCCESS)
-        return CLONER_ERR_TRANSFER;
+    if (result != TDFU_SUCCESS)
+        return TDFU_ERROR_TRANSFER_FAILED;
 
     report_progress(progress, user_data, 100, "bootstrap", "Complete");
-    return CLONER_OK;
+    return TDFU_SUCCESS;
 }
 
-cloner_error_t cloner_write_firmware(int device_index, const uint8_t *firmware, size_t len, cloner_progress_cb progress,
+tdfu_error_t tdfu_write_firmware(int device_index, const uint8_t *firmware, size_t len, tdfu_progress_cb progress,
                                      void *user_data) {
 
     if (!g_initialized)
-        return CLONER_ERR_USB_INIT;
+        return TDFU_ERROR_INIT_FAILED;
     if (device_index < 0 || device_index >= g_device_count)
-        return CLONER_ERR_PARAM;
+        return TDFU_ERROR_INVALID_PARAMETER;
     if (!firmware || len == 0)
-        return CLONER_ERR_PARAM;
+        return TDFU_ERROR_INVALID_PARAMETER;
 
     report_progress(progress, user_data, 10, "write", "Preparing...");
 
-    /* Write firmware data to a temp file for cloner_op_write_firmware */
+    /* Write firmware data to a temp file for tdfu_op_write_firmware */
     char tmpfile[] = "/tmp/cloner-fw-XXXXXX";
     int tmpfd = mkstemp(tmpfile);
     if (tmpfd < 0)
-        return CLONER_ERR_FILE;
+        return TDFU_ERROR_FILE_IO;
     if (write(tmpfd, firmware, len) != (ssize_t)len) {
         close(tmpfd);
         unlink(tmpfile);
-        return CLONER_ERR_FILE;
+        return TDFU_ERROR_FILE_IO;
     }
     close(tmpfd);
 
@@ -253,7 +250,7 @@ cloner_error_t cloner_write_firmware(int device_index, const uint8_t *firmware, 
      * firmware-stage default profile (T31), which supports JEDEC flash
      * auto-detect. Forcing the bootrom variant (e.g. T20) selects a
      * profile that may require --flash-chip. */
-    thingino_error_t result = cloner_op_write_firmware(
+    tdfu_error_t result = tdfu_op_write_firmware(
         &g_manager, device_index, tmpfile,
         NULL,           /* force_cpu (auto) */
         NULL,           /* flash_chip_name (auto-detect) */
@@ -273,22 +270,22 @@ cloner_error_t cloner_write_firmware(int device_index, const uint8_t *firmware, 
 
     unlink(tmpfile);
 
-    if (result != THINGINO_SUCCESS)
-        return CLONER_ERR_TRANSFER;
+    if (result != TDFU_SUCCESS)
+        return TDFU_ERROR_TRANSFER_FAILED;
 
     report_progress(progress, user_data, 100, "write", "Complete");
-    return CLONER_OK;
+    return TDFU_SUCCESS;
 }
 
-cloner_error_t cloner_read_firmware(int device_index, uint8_t **firmware, size_t *len, cloner_progress_cb progress,
+tdfu_error_t tdfu_read_firmware(int device_index, uint8_t **firmware, size_t *len, tdfu_progress_cb progress,
                                     void *user_data) {
 
     if (!g_initialized)
-        return CLONER_ERR_USB_INIT;
+        return TDFU_ERROR_INIT_FAILED;
     if (device_index < 0 || device_index >= g_device_count)
-        return CLONER_ERR_PARAM;
+        return TDFU_ERROR_INVALID_PARAMETER;
     if (!firmware || !len)
-        return CLONER_ERR_PARAM;
+        return TDFU_ERROR_INVALID_PARAMETER;
 
     report_progress(progress, user_data, 10, "read", "Starting read...");
 
@@ -297,17 +294,17 @@ cloner_error_t cloner_read_firmware(int device_index, uint8_t **firmware, size_t
     char tmpfile[] = "/tmp/cloner-rd-XXXXXX";
     int tmpfd = mkstemp(tmpfile);
     if (tmpfd < 0)
-        return CLONER_ERR_FILE;
+        return TDFU_ERROR_FILE_IO;
     close(tmpfd);
 
     report_progress(progress, user_data, 20, "read", "Reading flash...");
 
     /* Don't pass force_cpu — let operations.c use the firmware-stage
      * default profile, which supports JEDEC flash auto-detect. */
-    thingino_error_t result = cloner_op_read_firmware(&g_manager, device_index, tmpfile, NULL, NULL);
-    if (result != THINGINO_SUCCESS) {
+    tdfu_error_t result = tdfu_op_read_firmware(&g_manager, device_index, tmpfile, NULL, NULL);
+    if (result != TDFU_SUCCESS) {
         unlink(tmpfile);
-        return CLONER_ERR_TRANSFER;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
     report_progress(progress, user_data, 90, "read", "Loading data...");
@@ -316,14 +313,14 @@ cloner_error_t cloner_read_firmware(int device_index, uint8_t **firmware, size_t
     result = load_file(tmpfile, firmware, len);
     unlink(tmpfile);
 
-    if (result != THINGINO_SUCCESS)
-        return CLONER_ERR_FILE;
+    if (result != TDFU_SUCCESS)
+        return TDFU_ERROR_FILE_IO;
 
 #ifdef __EMSCRIPTEN__
     /* Web flasher: reboot device after read so it boots the firmware */
     {
         usb_device_t *rdev = NULL;
-        if (usb_manager_open_device(&g_manager, &g_devices[device_index], &rdev) == THINGINO_SUCCESS) {
+        if (usb_manager_open_device(&g_manager, &g_devices[device_index], &rdev) == TDFU_SUCCESS) {
             usb_device_vendor_request(rdev, REQUEST_TYPE_VENDOR, VR_REBOOT, 0, 0, NULL, 0, NULL, NULL);
             usb_device_close(rdev);
             free(rdev);
@@ -332,50 +329,46 @@ cloner_error_t cloner_read_firmware(int device_index, uint8_t **firmware, size_t
 #endif
 
     report_progress(progress, user_data, 100, "read", "Complete");
-    return CLONER_OK;
+    return TDFU_SUCCESS;
 }
 
-const void *cloner_find_ddr_chip(const char *name) {
+const void *tdfu_find_ddr_chip(const char *name) {
     return ddr_chip_config_get(name);
 }
 
-cloner_error_t cloner_generate_ddr(const char *processor_name, uint8_t *out, size_t *out_len) {
+tdfu_error_t tdfu_generate_ddr(const char *processor_name, uint8_t *out, size_t *out_len) {
 
     if (!processor_name || !out || !out_len)
-        return CLONER_ERR_PARAM;
+        return TDFU_ERROR_INVALID_PARAMETER;
 
     /* Caller must provide at least DDR_BINARY_SIZE_MAX bytes */
     if (*out_len < DDR_BINARY_SIZE_MAX)
-        return CLONER_ERR_PARAM;
+        return TDFU_ERROR_INVALID_PARAMETER;
 
     platform_config_t platform;
     if (ddr_get_platform_config(processor_name, &platform) != 0)
-        return CLONER_ERR_PARAM;
+        return TDFU_ERROR_INVALID_PARAMETER;
 
     const ddr_chip_config_t *chip = ddr_chip_config_get_default(processor_name);
     if (!chip)
-        return CLONER_ERR_PARAM;
+        return TDFU_ERROR_INVALID_PARAMETER;
 
     ddr_phy_params_t params;
     ddr_chip_to_phy_params(chip, platform.ddr_freq, &params);
 
     *out_len = ddr_build_binary(&platform, &params, out);
-    return CLONER_OK;
+    return TDFU_SUCCESS;
 }
 
-cloner_error_t cloner_set_device_variant(int device_index, cloner_variant_t variant) {
+tdfu_error_t tdfu_set_device_variant(int device_index, tdfu_variant_t variant) {
     if (!g_initialized)
-        return CLONER_ERR_USB_INIT;
+        return TDFU_ERROR_INIT_FAILED;
     if (device_index < 0 || device_index >= g_device_count)
-        return CLONER_ERR_PARAM;
-    g_devices[device_index].variant = (processor_variant_t)variant;
-    return CLONER_OK;
+        return TDFU_ERROR_INVALID_PARAMETER;
+    g_devices[device_index].variant = (tdfu_variant_t)variant;
+    return TDFU_SUCCESS;
 }
 
-const char *cloner_variant_to_string(cloner_variant_t variant) {
-    return processor_variant_to_string((processor_variant_t)variant);
-}
-
-cloner_variant_t cloner_variant_from_string(const char *name) {
-    return (cloner_variant_t)string_to_processor_variant(name);
-}
+/* tdfu_variant_to_string / tdfu_variant_from_string live in utils.c
+ * (formerly processor_variant_to_string / string_to_processor_variant);
+ * the facade no longer wraps them. */

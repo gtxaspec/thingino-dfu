@@ -29,9 +29,9 @@
  * @param data        Output: allocated buffer with firmware data
  * @param actual_size Output: actual bytes read
  */
-thingino_error_t firmware_read_full(usb_device_t *device, uint32_t read_size, uint8_t **data, uint32_t *actual_size) {
+tdfu_error_t firmware_read_full(usb_device_t *device, uint32_t read_size, uint8_t **data, uint32_t *actual_size) {
     if (!device || !data || !actual_size || read_size == 0) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     uint32_t chunk_size = READ_CHUNK_SIZE; /* 1MB for all platforms */
@@ -42,7 +42,7 @@ thingino_error_t firmware_read_full(usb_device_t *device, uint32_t read_size, ui
     uint8_t *firmware_buffer = (uint8_t *)malloc(read_size);
     if (!firmware_buffer) {
         LOG_ERROR("Failed to allocate %u bytes for firmware buffer\n", read_size);
-        return THINGINO_ERROR_MEMORY;
+        return TDFU_ERROR_MEMORY;
     }
 
     uint32_t total_read = 0;
@@ -58,12 +58,12 @@ thingino_error_t firmware_read_full(usb_device_t *device, uint32_t read_size, ui
         uint8_t *chunk_data = NULL;
         int chunk_len = 0;
 
-        thingino_error_t result =
+        tdfu_error_t result =
             firmware_handshake_read_chunk(device, i, offset, this_chunk, read_size, &chunk_data, &chunk_len);
 
-        if (result != THINGINO_SUCCESS) {
+        if (result != TDFU_SUCCESS) {
             LOG_ERROR("Read chunk %u/%u failed at offset 0x%08X: %s\n", i + 1, chunk_count, offset,
-                      thingino_error_to_string(result));
+                      tdfu_error_to_string(result));
             free(firmware_buffer);
             return result;
         }
@@ -89,5 +89,5 @@ thingino_error_t firmware_read_full(usb_device_t *device, uint32_t read_size, ui
     *data = firmware_buffer;
     *actual_size = total_read;
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }

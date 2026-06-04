@@ -6,32 +6,32 @@
  * progress callbacks.
  */
 
-#ifndef CLONER_CORE_H
-#define CLONER_CORE_H
+#ifndef TDFU_CORE_H
+#define TDFU_CORE_H
 
 #include "cloner/types.h"
 
 /**
  * Initialize the cloner library. Must be called before any other function.
- * Returns CLONER_OK on success.
+ * Returns TDFU_SUCCESS on success.
  */
-cloner_error_t cloner_init(void);
+tdfu_error_t tdfu_init(void);
 
 /**
  * Shut down the cloner library. Releases USB resources.
  */
-void cloner_cleanup(void);
+void tdfu_cleanup(void);
 
 /**
  * Discover connected Ingenic USB devices.
- * Caller must free the returned list with cloner_free_device_list().
+ * Caller must free the returned list with tdfu_free_device_list().
  */
-cloner_error_t cloner_discover_devices(cloner_device_list_t *list);
+tdfu_error_t tdfu_discover_devices(tdfu_device_list_t *list);
 
 /**
- * Free a device list returned by cloner_discover_devices().
+ * Free a device list returned by tdfu_discover_devices().
  */
-void cloner_free_device_list(cloner_device_list_t *list);
+void tdfu_free_device_list(tdfu_device_list_t *list);
 
 /**
  * Bootstrap a device: load DDR config, SPL, and U-Boot.
@@ -43,16 +43,16 @@ void cloner_free_device_list(cloner_device_list_t *list);
  * @param progress      Optional progress callback (NULL = no progress)
  * @param user_data     Passed to progress callback
  */
-cloner_error_t cloner_bootstrap(int device_index, cloner_variant_t variant, const char *firmware_dir,
-                                cloner_progress_cb progress, void *user_data);
+tdfu_error_t tdfu_bootstrap(int device_index, tdfu_variant_t variant, const char *firmware_dir,
+                                tdfu_progress_cb progress, void *user_data);
 
 /**
  * Bootstrap with pre-loaded firmware binaries (for remote/daemon use).
  * The caller provides the DDR, SPL, and U-Boot data directly.
  */
-cloner_error_t cloner_bootstrap_with_data(int device_index, cloner_variant_t variant, const uint8_t *ddr,
+tdfu_error_t tdfu_bootstrap_with_data(int device_index, tdfu_variant_t variant, const uint8_t *ddr,
                                           size_t ddr_len, const uint8_t *spl, size_t spl_len, const uint8_t *uboot,
-                                          size_t uboot_len, cloner_progress_cb progress, void *user_data);
+                                          size_t uboot_len, tdfu_progress_cb progress, void *user_data);
 
 /**
  * Write firmware to a device's flash.
@@ -63,7 +63,7 @@ cloner_error_t cloner_bootstrap_with_data(int device_index, cloner_variant_t var
  * @param progress      Optional progress callback
  * @param user_data     Passed to progress callback
  */
-cloner_error_t cloner_write_firmware(int device_index, const uint8_t *firmware, size_t len, cloner_progress_cb progress,
+tdfu_error_t tdfu_write_firmware(int device_index, const uint8_t *firmware, size_t len, tdfu_progress_cb progress,
                                      void *user_data);
 
 /**
@@ -76,7 +76,7 @@ cloner_error_t cloner_write_firmware(int device_index, const uint8_t *firmware, 
  * @param progress      Optional progress callback
  * @param user_data     Passed to progress callback
  */
-cloner_error_t cloner_read_firmware(int device_index, uint8_t **firmware, size_t *len, cloner_progress_cb progress,
+tdfu_error_t tdfu_read_firmware(int device_index, uint8_t **firmware, size_t *len, tdfu_progress_cb progress,
                                     void *user_data);
 
 /**
@@ -84,7 +84,7 @@ cloner_error_t cloner_read_firmware(int device_index, uint8_t **firmware, size_t
  * Returns internal pointer (do not free). Opaque to consumers
  * that don't include ddr_config_database.h.
  */
-const void *cloner_find_ddr_chip(const char *name);
+const void *tdfu_find_ddr_chip(const char *name);
 
 /**
  * Generate a DDR configuration binary for a processor.
@@ -93,18 +93,18 @@ const void *cloner_find_ddr_chip(const char *name);
  * @param out             Output buffer (must be at least 324 bytes)
  * @param out_len         Output: actual bytes written
  */
-cloner_error_t cloner_generate_ddr(const char *processor_name, uint8_t *out, size_t *out_len);
+tdfu_error_t tdfu_generate_ddr(const char *processor_name, uint8_t *out, size_t *out_len);
 
 /**
  * Override the variant for a discovered device.
  * Use after bootstrap when re-enumeration loses the original variant.
  */
-cloner_error_t cloner_set_device_variant(int device_index, cloner_variant_t variant);
+tdfu_error_t tdfu_set_device_variant(int device_index, tdfu_variant_t variant);
 
 /**
  * Variant name conversion utilities.
  */
-const char *cloner_variant_to_string(cloner_variant_t variant);
-cloner_variant_t cloner_variant_from_string(const char *name);
+const char *tdfu_variant_to_string(tdfu_variant_t variant);
+tdfu_variant_t tdfu_variant_from_string(const char *name);
 
-#endif /* CLONER_CORE_H */
+#endif /* TDFU_CORE_H */

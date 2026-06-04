@@ -1,5 +1,5 @@
-#ifndef THINGINO_H
-#define THINGINO_H
+#ifndef TDFU_H
+#define TDFU_H
 
 #include <stdint.h>
 #include <libusb-1.0/libusb.h>
@@ -19,25 +19,25 @@ extern bool g_debug_enabled;
 // LOG HOOK - allows redirecting log output (e.g. daemon → TCP client)
 // ============================================================================
 
-typedef void (*cloner_log_fn)(const char *msg, size_t len);
-extern cloner_log_fn g_cloner_log_hook;
+typedef void (*tdfu_log_fn)(const char *msg, size_t len);
+extern tdfu_log_fn g_tdfu_log_hook;
 
 #ifdef __GNUC__
-void cloner_log_output(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+void tdfu_log_output(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 #else
-void cloner_log_output(const char *fmt, ...);
+void tdfu_log_output(const char *fmt, ...);
 #endif
 
 // Logging macros — route through hook when set, else stderr
 #define LOG_DEBUG(fmt, ...)                                   \
     do {                                                      \
         if (g_debug_enabled)                                  \
-            cloner_log_output("[DEBUG] " fmt, ##__VA_ARGS__); \
+            tdfu_log_output("[DEBUG] " fmt, ##__VA_ARGS__); \
     } while (0)
 
-#define LOG_INFO(fmt, ...)  cloner_log_output(fmt, ##__VA_ARGS__)
-#define LOG_WARN(fmt, ...)  cloner_log_output("[WARN] " fmt, ##__VA_ARGS__)
-#define LOG_ERROR(fmt, ...) cloner_log_output("[ERROR] " fmt, ##__VA_ARGS__)
+#define LOG_INFO(fmt, ...)  tdfu_log_output(fmt, ##__VA_ARGS__)
+#define LOG_WARN(fmt, ...)  tdfu_log_output("[WARN] " fmt, ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...) tdfu_log_output("[ERROR] " fmt, ##__VA_ARGS__)
 
 // Legacy alias
 #define DEBUG_PRINT LOG_DEBUG
@@ -119,49 +119,49 @@ typedef struct {
 // ============================================================================
 
 // Processor variants
-typedef enum processor_variant {
-    VARIANT_T10,
-    VARIANT_T20,
-    VARIANT_T21,
-    VARIANT_T23,
-    VARIANT_T30,
-    VARIANT_T31,
-    VARIANT_T31X,
-    VARIANT_T31ZX,
-    VARIANT_T31A, // T31A (DDR3, like A1)
-    VARIANT_A1,   // A1 (T31-based but with DDR3, different handling)
-    VARIANT_T40,
-    VARIANT_T41,
-    VARIANT_T32,
-    VARIANT_X1000,
-    VARIANT_X1600,
-    VARIANT_X1700,
-    VARIANT_X2000,
-    VARIANT_X2100,
-    VARIANT_X2600,
-    VARIANT_T31AL, // T31AL (DDR2, distinct from T31A which is DDR3)
-    VARIANT_T40XP, // T40XP (DDR3, dw32=1, different bootrom from T40NN)
-    VARIANT_T23DL, // T23DL (DDR2, 32MB, M14D2561616A)
-} processor_variant_t;
-#define PROCESSOR_VARIANT_DEFINED
+typedef enum tdfu_variant {
+    TDFU_VARIANT_T10,
+    TDFU_VARIANT_T20,
+    TDFU_VARIANT_T21,
+    TDFU_VARIANT_T23,
+    TDFU_VARIANT_T30,
+    TDFU_VARIANT_T31,
+    TDFU_VARIANT_T31X,
+    TDFU_VARIANT_T31ZX,
+    TDFU_VARIANT_T31A, // T31A (DDR3, like A1)
+    TDFU_VARIANT_A1,   // A1 (T31-based but with DDR3, different handling)
+    TDFU_VARIANT_T40,
+    TDFU_VARIANT_T41,
+    TDFU_VARIANT_T32,
+    TDFU_VARIANT_X1000,
+    TDFU_VARIANT_X1600,
+    TDFU_VARIANT_X1700,
+    TDFU_VARIANT_X2000,
+    TDFU_VARIANT_X2100,
+    TDFU_VARIANT_X2600,
+    TDFU_VARIANT_T31AL, // T31AL (DDR2, distinct from T31A which is DDR3)
+    TDFU_VARIANT_T40XP, // T40XP (DDR3, dw32=1, different bootrom from T40NN)
+    TDFU_VARIANT_T23DL, // T23DL (DDR2, 32MB, M14D2561616A)
+} tdfu_variant_t;
+#define TDFU_VARIANT_DEFINED
 
 // Device stages
-typedef enum { STAGE_BOOTROM, STAGE_FIRMWARE } device_stage_t;
+typedef enum { TDFU_STAGE_BOOTROM, TDFU_STAGE_FIRMWARE } tdfu_stage_t;
 
 // Error codes
 typedef enum {
-    THINGINO_SUCCESS = 0,
-    THINGINO_ERROR_INIT_FAILED = -1,
-    THINGINO_ERROR_DEVICE_NOT_FOUND = -2,
-    THINGINO_ERROR_OPEN_FAILED = -3,
-    THINGINO_ERROR_TRANSFER_FAILED = -4,
-    THINGINO_ERROR_TIMEOUT = -5,
-    THINGINO_ERROR_INVALID_PARAMETER = -6,
-    THINGINO_ERROR_MEMORY = -7,
-    THINGINO_ERROR_FILE_IO = -8,
-    THINGINO_ERROR_PROTOCOL = -9,
-    THINGINO_ERROR_TRANSFER_TIMEOUT = -10
-} thingino_error_t;
+    TDFU_SUCCESS = 0,
+    TDFU_ERROR_INIT_FAILED = -1,
+    TDFU_ERROR_DEVICE_NOT_FOUND = -2,
+    TDFU_ERROR_OPEN_FAILED = -3,
+    TDFU_ERROR_TRANSFER_FAILED = -4,
+    TDFU_ERROR_TIMEOUT = -5,
+    TDFU_ERROR_INVALID_PARAMETER = -6,
+    TDFU_ERROR_MEMORY = -7,
+    TDFU_ERROR_FILE_IO = -8,
+    TDFU_ERROR_PROTOCOL = -9,
+    TDFU_ERROR_TRANSFER_TIMEOUT = -10
+} tdfu_error_t;
 
 // Device information structure
 typedef struct {
@@ -169,16 +169,16 @@ typedef struct {
     uint8_t address;
     uint16_t vendor;
     uint16_t product;
-    device_stage_t stage;
-    processor_variant_t variant;
-} device_info_t;
+    tdfu_stage_t stage;
+    tdfu_variant_t variant;
+} tdfu_device_info_t;
 
 // CPU information structure
 typedef struct {
     uint8_t magic[8];    // "BOOT47XX" or similar
     uint8_t unknown[8];  // Additional info
     char clean_magic[9]; // Clean ASCII string for variant detection
-    device_stage_t stage;
+    tdfu_stage_t stage;
 } cpu_info_t;
 
 // Write command structure
@@ -247,7 +247,7 @@ typedef struct {
     libusb_device_handle *handle;
     libusb_context *context;
     libusb_device *device;
-    device_info_t info;
+    tdfu_device_info_t info;
     bool closed;
     bool stage1_consumed; // Set by protocol_detect_soc after STAGE1 execution
 } usb_device_t;
@@ -263,134 +263,134 @@ typedef struct {
 // ============================================================================
 
 // Manager functions
-thingino_error_t usb_manager_init(usb_manager_t *manager);
-thingino_error_t usb_manager_find_devices(usb_manager_t *manager, device_info_t **devices, int *count);
-thingino_error_t usb_manager_find_devices_fast(usb_manager_t *manager, device_info_t **devices, int *count);
-thingino_error_t usb_manager_open_device(usb_manager_t *manager, const device_info_t *info, usb_device_t **device);
+tdfu_error_t usb_manager_init(usb_manager_t *manager);
+tdfu_error_t usb_manager_find_devices(usb_manager_t *manager, tdfu_device_info_t **devices, int *count);
+tdfu_error_t usb_manager_find_devices_fast(usb_manager_t *manager, tdfu_device_info_t **devices, int *count);
+tdfu_error_t usb_manager_open_device(usb_manager_t *manager, const tdfu_device_info_t *info, usb_device_t **device);
 void usb_manager_cleanup(usb_manager_t *manager);
 
 // Device functions
-thingino_error_t usb_device_init(usb_device_t *device, uint8_t bus, uint8_t address);
-thingino_error_t usb_device_close(usb_device_t *device);
-thingino_error_t usb_device_reopen(usb_device_t *device);
+tdfu_error_t usb_device_init(usb_device_t *device, uint8_t bus, uint8_t address);
+tdfu_error_t usb_device_close(usb_device_t *device);
+tdfu_error_t usb_device_reopen(usb_device_t *device);
 
-thingino_error_t usb_device_reset(usb_device_t *device);
-thingino_error_t usb_device_claim_interface(usb_device_t *device);
-thingino_error_t usb_device_release_interface(usb_device_t *device);
-thingino_error_t usb_device_get_cpu_info(usb_device_t *device, cpu_info_t *info);
+tdfu_error_t usb_device_reset(usb_device_t *device);
+tdfu_error_t usb_device_claim_interface(usb_device_t *device);
+tdfu_error_t usb_device_release_interface(usb_device_t *device);
+tdfu_error_t usb_device_get_cpu_info(usb_device_t *device, cpu_info_t *info);
 
 // Transfer functions
-thingino_error_t usb_device_control_transfer(usb_device_t *device, uint8_t request_type, uint8_t request,
+tdfu_error_t usb_device_control_transfer(usb_device_t *device, uint8_t request_type, uint8_t request,
                                              uint16_t value, uint16_t index, uint8_t *data, uint16_t length,
                                              int *transferred);
-thingino_error_t usb_device_bulk_transfer(usb_device_t *device, uint8_t endpoint, uint8_t *data, int length,
+tdfu_error_t usb_device_bulk_transfer(usb_device_t *device, uint8_t endpoint, uint8_t *data, int length,
                                           int *transferred, int timeout);
-thingino_error_t usb_device_interrupt_transfer(usb_device_t *device, uint8_t endpoint, uint8_t *data, int length,
+tdfu_error_t usb_device_interrupt_transfer(usb_device_t *device, uint8_t endpoint, uint8_t *data, int length,
                                                int *transferred, int timeout);
-thingino_error_t usb_device_vendor_request(usb_device_t *device, uint8_t request_type, uint8_t request, uint16_t value,
+tdfu_error_t usb_device_vendor_request(usb_device_t *device, uint8_t request_type, uint8_t request, uint16_t value,
                                            uint16_t index, uint8_t *data, uint16_t length, uint8_t *response,
                                            int *response_length);
 
 // Protocol functions
-thingino_error_t protocol_set_data_address(usb_device_t *device, uint32_t addr);
-thingino_error_t protocol_set_data_length(usb_device_t *device, uint32_t length);
-thingino_error_t protocol_flush_cache(usb_device_t *device);
-thingino_error_t protocol_read_status(usb_device_t *device, uint8_t *status_buffer, int buffer_size, int *status_len);
-thingino_error_t protocol_prog_stage1(usb_device_t *device, uint32_t addr);
-thingino_error_t protocol_prog_stage2(usb_device_t *device, uint32_t addr);
-thingino_error_t protocol_get_ack(usb_device_t *device, int32_t *status);
-thingino_error_t protocol_init(usb_device_t *device);
-thingino_error_t protocol_read_memory(usb_device_t *device, uint32_t addr, uint32_t len, uint8_t *out);
-thingino_error_t protocol_detect_soc(usb_device_t *device, processor_variant_t *variant);
-thingino_error_t protocol_nand_read(usb_device_t *device, uint32_t offset, uint32_t size, uint8_t **data,
+tdfu_error_t protocol_set_data_address(usb_device_t *device, uint32_t addr);
+tdfu_error_t protocol_set_data_length(usb_device_t *device, uint32_t length);
+tdfu_error_t protocol_flush_cache(usb_device_t *device);
+tdfu_error_t protocol_read_status(usb_device_t *device, uint8_t *status_buffer, int buffer_size, int *status_len);
+tdfu_error_t protocol_prog_stage1(usb_device_t *device, uint32_t addr);
+tdfu_error_t protocol_prog_stage2(usb_device_t *device, uint32_t addr);
+tdfu_error_t protocol_get_ack(usb_device_t *device, int32_t *status);
+tdfu_error_t protocol_init(usb_device_t *device);
+tdfu_error_t protocol_read_memory(usb_device_t *device, uint32_t addr, uint32_t len, uint8_t *out);
+tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant);
+tdfu_error_t protocol_nand_read(usb_device_t *device, uint32_t offset, uint32_t size, uint8_t **data,
                                     int *transferred);
 
 // Firmware functions
-thingino_error_t firmware_load(processor_variant_t variant, firmware_files_t *firmware);
-thingino_error_t firmware_load_from_dir(processor_variant_t variant, const char *firmware_dir,
+tdfu_error_t firmware_load(tdfu_variant_t variant, firmware_files_t *firmware);
+tdfu_error_t firmware_load_from_dir(tdfu_variant_t variant, const char *firmware_dir,
                                         firmware_files_t *firmware);
-thingino_error_t firmware_load_from_files(processor_variant_t variant, const char *config_file, const char *spl_file,
+tdfu_error_t firmware_load_from_files(tdfu_variant_t variant, const char *config_file, const char *spl_file,
                                           const char *uboot_file, firmware_files_t *firmware);
 void firmware_cleanup(firmware_files_t *firmware);
-thingino_error_t load_file(const char *filename, uint8_t **data, size_t *size);
-thingino_error_t firmware_file_check_readable(const char *path);
-thingino_error_t firmware_validate(const firmware_files_t *firmware);
+tdfu_error_t load_file(const char *filename, uint8_t **data, size_t *size);
+tdfu_error_t firmware_file_check_readable(const char *path);
+tdfu_error_t firmware_validate(const firmware_files_t *firmware);
 
 // DDR functions
-thingino_error_t ddr_validate_binary(const uint8_t *data, size_t size);
+tdfu_error_t ddr_validate_binary(const uint8_t *data, size_t size);
 
 // Bootstrap functions
-thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t *config);
-thingino_error_t bootstrap_ensure_bootstrapped(usb_device_t *device, const bootstrap_config_t *config);
-thingino_error_t bootstrap_load_data_to_memory(usb_device_t *device, const uint8_t *data, size_t size,
+tdfu_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t *config);
+tdfu_error_t bootstrap_ensure_bootstrapped(usb_device_t *device, const bootstrap_config_t *config);
+tdfu_error_t bootstrap_load_data_to_memory(usb_device_t *device, const uint8_t *data, size_t size,
                                                uint32_t address);
-thingino_error_t bootstrap_program_stage2(usb_device_t *device, const uint8_t *data, size_t size);
-thingino_error_t bootstrap_transfer_data(usb_device_t *device, const uint8_t *data, size_t size);
+tdfu_error_t bootstrap_program_stage2(usb_device_t *device, const uint8_t *data, size_t size);
+tdfu_error_t bootstrap_transfer_data(usb_device_t *device, const uint8_t *data, size_t size);
 
 // Additional protocol functions
-thingino_error_t protocol_fw_read(usb_device_t *device, int data_len, uint8_t **data, int *actual_len);
-thingino_error_t protocol_fw_handshake(usb_device_t *device);
-thingino_error_t protocol_fw_write_chunk1(usb_device_t *device, const uint8_t *data);
-thingino_error_t protocol_fw_write_chunk2(usb_device_t *device, const uint8_t *data);
-thingino_error_t protocol_traditional_read(usb_device_t *device, int data_len, uint8_t **data, int *actual_len);
-thingino_error_t protocol_fw_read_operation(usb_device_t *device, uint32_t offset, uint32_t length, uint8_t **data,
+tdfu_error_t protocol_fw_read(usb_device_t *device, int data_len, uint8_t **data, int *actual_len);
+tdfu_error_t protocol_fw_handshake(usb_device_t *device);
+tdfu_error_t protocol_fw_write_chunk1(usb_device_t *device, const uint8_t *data);
+tdfu_error_t protocol_fw_write_chunk2(usb_device_t *device, const uint8_t *data);
+tdfu_error_t protocol_traditional_read(usb_device_t *device, int data_len, uint8_t **data, int *actual_len);
+tdfu_error_t protocol_fw_read_operation(usb_device_t *device, uint32_t offset, uint32_t length, uint8_t **data,
                                             int *actual_len);
-thingino_error_t protocol_fw_read_status(usb_device_t *device, int status_cmd, uint32_t *status);
-thingino_error_t protocol_vendor_style_read(usb_device_t *device, uint32_t offset, uint32_t size, uint8_t **data,
+tdfu_error_t protocol_fw_read_status(usb_device_t *device, int status_cmd, uint32_t *status);
+tdfu_error_t protocol_vendor_style_read(usb_device_t *device, uint32_t offset, uint32_t size, uint8_t **data,
                                             int *actual_len);
 
 // Proper bootloader protocol functions (using code execution pattern)
-thingino_error_t protocol_load_and_execute_code(usb_device_t *device, uint32_t ram_address, const uint8_t *code,
+tdfu_error_t protocol_load_and_execute_code(usb_device_t *device, uint32_t ram_address, const uint8_t *code,
                                                 uint32_t code_size);
-thingino_error_t protocol_proper_firmware_read(usb_device_t *device, uint32_t flash_offset, uint32_t read_size,
+tdfu_error_t protocol_proper_firmware_read(usb_device_t *device, uint32_t flash_offset, uint32_t read_size,
                                                uint8_t **out_data, int *out_len);
-thingino_error_t protocol_proper_firmware_write(usb_device_t *device, uint32_t flash_offset, const uint8_t *data,
+tdfu_error_t protocol_proper_firmware_write(usb_device_t *device, uint32_t flash_offset, const uint8_t *data,
                                                 uint32_t data_size);
 
 // Firmware read functions
-thingino_error_t firmware_read_full(usb_device_t *device, uint32_t read_size, uint8_t **data, uint32_t *actual_size);
+tdfu_error_t firmware_read_full(usb_device_t *device, uint32_t read_size, uint8_t **data, uint32_t *actual_size);
 
 // Firmware handshake protocol functions (40-byte chunk transfers)
-thingino_error_t firmware_handshake_read_chunk(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
+tdfu_error_t firmware_handshake_read_chunk(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
                                                uint32_t chunk_size, uint32_t total_size, uint8_t **out_data,
                                                int *out_len);
-thingino_error_t firmware_handshake_write_chunk(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
+tdfu_error_t firmware_handshake_write_chunk(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
                                                 const uint8_t *data, uint32_t data_size);
-thingino_error_t firmware_handshake_write_chunk_a1(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
+tdfu_error_t firmware_handshake_write_chunk_a1(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
                                                    const uint8_t *data, uint32_t data_size);
-thingino_error_t firmware_handshake_write_chunk_vendor(usb_device_t *device, uint32_t chunk_index,
+tdfu_error_t firmware_handshake_write_chunk_vendor(usb_device_t *device, uint32_t chunk_index,
                                                        uint32_t chunk_offset, const uint8_t *data, uint32_t data_size);
-thingino_error_t firmware_handshake_init(usb_device_t *device);
+tdfu_error_t firmware_handshake_init(usb_device_t *device);
 
 // Firmware writer functions
-thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firmware_file,
+tdfu_error_t write_firmware_to_device(usb_device_t *device, const char *firmware_file,
                                           const firmware_binary_t *fw_binary, bool no_erase, bool is_a1_board,
                                           uint32_t chunk_size);
-thingino_error_t send_bulk_data(usb_device_t *device, uint8_t endpoint, const uint8_t *data, uint32_t size);
+tdfu_error_t send_bulk_data(usb_device_t *device, uint8_t endpoint, const uint8_t *data, uint32_t size);
 
 // Utility functions (additional)
-processor_variant_t detect_variant_from_magic(const char *magic);
+tdfu_variant_t detect_variant_from_magic(const char *magic);
 
 // Utility functions
 uint32_t calculate_crc32(const uint8_t *data, size_t length);
-const char *processor_variant_to_string(processor_variant_t variant);
-processor_variant_t string_to_processor_variant(const char *str);
-const char *device_stage_to_string(device_stage_t stage);
-const char *thingino_error_to_string(thingino_error_t error);
+const char *tdfu_variant_to_string(tdfu_variant_t variant);
+tdfu_variant_t tdfu_variant_from_string(const char *str);
+const char *tdfu_stage_to_string(tdfu_stage_t stage);
+const char *tdfu_error_to_string(tdfu_error_t error);
 
 // High-level device operations (libcloner/src/operations.c)
-const char *cloner_get_last_detected_variant(void);
-thingino_error_t cloner_op_bootstrap(usb_manager_t *manager, int index, const char *force_cpu, bool verbose,
+const char *tdfu_get_last_detected_variant(void);
+tdfu_error_t tdfu_op_bootstrap(usb_manager_t *manager, int index, const char *force_cpu, bool verbose,
                                      bool skip_ddr, const char *config_file, const char *spl_file,
                                      const char *uboot_file, const char *firmware_dir);
 
-thingino_error_t cloner_op_read_firmware(usb_manager_t *manager, int index, const char *output_file,
+tdfu_error_t tdfu_op_read_firmware(usb_manager_t *manager, int index, const char *output_file,
                                          const char *force_cpu, const char *flash_chip_name);
 
-thingino_error_t cloner_op_write_firmware(usb_manager_t *manager, int device_index, const char *firmware_file,
+tdfu_error_t tdfu_op_write_firmware(usb_manager_t *manager, int device_index, const char *firmware_file,
                                           const char *force_cpu, const char *flash_chip_name, bool no_erase,
                                           bool reboot_after, bool do_bootstrap, bool verbose, bool skip_ddr,
                                           const char *config_file, const char *spl_file, const char *uboot_file,
                                           const char *firmware_dir, uint32_t chunk_size);
 
-#endif // THINGINO_H
+#endif // TDFU_H

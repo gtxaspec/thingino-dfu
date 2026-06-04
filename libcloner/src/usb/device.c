@@ -11,10 +11,10 @@
 #include <time.h>
 #endif
 
-thingino_error_t usb_device_get_cpu_info(usb_device_t *device, cpu_info_t *info) {
+tdfu_error_t usb_device_get_cpu_info(usb_device_t *device, cpu_info_t *info) {
     if (!device || !info || device->closed) {
         DEBUG_PRINT("GetCPUInfo: Invalid parameters or device closed\n");
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("GetCPUInfo: Starting CPU info request (VID:0x%04X, PID:0x%04X)\n", device->info.vendor,
@@ -32,9 +32,9 @@ thingino_error_t usb_device_get_cpu_info(usb_device_t *device, cpu_info_t *info)
                     libusb_error_name(result));
 
         // Fall back to interface claiming approach
-        thingino_error_t claim_result = usb_device_claim_interface(device);
-        if (claim_result != THINGINO_SUCCESS) {
-            DEBUG_PRINT("GetCPUInfo: Failed to claim interface: %s\n", thingino_error_to_string(claim_result));
+        tdfu_error_t claim_result = usb_device_claim_interface(device);
+        if (claim_result != TDFU_SUCCESS) {
+            DEBUG_PRINT("GetCPUInfo: Failed to claim interface: %s\n", tdfu_error_to_string(claim_result));
             return claim_result;
         }
 
@@ -44,8 +44,8 @@ thingino_error_t usb_device_get_cpu_info(usb_device_t *device, cpu_info_t *info)
         // Release interface after communication
         usb_device_release_interface(device);
 
-        if (result != THINGINO_SUCCESS) {
-            DEBUG_PRINT("GetCPUInfo: Vendor request failed: %s\n", thingino_error_to_string(result));
+        if (result != TDFU_SUCCESS) {
+            DEBUG_PRINT("GetCPUInfo: Vendor request failed: %s\n", tdfu_error_to_string(result));
             return result;
         }
     } else {
@@ -55,7 +55,7 @@ thingino_error_t usb_device_get_cpu_info(usb_device_t *device, cpu_info_t *info)
 
     if (transferred < 8) {
         DEBUG_PRINT("GetCPUInfo: Invalid response length: %d (expected 8)\n", transferred);
-        return THINGINO_ERROR_PROTOCOL;
+        return TDFU_ERROR_PROTOCOL;
     }
 
     DEBUG_PRINT("GetCPUInfo: Got %d bytes of response data\n", transferred);
@@ -114,29 +114,29 @@ thingino_error_t usb_device_get_cpu_info(usb_device_t *device, cpu_info_t *info)
     }
 
     if (is_firmware_stage) {
-        info->stage = STAGE_FIRMWARE;
-        device->info.stage = STAGE_FIRMWARE;
+        info->stage = TDFU_STAGE_FIRMWARE;
+        device->info.stage = TDFU_STAGE_FIRMWARE;
         DEBUG_PRINT("GetCPUInfo: Device is in firmware stage\n");
     } else {
-        info->stage = STAGE_BOOTROM;
-        device->info.stage = STAGE_BOOTROM;
+        info->stage = TDFU_STAGE_BOOTROM;
+        device->info.stage = TDFU_STAGE_BOOTROM;
         DEBUG_PRINT("GetCPUInfo: Device is in bootrom stage\n");
     }
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 // Initialize USB device
-thingino_error_t usb_device_init(usb_device_t *device, uint8_t bus, uint8_t address) {
+tdfu_error_t usb_device_init(usb_device_t *device, uint8_t bus, uint8_t address) {
     if (!device) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     // Find the device by bus and address
     libusb_device **devices;
     ssize_t count = libusb_get_device_list(NULL, &devices);
     if (count < 0) {
-        return THINGINO_ERROR_DEVICE_NOT_FOUND;
+        return TDFU_ERROR_DEVICE_NOT_FOUND;
     }
 
     libusb_device *found_device = NULL;
@@ -152,14 +152,14 @@ thingino_error_t usb_device_init(usb_device_t *device, uint8_t bus, uint8_t addr
 
     if (!found_device) {
         libusb_free_device_list(devices, 1);
-        return THINGINO_ERROR_DEVICE_NOT_FOUND;
+        return TDFU_ERROR_DEVICE_NOT_FOUND;
     }
 
     // Open the device
     int result = libusb_open(found_device, &device->handle);
     if (result != LIBUSB_SUCCESS) {
         libusb_free_device_list(devices, 1);
-        return THINGINO_ERROR_OPEN_FAILED;
+        return TDFU_ERROR_OPEN_FAILED;
     }
 
     // Get device descriptor
@@ -168,7 +168,7 @@ thingino_error_t usb_device_init(usb_device_t *device, uint8_t bus, uint8_t addr
     if (result != LIBUSB_SUCCESS) {
         libusb_close(device->handle);
         libusb_free_device_list(devices, 1);
-        return THINGINO_ERROR_OPEN_FAILED;
+        return TDFU_ERROR_OPEN_FAILED;
     }
 
     // Initialize device structure
@@ -193,13 +193,13 @@ thingino_error_t usb_device_init(usb_device_t *device, uint8_t bus, uint8_t addr
     DEBUG_PRINT("Device initialized: VID:0x%04X, PID:0x%04X, Bus:%d, Addr:%d\n", device->info.vendor,
                 device->info.product, bus, address);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 // Close USB device
-thingino_error_t usb_device_close(usb_device_t *device) {
+tdfu_error_t usb_device_close(usb_device_t *device) {
     if (!device) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     if (!device->closed && device->handle) {
@@ -208,13 +208,13 @@ thingino_error_t usb_device_close(usb_device_t *device) {
     }
 
     device->closed = true;
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 // Reopen USB device after possible reset or re-enumeration
-thingino_error_t usb_device_reopen(usb_device_t *device) {
+tdfu_error_t usb_device_reopen(usb_device_t *device) {
     if (!device) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
 #ifdef ANDROID
@@ -222,7 +222,7 @@ thingino_error_t usb_device_reopen(usb_device_t *device) {
      * We cannot enumerate or reopen devices — the existing handle stays valid.
      * Just return success and keep using the current handle. */
     DEBUG_PRINT("usb_device_reopen: skipping on Android (fd managed by Java)\n");
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 #endif
 
     DEBUG_PRINT("usb_device_reopen: attempting to reopen device VID:0x%04X PID:0x%04X (old bus=%d addr=%d)\n",
@@ -240,7 +240,7 @@ thingino_error_t usb_device_reopen(usb_device_t *device) {
     ssize_t count = libusb_get_device_list(device->context, &list);
     if (count < 0) {
         DEBUG_PRINT("usb_device_reopen: libusb_get_device_list failed: %zd\n", count);
-        return THINGINO_ERROR_DEVICE_NOT_FOUND;
+        return TDFU_ERROR_DEVICE_NOT_FOUND;
     }
 
     libusb_device *found = NULL;
@@ -277,14 +277,14 @@ thingino_error_t usb_device_reopen(usb_device_t *device) {
     if (!found) {
         libusb_free_device_list(list, 1);
         DEBUG_PRINT("usb_device_reopen: matching device not found after re-enumeration\n");
-        return THINGINO_ERROR_DEVICE_NOT_FOUND;
+        return TDFU_ERROR_DEVICE_NOT_FOUND;
     }
 
     int result = libusb_open(found, &device->handle);
     if (result != LIBUSB_SUCCESS) {
         libusb_free_device_list(list, 1);
         DEBUG_PRINT("usb_device_reopen: libusb_open failed: %s\n", libusb_error_name(result));
-        return THINGINO_ERROR_OPEN_FAILED;
+        return TDFU_ERROR_OPEN_FAILED;
     }
 
     device->device = found;
@@ -297,34 +297,34 @@ thingino_error_t usb_device_reopen(usb_device_t *device) {
 
     DEBUG_PRINT("usb_device_reopen: reopened on bus=%d addr=%d\n", device->info.bus, device->info.address);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 // Reset USB device
-thingino_error_t usb_device_reset(usb_device_t *device) {
+tdfu_error_t usb_device_reset(usb_device_t *device) {
     if (!device || !device->handle || device->closed) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
 #ifdef ANDROID
     /* USB reset not supported on Android — fd is managed by Java */
     DEBUG_PRINT("usb_device_reset: skipping on Android\n");
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 #endif
 
     int result = libusb_reset_device(device->handle);
     if (result != LIBUSB_SUCCESS) {
         DEBUG_PRINT("Reset device failed: %s\n", libusb_error_name(result));
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 // Claim USB interface
-thingino_error_t usb_device_claim_interface(usb_device_t *device) {
+tdfu_error_t usb_device_claim_interface(usb_device_t *device) {
     if (!device || !device->handle || device->closed) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     // Ensure configuration is set before claiming interface
@@ -347,48 +347,48 @@ thingino_error_t usb_device_claim_interface(usb_device_t *device) {
     int result = libusb_claim_interface(device->handle, 0);
     if (result != LIBUSB_SUCCESS) {
         DEBUG_PRINT("Claim interface failed: %s\n", libusb_error_name(result));
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 // Release USB interface
-thingino_error_t usb_device_release_interface(usb_device_t *device) {
+tdfu_error_t usb_device_release_interface(usb_device_t *device) {
     if (!device || !device->handle || device->closed) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     int result = libusb_release_interface(device->handle, 0);
     if (result != LIBUSB_SUCCESS) {
         DEBUG_PRINT("Release interface failed: %s\n", libusb_error_name(result));
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 // Control transfer
-thingino_error_t usb_device_control_transfer(usb_device_t *device, uint8_t request_type, uint8_t request,
+tdfu_error_t usb_device_control_transfer(usb_device_t *device, uint8_t request_type, uint8_t request,
                                              uint16_t value, uint16_t index, uint8_t *data, uint16_t length,
                                              int *transferred) {
 
     if (!device || !device->handle || device->closed) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     int result = libusb_control_transfer(device->handle, request_type, request, value, index, data, length, 5000);
 
     if (result < 0) {
         DEBUG_PRINT("Control transfer failed: %s\n", libusb_error_name(result));
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
     if (transferred) {
         *transferred = result;
     }
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 // Helper to get current time in milliseconds
@@ -402,11 +402,11 @@ thingino_error_t usb_device_control_transfer(usb_device_t *device, uint8_t reque
 // Bulk transfer with timeout parameter
 // According to the trace file, protocol requires successful transfer
 // Fail immediately if transfer doesn't succeed
-thingino_error_t usb_device_bulk_transfer(usb_device_t *device, uint8_t endpoint, uint8_t *data, int length,
+tdfu_error_t usb_device_bulk_transfer(usb_device_t *device, uint8_t endpoint, uint8_t *data, int length,
                                           int *transferred, int timeout) {
 
     if (!device || !device->handle || device->closed) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     // Determine direction from endpoint (bit 7: 0=OUT, 1=IN)
@@ -419,7 +419,7 @@ thingino_error_t usb_device_bulk_transfer(usb_device_t *device, uint8_t endpoint
 
     if (result == LIBUSB_SUCCESS) {
         DEBUG_PRINT("Bulk transfer success: %d bytes transferred\n", transferred ? *transferred : -1);
-        return THINGINO_SUCCESS;
+        return TDFU_SUCCESS;
     }
 
     // Special handling for timeouts
@@ -431,26 +431,26 @@ thingino_error_t usb_device_bulk_transfer(usb_device_t *device, uint8_t endpoint
             DEBUG_PRINT(
                 "Bulk transfer reported timeout but full length (%d bytes) was transferred; treating as success\n",
                 *transferred);
-            return THINGINO_SUCCESS;
+            return TDFU_SUCCESS;
         }
 
         DEBUG_PRINT("Bulk transfer timeout (%s): endpoint=0x%02X, length=%d, timeout=%dms, transferred=%d\n", direction,
                     endpoint, length, timeout, transferred ? *transferred : -1);
-        return THINGINO_ERROR_TIMEOUT;
+        return TDFU_ERROR_TIMEOUT;
     }
 
     LOG_INFO("[ERROR] Bulk transfer failed: %s (endpoint=0x%02X, length=%d, timeout=%dms, transferred=%d)\n",
              libusb_error_name(result), endpoint, length, timeout, transferred ? *transferred : -1);
-    return THINGINO_ERROR_TRANSFER_FAILED;
+    return TDFU_ERROR_TRANSFER_FAILED;
 }
 
 // Interrupt transfer with timeout parameter
 // Used for INT endpoint communication (e.g., EP 0x00 handshaking)
-thingino_error_t usb_device_interrupt_transfer(usb_device_t *device, uint8_t endpoint, uint8_t *data, int length,
+tdfu_error_t usb_device_interrupt_transfer(usb_device_t *device, uint8_t endpoint, uint8_t *data, int length,
                                                int *transferred, int timeout) {
 
     if (!device || !device->handle || device->closed) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     // Determine direction from endpoint (bit 7: 0=OUT, 1=IN)
@@ -464,27 +464,27 @@ thingino_error_t usb_device_interrupt_transfer(usb_device_t *device, uint8_t end
 
     if (result == LIBUSB_SUCCESS) {
         DEBUG_PRINT("Interrupt transfer success (%s): %d bytes transferred\n", direction, *transferred);
-        return THINGINO_SUCCESS;
+        return TDFU_SUCCESS;
     }
 
     if (result == LIBUSB_ERROR_TIMEOUT) {
         DEBUG_PRINT("Interrupt transfer timeout (%s): endpoint=0x%02X, length=%d, timeout=%dms\n", direction, endpoint,
                     length, timeout);
-        return THINGINO_ERROR_TIMEOUT;
+        return TDFU_ERROR_TIMEOUT;
     }
 
     DEBUG_PRINT("Interrupt transfer failed (%s): %s (endpoint=0x%02X, length=%d, timeout=%dms)\n", direction,
                 libusb_error_name(result), endpoint, length, timeout);
-    return THINGINO_ERROR_TRANSFER_FAILED;
+    return TDFU_ERROR_TRANSFER_FAILED;
 }
 
 // Vendor request with retry logic for device re-enumeration
-thingino_error_t usb_device_vendor_request(usb_device_t *device, uint8_t request_type, uint8_t request, uint16_t value,
+tdfu_error_t usb_device_vendor_request(usb_device_t *device, uint8_t request_type, uint8_t request, uint16_t value,
                                            uint16_t index, uint8_t *data, uint16_t length, uint8_t *response,
                                            int *response_length) {
 
     if (!device || !device->handle || device->closed) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     // Special handling for firmware-stage VR_WRITE (0x12) handshakes.
@@ -493,7 +493,7 @@ thingino_error_t usb_device_vendor_request(usb_device_t *device, uint8_t request
     // process the subsequent bulk-out chunk. To avoid spamming multiple
     // identical VR_WRITE requests (which diverges from the vendor trace),
     // send it once and treat a timeout as success.
-    if (request_type == REQUEST_TYPE_OUT && request == VR_WRITE && device->info.stage == STAGE_FIRMWARE) {
+    if (request_type == REQUEST_TYPE_OUT && request == VR_WRITE && device->info.stage == TDFU_STAGE_FIRMWARE) {
 
         uint8_t *buffer = response ? response : data;
         int result = libusb_control_transfer(device->handle, request_type, request, value, index, buffer, length, 5000);
@@ -502,7 +502,7 @@ thingino_error_t usb_device_vendor_request(usb_device_t *device, uint8_t request
             if (response_length) {
                 *response_length = result;
             }
-            return THINGINO_SUCCESS;
+            return TDFU_SUCCESS;
         }
 
         if (result == LIBUSB_ERROR_TIMEOUT) {
@@ -511,11 +511,11 @@ thingino_error_t usb_device_vendor_request(usb_device_t *device, uint8_t request
             if (response_length) {
                 *response_length = 0;
             }
-            return THINGINO_SUCCESS;
+            return TDFU_SUCCESS;
         }
 
         DEBUG_PRINT("Vendor request VR_WRITE failed: %s\n", libusb_error_name(result));
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
     // Special handling for firmware-stage VR_SET_DATA_ADDR (0x01) and VR_SET_DATA_LEN (0x02) during NOR
@@ -532,7 +532,7 @@ thingino_error_t usb_device_vendor_request(usb_device_t *device, uint8_t request
     // "device busy but OK" and let subsequent operations (status checks,
     // handshakes, data transfers) detect any real failures.
     if (request_type == REQUEST_TYPE_OUT && (request == VR_SET_DATA_ADDR || request == VR_SET_DATA_LEN) &&
-        device->info.stage == STAGE_FIRMWARE) {
+        device->info.stage == TDFU_STAGE_FIRMWARE) {
 
         uint8_t *buffer = response ? response : data;
         int result = libusb_control_transfer(device->handle, request_type, request, value, index, buffer, length, 5000);
@@ -541,7 +541,7 @@ thingino_error_t usb_device_vendor_request(usb_device_t *device, uint8_t request
             if (response_length) {
                 *response_length = result;
             }
-            return THINGINO_SUCCESS;
+            return TDFU_SUCCESS;
         }
 
         if (result == LIBUSB_ERROR_TIMEOUT) {
@@ -552,12 +552,12 @@ thingino_error_t usb_device_vendor_request(usb_device_t *device, uint8_t request
             if (response_length) {
                 *response_length = 0;
             }
-            return THINGINO_SUCCESS;
+            return TDFU_SUCCESS;
         }
 
         const char *req_name = (request == VR_SET_DATA_ADDR) ? "VR_SET_DATA_ADDR" : "VR_SET_DATA_LEN";
         DEBUG_PRINT("Vendor request %s failed: %s\n", req_name, libusb_error_name(result));
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
     // Retry logic for device re-enumeration issues
@@ -574,7 +574,7 @@ thingino_error_t usb_device_vendor_request(usb_device_t *device, uint8_t request
             if (response_length) {
                 *response_length = result;
             }
-            return THINGINO_SUCCESS;
+            return TDFU_SUCCESS;
         }
 
         // Check if this is a timeout or pipe error (device disconnected)
@@ -586,14 +586,14 @@ thingino_error_t usb_device_vendor_request(usb_device_t *device, uint8_t request
                 platform_sleep_ms(retry_delays[retry_count - 1] / 1000);
             } else {
                 DEBUG_PRINT("Vendor request failed after %d retries: %s\n", max_retries, libusb_error_name(result));
-                return THINGINO_ERROR_TRANSFER_FAILED;
+                return TDFU_ERROR_TRANSFER_FAILED;
             }
         } else {
             // Non-recoverable error
             DEBUG_PRINT("Vendor request failed: %s\n", libusb_error_name(result));
-            return THINGINO_ERROR_TRANSFER_FAILED;
+            return TDFU_ERROR_TRANSFER_FAILED;
         }
     }
 
-    return THINGINO_ERROR_TRANSFER_FAILED;
+    return TDFU_ERROR_TRANSFER_FAILED;
 }

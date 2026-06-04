@@ -21,11 +21,11 @@ static int tests_skipped = 0;
 
 static uint8_t *load_ref_binary(const char *path, size_t *size) {
     uint8_t *data = NULL;
-    if (load_file(path, &data, size) != THINGINO_SUCCESS) {
+    if (load_file(path, &data, size) != TDFU_SUCCESS) {
         /* Try with ../ prefix for running from build dir */
         char alt[512];
         snprintf(alt, sizeof(alt), "../%s", path);
-        if (load_file(alt, &data, size) != THINGINO_SUCCESS)
+        if (load_file(alt, &data, size) != TDFU_SUCCESS)
             return NULL;
     }
     return data;

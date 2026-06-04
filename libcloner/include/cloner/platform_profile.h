@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-/* processor_variant_t is defined in thingino.h */
+/* tdfu_variant_t is defined in thingino.h */
 #include "cloner/thingino.h"
 
 /**
@@ -85,6 +85,6 @@ typedef struct {
  * Returns a pointer to a static const profile, never NULL.
  * Unknown variants get the T31 (default) profile.
  */
-const platform_profile_t *platform_get_profile(processor_variant_t variant);
+const platform_profile_t *platform_get_profile(tdfu_variant_t variant);
 
 #endif /* PLATFORM_PROFILE_H */

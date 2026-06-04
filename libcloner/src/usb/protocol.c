@@ -7,20 +7,20 @@
 // PROTOCOL IMPLEMENTATION
 // ============================================================================
 
-thingino_error_t protocol_set_data_address(usb_device_t *device, uint32_t addr) {
+tdfu_error_t protocol_set_data_address(usb_device_t *device, uint32_t addr) {
     if (!device) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("SetDataAddress: 0x%08x\n", addr);
 
     int response_length;
-    thingino_error_t result =
+    tdfu_error_t result =
         usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_SET_DATA_ADDR, (uint16_t)(addr >> 16),
                                   (uint16_t)(addr & 0xFFFF), NULL, 0, NULL, &response_length);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("SetDataAddress error: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("SetDataAddress error: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -29,23 +29,23 @@ thingino_error_t protocol_set_data_address(usb_device_t *device, uint32_t addr) 
     // Platform-specific sleep
     platform_sleep_ms(CMD_RESPONSE_DELAY_MS);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t protocol_set_data_length(usb_device_t *device, uint32_t length) {
+tdfu_error_t protocol_set_data_length(usb_device_t *device, uint32_t length) {
     if (!device) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("SetDataLength: %d (0x%08x)\n", length, length);
 
     int response_length;
-    thingino_error_t result =
+    tdfu_error_t result =
         usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_SET_DATA_LEN, (uint16_t)(length >> 16),
                                   (uint16_t)(length & 0xFFFF), NULL, 0, NULL, &response_length);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("SetDataLength error: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("SetDataLength error: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -54,22 +54,22 @@ thingino_error_t protocol_set_data_length(usb_device_t *device, uint32_t length)
     // Platform-specific sleep
     platform_sleep_ms(CMD_RESPONSE_DELAY_MS);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t protocol_flush_cache(usb_device_t *device) {
+tdfu_error_t protocol_flush_cache(usb_device_t *device) {
     if (!device) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("FlushCache: executing\n");
 
     int response_length;
-    thingino_error_t result =
+    tdfu_error_t result =
         usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_FLUSH_CACHE, 0, 0, NULL, 0, NULL, &response_length);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("FlushCache error: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("FlushCache error: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -78,56 +78,56 @@ thingino_error_t protocol_flush_cache(usb_device_t *device) {
     // Platform-specific sleep
     platform_sleep_ms(CMD_RESPONSE_DELAY_MS);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /**
  * Read device status
  */
-thingino_error_t protocol_read_status(usb_device_t *device, uint8_t *status_buffer, int buffer_size, int *status_len) {
+tdfu_error_t protocol_read_status(usb_device_t *device, uint8_t *status_buffer, int buffer_size, int *status_len) {
     if (!device || !status_buffer || buffer_size < 8) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("ReadStatus: executing\n");
 
     // Use VR_FW_READ_STATUS2 (0x19) - most commonly used status check
-    thingino_error_t result = usb_device_vendor_request(device, REQUEST_TYPE_VENDOR, VR_FW_READ_STATUS2, 0, 0, NULL,
+    tdfu_error_t result = usb_device_vendor_request(device, REQUEST_TYPE_VENDOR, VR_FW_READ_STATUS2, 0, 0, NULL,
                                                         buffer_size, status_buffer, status_len);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("ReadStatus error: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("ReadStatus error: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
     DEBUG_PRINT("ReadStatus: success, got %d bytes\n", *status_len);
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /**
  * Set up a data transfer: set address + length in one call.
  */
-static thingino_error_t protocol_setup_transfer(usb_device_t *device, uint32_t addr, uint32_t length) {
-    thingino_error_t result = protocol_set_data_address(device, addr);
-    if (result != THINGINO_SUCCESS)
+static tdfu_error_t protocol_setup_transfer(usb_device_t *device, uint32_t addr, uint32_t length) {
+    tdfu_error_t result = protocol_set_data_address(device, addr);
+    if (result != TDFU_SUCCESS)
         return result;
     return protocol_set_data_length(device, length);
 }
 
-thingino_error_t protocol_prog_stage1(usb_device_t *device, uint32_t addr) {
+tdfu_error_t protocol_prog_stage1(usb_device_t *device, uint32_t addr) {
     if (!device) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("ProgStage1: addr=0x%08x\n", addr);
 
     int response_length;
-    thingino_error_t result =
+    tdfu_error_t result =
         usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_PROG_STAGE1, (uint16_t)(addr >> 16),
                                   (uint16_t)(addr & 0xFFFF), NULL, 0, NULL, &response_length);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("ProgStage1 error: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("ProgStage1 error: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -136,27 +136,27 @@ thingino_error_t protocol_prog_stage1(usb_device_t *device, uint32_t addr) {
     // Platform-specific sleep
     platform_sleep_ms(CMD_RESPONSE_DELAY_MS);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t protocol_prog_stage2(usb_device_t *device, uint32_t addr) {
+tdfu_error_t protocol_prog_stage2(usb_device_t *device, uint32_t addr) {
     if (!device) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("ProgStage2: addr=0x%08x\n", addr);
 
     int response_length;
-    thingino_error_t result =
+    tdfu_error_t result =
         usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_PROG_STAGE2, (uint16_t)(addr >> 16),
                                   (uint16_t)(addr & 0xFFFF), NULL, 0, NULL, &response_length);
 
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         // It's expected for ProgStage2 to fail with timeout or pipe error
         // because device is re-enumerating after executing U-Boot
         DEBUG_PRINT("ProgStage2 sent (timeout/pipe error during re-enumeration is expected): %s\n",
-                    thingino_error_to_string(result));
-        return THINGINO_SUCCESS; // Treat as success - device is re-enumerating
+                    tdfu_error_to_string(result));
+        return TDFU_SUCCESS; // Treat as success - device is re-enumerating
     }
 
     DEBUG_PRINT("ProgStage2 OK\n");
@@ -164,36 +164,36 @@ thingino_error_t protocol_prog_stage2(usb_device_t *device, uint32_t addr) {
     // Platform-specific sleep
     platform_sleep_ms(CMD_RESPONSE_DELAY_MS);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t protocol_get_ack(usb_device_t *device, int32_t *status) {
+tdfu_error_t protocol_get_ack(usb_device_t *device, int32_t *status) {
     if (!device || !status) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     uint8_t data[4];
     int response_length;
-    thingino_error_t result =
+    tdfu_error_t result =
         usb_device_vendor_request(device, REQUEST_TYPE_VENDOR, VR_GET_CPU_INFO, 0, 0, NULL, 4, data, &response_length);
 
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         return result;
     }
 
     if (response_length < 4) {
-        return THINGINO_ERROR_PROTOCOL;
+        return TDFU_ERROR_PROTOCOL;
     }
 
     // Convert little-endian bytes to int32
     *status = (int32_t)data[0] | (int32_t)data[1] << 8 | (int32_t)data[2] << 16 | (int32_t)data[3] << 24;
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t protocol_read_flash_id(usb_device_t *device, uint32_t *jedec_id) {
+tdfu_error_t protocol_read_flash_id(usb_device_t *device, uint32_t *jedec_id) {
     if (!device || !jedec_id)
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
 
     *jedec_id = 0;
 
@@ -203,11 +203,11 @@ thingino_error_t protocol_read_flash_id(usb_device_t *device, uint32_t *jedec_id
      * Verified from vendor USB capture: frame 13445/13448. */
     uint8_t buf[4] = {0};
     int len = 0;
-    thingino_error_t result =
+    tdfu_error_t result =
         usb_device_vendor_request(device, REQUEST_TYPE_VENDOR, VR_FW_READ_STATUS4, 0, 0, NULL, 3, buf, &len);
-    if (result != THINGINO_SUCCESS || len < 3) {
-        DEBUG_PRINT("Flash ID read (VR_FW_READ_STATUS4) failed: %s (len=%d)\n", thingino_error_to_string(result), len);
-        return THINGINO_ERROR_PROTOCOL;
+    if (result != TDFU_SUCCESS || len < 3) {
+        DEBUG_PRINT("Flash ID read (VR_FW_READ_STATUS4) failed: %s (len=%d)\n", tdfu_error_to_string(result), len);
+        return TDFU_ERROR_PROTOCOL;
     }
 
     /* Response is {capacity, type, manufacturer} — reverse to standard JEDEC order */
@@ -216,39 +216,39 @@ thingino_error_t protocol_read_flash_id(usb_device_t *device, uint32_t *jedec_id
     /* Validate manufacturer byte */
     if ((id >> 16) == 0 || id == 0xFFFFFF) {
         DEBUG_PRINT("Flash ID response not a valid JEDEC ID: %06X\n", id);
-        return THINGINO_ERROR_PROTOCOL;
+        return TDFU_ERROR_PROTOCOL;
     }
 
     *jedec_id = id;
     LOG_INFO("  Flash JEDEC ID: 0x%06X\n", id);
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /**
  * Read memory from device in bootrom stage.
  * Uses: VR_SET_DATA_ADDR(0x01) + VR_SET_DATA_LEN(0x02) + Bulk IN(0x81)
  */
-thingino_error_t protocol_read_memory(usb_device_t *device, uint32_t addr, uint32_t len, uint8_t *out) {
+tdfu_error_t protocol_read_memory(usb_device_t *device, uint32_t addr, uint32_t len, uint8_t *out) {
     if (!device || !out || len == 0) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
-    thingino_error_t result = protocol_set_data_address(device, addr);
-    if (result != THINGINO_SUCCESS)
+    tdfu_error_t result = protocol_set_data_address(device, addr);
+    if (result != TDFU_SUCCESS)
         return result;
 
     result = protocol_set_data_length(device, len);
-    if (result != THINGINO_SUCCESS)
+    if (result != TDFU_SUCCESS)
         return result;
 
     int transferred = 0;
     int rc = libusb_bulk_transfer(device->handle, ENDPOINT_IN, out, (int)len, &transferred, 2000);
     if (rc != 0 || transferred != (int)len) {
         DEBUG_PRINT("Memory read failed at 0x%08X: %s (got %d/%u)\n", addr, libusb_error_name(rc), transferred, len);
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /**
@@ -276,9 +276,9 @@ thingino_error_t protocol_read_memory(usb_device_t *device, uint32_t addr, uint3
  *   T10=0x0005, T20=0x2000, T21=0x0021, T23=0x0023,
  *   T30=0x0030, T31=0x0031, T40/T41=0x0040, A1=0x0001
  */
-thingino_error_t protocol_detect_soc(usb_device_t *device, processor_variant_t *variant) {
+tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant) {
     if (!device || !variant) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     /* Set USB configuration 1 and claim interface — required for bulk transfers.
@@ -591,12 +591,12 @@ thingino_error_t protocol_detect_soc(usb_device_t *device, processor_variant_t *
 
     const uint32_t prog_addr = 0x80001000;
     const uint32_t result_addr = 0x80001100;
-    thingino_error_t result;
+    tdfu_error_t result;
     int transferred = 0;
 
     /* Step 1: Upload MIPS program to TCSM at 0x80001000 */
     result = protocol_set_data_address(device, prog_addr);
-    if (result != THINGINO_SUCCESS)
+    if (result != TDFU_SUCCESS)
         goto fail;
 
     /* Pad to 512 bytes — bootrom bulk transfer minimum */
@@ -605,11 +605,11 @@ thingino_error_t protocol_detect_soc(usb_device_t *device, processor_variant_t *
     memcpy(padded, mips_prog, sizeof(mips_prog));
 
     result = protocol_set_data_length(device, sizeof(padded));
-    if (result != THINGINO_SUCCESS)
+    if (result != TDFU_SUCCESS)
         goto fail;
 
     result = usb_device_bulk_transfer(device, ENDPOINT_OUT, padded, sizeof(padded), &transferred, 5000);
-    if (result != THINGINO_SUCCESS || transferred != (int)sizeof(padded)) {
+    if (result != TDFU_SUCCESS || transferred != (int)sizeof(padded)) {
         DEBUG_PRINT("Failed to upload detect program: %d (transferred %d)\n", result, transferred);
         goto fail;
     }
@@ -627,10 +627,10 @@ thingino_error_t protocol_detect_soc(usb_device_t *device, processor_variant_t *
      * how much code to flush from D-cache before execution. Without it, the
      * program may not be visible to I-cache and won't execute. */
     result = protocol_set_data_length(device, 0x7000);
-    if (result != THINGINO_SUCCESS)
+    if (result != TDFU_SUCCESS)
         goto fail;
     result = protocol_prog_stage1(device, prog_addr);
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         DEBUG_PRINT("Failed to execute detect program\n");
         goto fail;
     }
@@ -642,7 +642,7 @@ thingino_error_t protocol_detect_soc(usb_device_t *device, processor_variant_t *
     uint8_t results[24] = {0};
     result = protocol_read_memory(device, result_addr, sizeof(results), results);
 
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         DEBUG_PRINT("Failed to read detect results from 0x%08X\n", result_addr);
         goto fail;
     }
@@ -663,12 +663,12 @@ thingino_error_t protocol_detect_soc(usb_device_t *device, processor_variant_t *
 
     if (marker != 0xDEADBEEF) {
         LOG_WARN("  Detect program did not execute (marker=0x%08X)\n", marker);
-        return THINGINO_ERROR_PROTOCOL;
+        return TDFU_ERROR_PROTOCOL;
     }
 
     if (soc_id_raw == 0) {
         LOG_WARN("  SoC ID register returned 0\n");
-        return THINGINO_ERROR_PROTOCOL;
+        return TDFU_ERROR_PROTOCOL;
     }
 
     /* Clear the VR_PROG_STAGE1 one-shot flag via host-side bulk OUT.
@@ -709,25 +709,25 @@ thingino_error_t protocol_detect_soc(usb_device_t *device, processor_variant_t *
     /* Match CPU family */
     switch (cpu_id) {
     case 0x0005:
-        *variant = VARIANT_T10;
+        *variant = TDFU_VARIANT_T10;
         break;
     case 0x2000:
-        *variant = VARIANT_T20;
+        *variant = TDFU_VARIANT_T20;
         break;
     case 0x0021:
-        *variant = VARIANT_T21;
+        *variant = TDFU_VARIANT_T21;
         break;
     case 0x0023:
         if (subtype1 == 0x3333)
-            *variant = VARIANT_T23DL; /* DDR2, 32MB */
+            *variant = TDFU_VARIANT_T23DL; /* DDR2, 32MB */
         else
-            *variant = VARIANT_T23; /* DDR2, 64MB (T23N/T23X/T23ZN) */
+            *variant = TDFU_VARIANT_T23; /* DDR2, 64MB (T23N/T23X/T23ZN) */
         break;
     case 0x0030:
-        *variant = VARIANT_T30;
+        *variant = TDFU_VARIANT_T30;
         break;
     case 0x0032:
-        *variant = VARIANT_T32;
+        *variant = TDFU_VARIANT_T32;
         break;
     case 0x0031:
         /* T31 family — DDR type depends on sub-variant:
@@ -736,13 +736,13 @@ thingino_error_t protocol_detect_soc(usb_device_t *device, processor_variant_t *
          *   DDR2: T31X (0x2222), T31N (0x1111), T31L (0x3333),
          *         T31ZX (0x6666), T31ZL (0x5555), T31ZC (0xDDDD), T31LC (0xEEEE) */
         if (subtype1 == 0x4444)
-            *variant = VARIANT_T31A; /* DDR3 */
+            *variant = TDFU_VARIANT_T31A; /* DDR3 */
         else if (subtype1 == 0xCCCC)
-            *variant = VARIANT_T31AL; /* DDR2 */
+            *variant = TDFU_VARIANT_T31AL; /* DDR2 */
         else if (subtype1 == 0x6666)
-            *variant = VARIANT_T31ZX; /* DDR2, USB re-enumerate after SPL */
+            *variant = TDFU_VARIANT_T31ZX; /* DDR2, USB re-enumerate after SPL */
         else
-            *variant = VARIANT_T31X; /* DDR2 (covers T31X/N/L/ZL/ZC/LC) */
+            *variant = TDFU_VARIANT_T31X; /* DDR2 (covers T31X/N/L/ZL/ZC/LC) */
         break;
     case 0x0040:
         /* T40/T41 family — DDR type varies:
@@ -751,18 +751,18 @@ thingino_error_t protocol_detect_soc(usb_device_t *device, processor_variant_t *
          *   T40XP (sub2=0x7777): DDR3
          *   T41*  (sub2=other):  DDR3 */
         if (subtype2 == 0x1111 || subtype2 == 0x8888)
-            *variant = VARIANT_T40; /* DDR2 */
+            *variant = TDFU_VARIANT_T40; /* DDR2 */
         else if (subtype2 == 0x7777)
-            *variant = VARIANT_T40XP; /* DDR3, dw32=1, different bootrom */
+            *variant = TDFU_VARIANT_T40XP; /* DDR3, dw32=1, different bootrom */
         else
-            *variant = VARIANT_T41; /* DDR3 (T41N, T41NQ, etc.) */
+            *variant = TDFU_VARIANT_T41; /* DDR3 (T41N, T41NQ, etc.) */
         break;
     case 0x0001:
-        *variant = VARIANT_A1;
+        *variant = TDFU_VARIANT_A1;
         break;
     default:
         LOG_WARN("  Unknown SoC CPU ID: 0x%04X\n", cpu_id);
-        return THINGINO_ERROR_PROTOCOL;
+        return TDFU_ERROR_PROTOCOL;
     }
 
     /* Log exact sub-variant name for informational purposes */
@@ -813,17 +813,17 @@ thingino_error_t protocol_detect_soc(usb_device_t *device, processor_variant_t *
         chip_name = "A1";
         break;
     }
-    DEBUG_PRINT("Detected: %s (%s)\n", chip_name, processor_variant_to_string(*variant));
-    return THINGINO_SUCCESS;
+    DEBUG_PRINT("Detected: %s (%s)\n", chip_name, tdfu_variant_to_string(*variant));
+    return TDFU_SUCCESS;
 
 fail:
     libusb_release_interface(device->handle, 0);
-    return THINGINO_ERROR_PROTOCOL;
+    return TDFU_ERROR_PROTOCOL;
 }
 
-thingino_error_t protocol_init(usb_device_t *device) {
+tdfu_error_t protocol_init(usb_device_t *device) {
     if (!device) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     int response_length;
@@ -842,17 +842,17 @@ static int calculate_protocol_timeout(uint32_t size) {
 }
 
 // Firmware stage protocol functions
-thingino_error_t protocol_fw_read(usb_device_t *device, int data_len, uint8_t **data, int *actual_len) {
+tdfu_error_t protocol_fw_read(usb_device_t *device, int data_len, uint8_t **data, int *actual_len) {
     if (!device || !data || !actual_len) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("FWRead: reading %d bytes\n", data_len);
 
     // For firmware reading, we need to claim interface first
-    thingino_error_t result = usb_device_claim_interface(device);
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("FWRead failed to claim interface: %s\n", thingino_error_to_string(result));
+    tdfu_error_t result = usb_device_claim_interface(device);
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("FWRead failed to claim interface: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -860,7 +860,7 @@ thingino_error_t protocol_fw_read(usb_device_t *device, int data_len, uint8_t **
     uint8_t *buffer = (uint8_t *)malloc(data_len);
     if (!buffer) {
         usb_device_release_interface(device);
-        return THINGINO_ERROR_MEMORY;
+        return TDFU_ERROR_MEMORY;
     }
 
     int transferred = 0;
@@ -884,14 +884,14 @@ thingino_error_t protocol_fw_read(usb_device_t *device, int data_len, uint8_t **
             platform_sleep_ms(100);
 
             // Re-claim interface and retry once with longer timeout
-            thingino_error_t claim_result = usb_device_claim_interface(device);
-            if (claim_result == THINGINO_SUCCESS) {
+            tdfu_error_t claim_result = usb_device_claim_interface(device);
+            if (claim_result == TDFU_SUCCESS) {
                 DEBUG_PRINT("FWRead retrying transfer after interface reset...\n");
                 int retry_timeout = timeout * 2; // Double timeout for retry
                 libusb_result =
                     libusb_bulk_transfer(device->handle, ENDPOINT_IN, buffer, data_len, &transferred, retry_timeout);
             } else {
-                DEBUG_PRINT("FWRead failed to reclaim interface: %s\n", thingino_error_to_string(claim_result));
+                DEBUG_PRINT("FWRead failed to reclaim interface: %s\n", tdfu_error_to_string(claim_result));
             }
         }
     }
@@ -902,19 +902,19 @@ thingino_error_t protocol_fw_read(usb_device_t *device, int data_len, uint8_t **
     if (libusb_result != LIBUSB_SUCCESS) {
         DEBUG_PRINT("FWRead bulk transfer error: %s\n", libusb_error_name(libusb_result));
         free(buffer);
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
     DEBUG_PRINT("FWRead success: got %d bytes (requested %d)\n", transferred, data_len);
 
     *data = buffer;
     *actual_len = transferred;
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t protocol_fw_handshake(usb_device_t *device) {
+tdfu_error_t protocol_fw_handshake(usb_device_t *device) {
     if (!device) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("FWHandshake: sending vendor request (command 0x%02X)\n", VR_FW_HANDSHAKE);
@@ -923,11 +923,11 @@ thingino_error_t protocol_fw_handshake(usb_device_t *device) {
     // Send it as a control/vendor request like all bootstrap commands
     // This request takes no parameters (wValue=0, wIndex=0) and has no data
     int response_length = 0;
-    thingino_error_t result =
+    tdfu_error_t result =
         usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_FW_HANDSHAKE, 0, 0, NULL, 0, NULL, &response_length);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("FWHandshake vendor request failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("FWHandshake vendor request failed: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -936,22 +936,22 @@ thingino_error_t protocol_fw_handshake(usb_device_t *device) {
     // Platform-specific sleep after successful handshake
     platform_sleep_ms(BULK_DATA_PREP_DELAY_MS);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t protocol_fw_write_chunk1(usb_device_t *device, const uint8_t *data) {
+tdfu_error_t protocol_fw_write_chunk1(usb_device_t *device, const uint8_t *data) {
     if (!device || !data) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("FWWriteChunk1: writing %d bytes\n", FW_HANDSHAKE_SIZE);
 
     int response_length;
-    thingino_error_t result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_READ, 0, 0, (uint8_t *)data,
+    tdfu_error_t result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_READ, 0, 0, (uint8_t *)data,
                                                         FW_HANDSHAKE_SIZE, NULL, &response_length);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("FWWriteChunk1 error: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("FWWriteChunk1 error: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -960,7 +960,7 @@ thingino_error_t protocol_fw_write_chunk1(usb_device_t *device, const uint8_t *d
     // Platform-specific sleep
     platform_sleep_ms(BULK_DATA_PREP_DELAY_MS);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 // ============================================================================
@@ -971,26 +971,26 @@ thingino_error_t protocol_fw_write_chunk1(usb_device_t *device, const uint8_t *d
  * Load firmware reader stub into RAM and execute it
  * Protocol: VR_SET_DATA_ADDRESS → VR_SET_DATA_LENGTH → VR_PROGRAM_START1 → Bulk-Out → VR_PROGRAM_START2
  */
-thingino_error_t protocol_load_and_execute_code(usb_device_t *device, uint32_t ram_address, const uint8_t *code,
+tdfu_error_t protocol_load_and_execute_code(usb_device_t *device, uint32_t ram_address, const uint8_t *code,
                                                 uint32_t code_size) {
     if (!device || !code || code_size == 0) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("Loading code to RAM: address=0x%08X, size=%u bytes\n", ram_address, code_size);
 
     // Step 1: Set RAM address for code
-    thingino_error_t result = protocol_prog_stage1(device, ram_address);
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("Failed to set RAM address for code: %s\n", thingino_error_to_string(result));
+    tdfu_error_t result = protocol_prog_stage1(device, ram_address);
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("Failed to set RAM address for code: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
     // Step 2: Transfer code to device via bulk-out
     int transferred = 0;
     result = usb_device_bulk_transfer(device, ENDPOINT_OUT, (uint8_t *)code, code_size, &transferred, 10000);
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("Failed to transfer code: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("Failed to transfer code: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -1002,30 +1002,30 @@ thingino_error_t protocol_load_and_execute_code(usb_device_t *device, uint32_t r
 
     // Step 3: Execute code at RAM address
     result = protocol_prog_stage2(device, ram_address);
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("Failed to execute code: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("Failed to execute code: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
     DEBUG_PRINT("Code execution initiated\n");
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /**
  * Firmware read using bootloader's code execution pattern
  * Proper protocol: Set address → Set size → Load reader stub → Execute → Bulk-in data
  */
-thingino_error_t protocol_proper_firmware_read(usb_device_t *device, uint32_t flash_offset, uint32_t read_size,
+tdfu_error_t protocol_proper_firmware_read(usb_device_t *device, uint32_t flash_offset, uint32_t read_size,
                                                uint8_t **out_data, int *out_len) {
     if (!device || !out_data || !out_len) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("ProperFirmwareRead: offset=0x%08X, size=%u bytes\n", flash_offset, read_size);
 
     // Step 1: Set flash address and size
-    thingino_error_t result = protocol_setup_transfer(device, flash_offset, read_size);
-    if (result != THINGINO_SUCCESS)
+    tdfu_error_t result = protocol_setup_transfer(device, flash_offset, read_size);
+    if (result != TDFU_SUCCESS)
         return result;
 
     // Step 2: For now, use the existing firmware read (requires firmware reader stub to be loaded separately)
@@ -1044,17 +1044,17 @@ thingino_error_t protocol_proper_firmware_read(usb_device_t *device, uint32_t fl
  * Firmware write using bootloader's code execution pattern with CRC32 verification
  * Proper protocol: Set address → Set size → Load writer stub → Execute → Bulk-out data → Verify
  */
-thingino_error_t protocol_proper_firmware_write(usb_device_t *device, uint32_t flash_offset, const uint8_t *data,
+tdfu_error_t protocol_proper_firmware_write(usb_device_t *device, uint32_t flash_offset, const uint8_t *data,
                                                 uint32_t data_size) {
     if (!device || !data || data_size == 0) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("ProperFirmwareWrite: offset=0x%08X, size=%u bytes\n", flash_offset, data_size);
 
     // Step 1: Set flash address and size
-    thingino_error_t result = protocol_setup_transfer(device, flash_offset, data_size);
-    if (result != THINGINO_SUCCESS)
+    tdfu_error_t result = protocol_setup_transfer(device, flash_offset, data_size);
+    if (result != TDFU_SUCCESS)
         return result;
 
     // Step 2: Calculate CRC32 for data verification
@@ -1065,7 +1065,7 @@ thingino_error_t protocol_proper_firmware_write(usb_device_t *device, uint32_t f
     uint32_t buffer_size = data_size + 4;
     uint8_t *write_buffer = (uint8_t *)malloc(buffer_size);
     if (!write_buffer) {
-        return THINGINO_ERROR_MEMORY;
+        return TDFU_ERROR_MEMORY;
     }
 
     memcpy(write_buffer, data, data_size);
@@ -1086,7 +1086,7 @@ thingino_error_t protocol_proper_firmware_write(usb_device_t *device, uint32_t f
     DEBUG_PRINT("ProperFirmwareWrite: Address and size set. Requires firmware writer stub to be loaded separately.\n");
 
     free(write_buffer);
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 // ============================================================================
@@ -1095,10 +1095,10 @@ thingino_error_t protocol_proper_firmware_write(usb_device_t *device, uint32_t f
 
 // Vendor-style firmware read using VR_READ (0x13) command
 // This matches the vendor tool's approach: send 40-byte command, check status, bulk read
-thingino_error_t protocol_vendor_style_read(usb_device_t *device, uint32_t offset, uint32_t size, uint8_t **data,
+tdfu_error_t protocol_vendor_style_read(usb_device_t *device, uint32_t offset, uint32_t size, uint8_t **data,
                                             int *actual_len) {
     if (!device || !data || !actual_len) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("VendorStyleRead: offset=0x%08X, size=%u bytes\n", offset, size);
@@ -1106,9 +1106,9 @@ thingino_error_t protocol_vendor_style_read(usb_device_t *device, uint32_t offse
     // CRITICAL: Initialize device state with SetDataAddress and SetDataLength
     // This prepares the U-Boot firmware to read from the specified address/size
     // Same pattern as NAND_OPS - must be done BEFORE issuing the read command
-    thingino_error_t result = protocol_setup_transfer(device, offset, size);
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("VendorStyleRead: setup failed: %s\n", thingino_error_to_string(result));
+    tdfu_error_t result = protocol_setup_transfer(device, offset, size);
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("VendorStyleRead: setup failed: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -1151,8 +1151,8 @@ thingino_error_t protocol_vendor_style_read(usb_device_t *device, uint32_t offse
     result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_READ, 0, 0, cmd_buffer, FW_HANDSHAKE_SIZE, NULL,
                                        &response_length);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("VendorStyleRead: VR_READ command failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("VendorStyleRead: VR_READ command failed: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -1164,8 +1164,8 @@ thingino_error_t protocol_vendor_style_read(usb_device_t *device, uint32_t offse
     result = usb_device_vendor_request(device, REQUEST_TYPE_VENDOR, VR_FW_READ_STATUS2, 0, 0, NULL, 8, status_buffer,
                                        &status_len);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("VendorStyleRead: Status check failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("VendorStyleRead: Status check failed: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -1180,7 +1180,7 @@ thingino_error_t protocol_vendor_style_read(usb_device_t *device, uint32_t offse
     // Allocate buffer for bulk read
     uint8_t *buffer = (uint8_t *)malloc(size);
     if (!buffer) {
-        return THINGINO_ERROR_MEMORY;
+        return TDFU_ERROR_MEMORY;
     }
 
     // Perform bulk IN transfer on endpoint 0x81
@@ -1193,8 +1193,8 @@ thingino_error_t protocol_vendor_style_read(usb_device_t *device, uint32_t offse
     int transferred = 0;
     result = usb_device_bulk_transfer(device, USB_ENDPOINT_IN, buffer, size, &transferred, timeout);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("VendorStyleRead: Bulk transfer failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("VendorStyleRead: Bulk transfer failed: %s\n", tdfu_error_to_string(result));
         free(buffer);
         return result;
     }
@@ -1203,21 +1203,21 @@ thingino_error_t protocol_vendor_style_read(usb_device_t *device, uint32_t offse
 
     *data = buffer;
     *actual_len = transferred;
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 // Traditional firmware read using VR_READ command (alternative approach)
-thingino_error_t protocol_traditional_read(usb_device_t *device, int data_len, uint8_t **data, int *actual_len) {
+tdfu_error_t protocol_traditional_read(usb_device_t *device, int data_len, uint8_t **data, int *actual_len) {
     if (!device || !data || !actual_len) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("TraditionalRead: reading %d bytes using VR_READ\n", data_len);
 
     // Claim interface for the operation
-    thingino_error_t result = usb_device_claim_interface(device);
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("TraditionalRead failed to claim interface: %s\n", thingino_error_to_string(result));
+    tdfu_error_t result = usb_device_claim_interface(device);
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("TraditionalRead failed to claim interface: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -1225,7 +1225,7 @@ thingino_error_t protocol_traditional_read(usb_device_t *device, int data_len, u
     uint8_t *buffer = (uint8_t *)malloc(data_len);
     if (!buffer) {
         usb_device_release_interface(device);
-        return THINGINO_ERROR_MEMORY;
+        return TDFU_ERROR_MEMORY;
     }
 
     int transferred = 0;
@@ -1235,8 +1235,8 @@ thingino_error_t protocol_traditional_read(usb_device_t *device, int data_len, u
     // Release interface after transfer
     usb_device_release_interface(device);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("TraditionalRead vendor request error: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("TraditionalRead vendor request error: %s\n", tdfu_error_to_string(result));
         free(buffer);
         return result;
     }
@@ -1245,34 +1245,34 @@ thingino_error_t protocol_traditional_read(usb_device_t *device, int data_len, u
 
     *data = buffer;
     *actual_len = transferred;
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t protocol_fw_read_operation(usb_device_t *device, uint32_t offset, uint32_t length, uint8_t **data,
+tdfu_error_t protocol_fw_read_operation(usb_device_t *device, uint32_t offset, uint32_t length, uint8_t **data,
                                             int *actual_len) {
     if (!device || !data || !actual_len) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("FWReadOperation: offset=0x%08X, length=%u\n", offset, length);
 
     // Set address and length first
-    thingino_error_t result = protocol_setup_transfer(device, offset, length);
-    if (result != THINGINO_SUCCESS)
+    tdfu_error_t result = protocol_setup_transfer(device, offset, length);
+    if (result != TDFU_SUCCESS)
         return result;
 
     // Try different operation parameters for read
     uint8_t *buffer = (uint8_t *)malloc(length);
     if (!buffer) {
-        return THINGINO_ERROR_MEMORY;
+        return TDFU_ERROR_MEMORY;
     }
 
     int response_length;
     // Try operation 12 with different parameters based on reference config analysis
     result = usb_device_vendor_request(device, REQUEST_TYPE_VENDOR, 12, 0, 0, NULL, length, buffer, &response_length);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("FWReadOperation error: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("FWReadOperation error: %s\n", tdfu_error_to_string(result));
         free(buffer);
         return result;
     }
@@ -1281,51 +1281,51 @@ thingino_error_t protocol_fw_read_operation(usb_device_t *device, uint32_t offse
 
     *data = buffer;
     *actual_len = response_length;
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t protocol_fw_read_status(usb_device_t *device, int status_cmd, uint32_t *status) {
+tdfu_error_t protocol_fw_read_status(usb_device_t *device, int status_cmd, uint32_t *status) {
     if (!device || !status) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("FWReadStatus: checking status with command 0x%02X\n", status_cmd);
 
     uint8_t data[4];
     int response_length;
-    thingino_error_t result =
+    tdfu_error_t result =
         usb_device_vendor_request(device, REQUEST_TYPE_VENDOR, status_cmd, 0, 0, NULL, 4, data, &response_length);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("FWReadStatus error: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("FWReadStatus error: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
     if (response_length < 4) {
         DEBUG_PRINT("FWReadStatus: insufficient response length %d\n", response_length);
-        return THINGINO_ERROR_PROTOCOL;
+        return TDFU_ERROR_PROTOCOL;
     }
 
     // Convert little-endian bytes to uint32
     *status = (uint32_t)data[0] | (uint32_t)data[1] << 8 | (uint32_t)data[2] << 16 | (uint32_t)data[3] << 24;
 
     DEBUG_PRINT("FWReadStatus: status = 0x%08X (%u)\n", *status, *status);
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t protocol_fw_write_chunk2(usb_device_t *device, const uint8_t *data) {
+tdfu_error_t protocol_fw_write_chunk2(usb_device_t *device, const uint8_t *data) {
     if (!device || !data) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("FWWriteChunk2: writing %d bytes\n", FW_HANDSHAKE_SIZE);
 
     int response_length;
-    thingino_error_t result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_FW_WRITE2, 0, 0, (uint8_t *)data,
+    tdfu_error_t result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_FW_WRITE2, 0, 0, (uint8_t *)data,
                                                         FW_HANDSHAKE_SIZE, NULL, &response_length);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("FWWriteChunk2 error: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("FWWriteChunk2 error: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -1334,7 +1334,7 @@ thingino_error_t protocol_fw_write_chunk2(usb_device_t *device, const uint8_t *d
     // Platform-specific sleep
     platform_sleep_ms(BULK_DATA_PREP_DELAY_MS);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 // ============================================================================
@@ -1352,18 +1352,18 @@ thingino_error_t protocol_fw_write_chunk2(usb_device_t *device, const uint8_t *d
  *
  * This uses the NAND_OPS command built into U-Boot bootloader
  */
-thingino_error_t protocol_nand_read(usb_device_t *device, uint32_t offset, uint32_t size, uint8_t **data,
+tdfu_error_t protocol_nand_read(usb_device_t *device, uint32_t offset, uint32_t size, uint8_t **data,
                                     int *transferred) {
     if (!device || !data || !transferred || size == 0) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("NAND_OPS Read: offset=0x%08X, size=%u bytes\n", offset, size);
 
     // Step 1: Set data address (flash offset)
-    thingino_error_t result = protocol_setup_transfer(device, offset, size);
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("NAND_OPS: SetDataLength failed: %s\n", thingino_error_to_string(result));
+    tdfu_error_t result = protocol_setup_transfer(device, offset, size);
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("NAND_OPS: SetDataLength failed: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -1374,8 +1374,8 @@ thingino_error_t protocol_nand_read(usb_device_t *device, uint32_t offset, uint3
     result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_NAND_OPS, NAND_OPERATION_READ, 0x0000, NULL, 0,
                                        NULL, &response_length);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("NAND_OPS: Command failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("NAND_OPS: Command failed: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -1388,7 +1388,7 @@ thingino_error_t protocol_nand_read(usb_device_t *device, uint32_t offset, uint3
     uint8_t *buffer = (uint8_t *)malloc(size);
     if (!buffer) {
         DEBUG_PRINT("NAND_OPS: Memory allocation failed for %u bytes\n", size);
-        return THINGINO_ERROR_MEMORY;
+        return TDFU_ERROR_MEMORY;
     }
 
     // Calculate timeout based on transfer size
@@ -1402,12 +1402,12 @@ thingino_error_t protocol_nand_read(usb_device_t *device, uint32_t offset, uint3
     if (libusb_result != LIBUSB_SUCCESS) {
         DEBUG_PRINT("NAND_OPS: Bulk transfer failed: %s\n", libusb_error_name(libusb_result));
         free(buffer);
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
     DEBUG_PRINT("NAND_OPS: Successfully read %d bytes (requested %u bytes)\n", bytes_transferred, size);
 
     *data = buffer;
     *transferred = bytes_transferred;
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }

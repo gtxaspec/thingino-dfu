@@ -34,7 +34,7 @@ async function wasmCall(name, returnType, argTypes, args) {
 }
 
 /* Variant→firmware directory mapping (mirrors loader.c variant_to_firmware_dir) */
-var VARIANT_DIR_MAP = {
+var TDFU_VARIANT_DIR_MAP = {
     'a1': 'a1_n_ne_x',
     't31zx': 't31x',
     't31al': 't31x',
@@ -43,7 +43,7 @@ var VARIANT_DIR_MAP = {
 };
 
 function variantToFirmwareDir(name) {
-    return VARIANT_DIR_MAP[name] || name;
+    return TDFU_VARIANT_DIR_MAP[name] || name;
 }
 
 /* ------------------------------------------------------------------ */
@@ -159,14 +159,14 @@ async function loadFirmwareFileToMemFS(variant) {
 /* ------------------------------------------------------------------ */
 
 /**
- * Call cloner_discover_devices and parse the first device's info.
+ * Call tdfu_discover_devices and parse the first device's info.
  * Returns { bus, addr, vid, pid, stage, variant, variantName } or null.
  */
 async function discoverDevices() {
     var listPtr = Module._malloc(8);
-    console.log('ccall cloner_discover_devices, listPtr=' + listPtr);
-    var result = await wasmCall('cloner_discover_devices', 'number', ['number'], [listPtr]);
-    console.log('cloner_discover_devices returned:', result);
+    console.log('ccall tdfu_discover_devices, listPtr=' + listPtr);
+    var result = await wasmCall('tdfu_discover_devices', 'number', ['number'], [listPtr]);
+    console.log('tdfu_discover_devices returned:', result);
 
     if (result !== 0) {
         console.log('discover FAILED with error', result);
@@ -179,12 +179,12 @@ async function discoverDevices() {
     console.log('devicesArrayPtr=' + devicesArrayPtr + ' count=' + count);
 
     if (count === 0) {
-        Module.ccall('cloner_free_device_list', null, ['number'], [listPtr]);
+        Module.ccall('tdfu_free_device_list', null, ['number'], [listPtr]);
         Module._free(listPtr);
         return null;
     }
 
-    // cloner_device_info_t layout (16 bytes, packed):
+    // tdfu_device_info_t layout (16 bytes, packed):
     //   u8 bus, u8 address, u16 vendor_id, u16 product_id, 2 pad,
     //   i32 stage, i32 variant
     var base = devicesArrayPtr;
@@ -195,10 +195,10 @@ async function discoverDevices() {
     var stage = Module.HEAPU32[(base + 8) >> 2];
     var variant = Module.HEAPU32[(base + 12) >> 2];
 
-    var namePtr = Module.ccall('cloner_variant_to_string', 'number', ['number'], [variant]);
+    var namePtr = Module.ccall('tdfu_variant_to_string', 'number', ['number'], [variant]);
     var variantName = namePtr ? Module.UTF8ToString(namePtr) : 'unknown';
 
-    Module.ccall('cloner_free_device_list', null, ['number'], [listPtr]);
+    Module.ccall('tdfu_free_device_list', null, ['number'], [listPtr]);
     Module._free(listPtr);
 
     return {
@@ -235,10 +235,10 @@ async function initModule() {
         console.log('WASM module loaded (' +
             (Module.HEAPU8.length / 1024 / 1024).toFixed(1) + ' MB heap)');
 
-        // {async:true} is required — cloner_init calls libusb_init which is async
-        var result = await wasmCall('cloner_init', 'number', [], []);
+        // {async:true} is required — tdfu_init calls libusb_init which is async
+        var result = await wasmCall('tdfu_init', 'number', [], []);
         if (result !== 0) {
-            log('cloner_init failed: ' + result, 'error');
+            log('tdfu_init failed: ' + result, 'error');
             return;
         }
 
@@ -248,7 +248,7 @@ async function initModule() {
         clonerReady = true;
 
         // Display version
-        var verPtr = Module.ccall('cloner_get_version', 'number', [], []);
+        var verPtr = Module.ccall('tdfu_get_version', 'number', [], []);
         var version = verPtr ? Module.UTF8ToString(verPtr) : 'dev';
         var verEl = document.getElementById('version-num');
         if (verEl) verEl.textContent = 'v' + version;
@@ -346,9 +346,9 @@ async function doBootstrap() {
         await loadFirmwareFileToMemFS(detectedVariantName);
         showProgress(30, 'Bootstrapping device...');
 
-        // Call cloner_bootstrap(device_index=0, variant, firmware_dir=NULL, progress=NULL, user_data=NULL)
+        // Call tdfu_bootstrap(device_index=0, variant, firmware_dir=NULL, progress=NULL, user_data=NULL)
         // firmware_dir NULL means default "./firmware"
-        var result = await wasmCall('cloner_bootstrap', 'number',
+        var result = await wasmCall('tdfu_bootstrap', 'number',
             ['number', 'number', 'number', 'number', 'number'],
             [0, detectedVariant, 0, 0, 0]);
 
@@ -366,7 +366,7 @@ async function doBootstrap() {
         var info = await discoverDevices();
         if (info) {
             // Restore the original variant — re-enumeration defaults to T31X
-            Module.ccall('cloner_set_device_variant', 'number',
+            Module.ccall('tdfu_set_device_variant', 'number',
                 ['number', 'number'], [0, detectedVariant]);
             info.variant = detectedVariant;
             info.variantName = detectedVariantName;
@@ -420,7 +420,7 @@ async function doWrite() {
     if (!clonerReady || !firmwareData) return;
 
     // Always bootstrap from JS if device is in bootrom — the internal
-    // bootstrap in cloner_op_write_firmware doesn't handle WebUSB re-enumeration
+    // bootstrap in tdfu_op_write_firmware doesn't handle WebUSB re-enumeration
     var info = await discoverDevices();
     if (!info) {
         log('No device found', 'error');
@@ -459,8 +459,8 @@ async function doWrite() {
 
         showProgress(30, 'Writing to flash...');
 
-        // cloner_write_firmware(device_index=0, firmware, len, progress=NULL, user_data=NULL)
-        var result = await wasmCall('cloner_write_firmware', 'number',
+        // tdfu_write_firmware(device_index=0, firmware, len, progress=NULL, user_data=NULL)
+        var result = await wasmCall('tdfu_write_firmware', 'number',
             ['number', 'number', 'number', 'number', 'number'],
             [0, dataPtr, firmwareData.length, 0, 0]);
 
@@ -518,11 +518,11 @@ async function doRead() {
             return;
         }
         // Set correct variant after re-discovery
-        Module.ccall('cloner_set_device_variant', 'number',
+        Module.ccall('tdfu_set_device_variant', 'number',
             ['number', 'number'], [0, detectedVariant]);
         console.log('Read target: ' + detectedVariantName + ' (' + (readInfo.stage === 0 ? 'Bootrom' : 'Firmware') + ')');
 
-        // Preload firmware to MEMFS — cloner_op_read_firmware may bootstrap internally
+        // Preload firmware to MEMFS — tdfu_op_read_firmware may bootstrap internally
         await loadFirmwareFileToMemFS(detectedVariantName);
 
         // Allocate output pointers
@@ -532,13 +532,13 @@ async function doRead() {
         Module.HEAPU32[lenPtr >> 2] = 0;
 
         showProgress(30, 'Reading from flash...');
-        console.log('cloner_read_firmware args: idx=0 fwPtrPtr=' + fwPtrPtr + ' lenPtr=' + lenPtr);
+        console.log('tdfu_read_firmware args: idx=0 fwPtrPtr=' + fwPtrPtr + ' lenPtr=' + lenPtr);
 
-        // cloner_read_firmware(device_index=0, &firmware, &len, progress=NULL, user_data=NULL)
-        var result = await wasmCall('cloner_read_firmware', 'number',
+        // tdfu_read_firmware(device_index=0, &firmware, &len, progress=NULL, user_data=NULL)
+        var result = await wasmCall('tdfu_read_firmware', 'number',
             ['number', 'number', 'number', 'number', 'number'],
             [0, fwPtrPtr, lenPtr, 0, 0]);
-        console.log('cloner_read_firmware returned:', result);
+        console.log('tdfu_read_firmware returned:', result);
 
         if (result !== 0) {
             log('Read failed: error ' + result, 'error');

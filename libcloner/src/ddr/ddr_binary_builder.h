@@ -236,9 +236,9 @@ void ddr_chip_to_phy_params(const ddr_chip_config_t *chip, uint32_t ddr_freq_hz,
  * Get default platform configuration for a processor variant
  *
  * This is a convenience wrapper around ddr_get_platform_config() that accepts
- * processor_variant_t enum values from the main thingino codebase.
+ * tdfu_variant_t enum values from the main thingino codebase.
  *
- * @param variant Processor variant enum (VARIANT_T31X, VARIANT_T31ZX, etc.)
+ * @param variant Processor variant enum (TDFU_VARIANT_T31X, TDFU_VARIANT_T31ZX, etc.)
  * @param config Output platform configuration structure
  * @return 0 on success, -1 on error (unsupported variant or NULL pointer)
  */

@@ -595,7 +595,7 @@ int flash_descriptor_create_a1_writer_full(uint8_t *buffer) {
  * Verified from vendor USB capture: frames 13427/13441 (marker) and
  * 13449/13463 (descriptor).
  */
-static thingino_error_t send_fw_write2_bulk(usb_device_t *device, const uint8_t *data, uint32_t size) {
+static tdfu_error_t send_fw_write2_bulk(usb_device_t *device, const uint8_t *data, uint32_t size) {
     /* Build 40-byte FW_WRITE2 command: first u32 = bulk payload size */
     uint8_t cmd[40];
     memset(cmd, 0, sizeof(cmd));
@@ -607,17 +607,17 @@ static thingino_error_t send_fw_write2_bulk(usb_device_t *device, const uint8_t 
     int result = libusb_control_transfer(device->handle, 0x40, VR_FW_WRITE2, 0, 0, cmd, 40, 5000);
     if (result < 0) {
         LOG_ERROR("FW_WRITE2 control failed: %s\n", libusb_error_name(result));
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
     int transferred = 0;
     result = libusb_bulk_transfer(device->handle, 0x01, (unsigned char *)data, (int)size, &transferred, 5000);
     if (result != 0 || transferred != (int)size) {
         LOG_ERROR("Bulk transfer failed: %s, %d/%u bytes\n", libusb_error_name(result), transferred, size);
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /**
@@ -626,14 +626,14 @@ static thingino_error_t send_fw_write2_bulk(usb_device_t *device, const uint8_t 
  *
  * Vendor flow: FW_WRITE2 control (40 bytes, size=172) + bulk OUT (172 bytes).
  */
-thingino_error_t flash_partition_marker_send(usb_device_t *device) {
+tdfu_error_t flash_partition_marker_send(usb_device_t *device) {
     if (!device)
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
 
     uint8_t descriptor[FLASH_DESCRIPTOR_SIZE];
     if (flash_descriptor_create_t31x_writer_full(descriptor) != 0) {
         LOG_ERROR("Failed to generate flash descriptor for partition marker\n");
-        return THINGINO_ERROR_FILE_IO;
+        return TDFU_ERROR_FILE_IO;
     }
 
     const size_t marker_offset = 0x1C;
@@ -641,13 +641,13 @@ thingino_error_t flash_partition_marker_send(usb_device_t *device) {
 
     DEBUG_PRINT("Sending partition marker (ILOP, %zu bytes)...\n", marker_size);
 
-    thingino_error_t rc = send_fw_write2_bulk(device, descriptor + marker_offset, (uint32_t)marker_size);
-    if (rc != THINGINO_SUCCESS)
+    tdfu_error_t rc = send_fw_write2_bulk(device, descriptor + marker_offset, (uint32_t)marker_size);
+    if (rc != TDFU_SUCCESS)
         return rc;
 
     platform_sleep_ms(100);
     DEBUG_PRINT("Partition marker sent successfully\n");
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /**
@@ -656,14 +656,14 @@ thingino_error_t flash_partition_marker_send(usb_device_t *device) {
  * These platforms use DESC_RAW_BULK_THEN_SEND mode where the marker
  * is sent as a raw bulk OUT transfer without the VR_FW_WRITE2 control prefix.
  */
-thingino_error_t flash_partition_marker_send_raw(usb_device_t *device) {
+tdfu_error_t flash_partition_marker_send_raw(usb_device_t *device) {
     if (!device)
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
 
     uint8_t descriptor[FLASH_DESCRIPTOR_SIZE];
     if (flash_descriptor_create_t31x_writer_full(descriptor) != 0) {
         LOG_ERROR("Failed to generate flash descriptor for partition marker\n");
-        return THINGINO_ERROR_FILE_IO;
+        return TDFU_ERROR_FILE_IO;
     }
 
     const size_t marker_offset = 0x1C;
@@ -679,12 +679,12 @@ thingino_error_t flash_partition_marker_send_raw(usb_device_t *device) {
     int result = libusb_bulk_transfer(device->handle, 0x01, descriptor + marker_offset, (int)marker_size, &transferred, 5000);
     if (result != 0 || transferred != (int)marker_size) {
         LOG_ERROR("Raw bulk marker transfer failed: %s, %d/%zu bytes\n", libusb_error_name(result), transferred, marker_size);
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
     platform_sleep_ms(100);
     DEBUG_PRINT("Raw bulk partition marker sent successfully\n");
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /**
@@ -692,20 +692,20 @@ thingino_error_t flash_partition_marker_send_raw(usb_device_t *device) {
  *
  * Vendor flow: FW_WRITE2 control (40 bytes, size=972) + bulk OUT (972 bytes).
  */
-thingino_error_t flash_descriptor_send_sized(usb_device_t *device, const uint8_t *descriptor, uint32_t size) {
+tdfu_error_t flash_descriptor_send_sized(usb_device_t *device, const uint8_t *descriptor, uint32_t size) {
     if (!device || !descriptor)
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
 
     DEBUG_PRINT("Sending flash descriptor (%u bytes)...\n", size);
 
-    thingino_error_t rc = send_fw_write2_bulk(device, descriptor, size);
-    if (rc != THINGINO_SUCCESS)
+    tdfu_error_t rc = send_fw_write2_bulk(device, descriptor, size);
+    if (rc != TDFU_SUCCESS)
         return rc;
 
     DEBUG_PRINT("Flash descriptor sent successfully\n");
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t flash_descriptor_send(usb_device_t *device, const uint8_t *descriptor) {
+tdfu_error_t flash_descriptor_send(usb_device_t *device, const uint8_t *descriptor) {
     return flash_descriptor_send_sized(device, descriptor, FLASH_DESCRIPTOR_SIZE);
 }

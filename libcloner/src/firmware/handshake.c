@@ -64,8 +64,8 @@ __attribute__((unused)) static void firmware_drain_logs(usb_device_t *device, ui
     int transferred = 0;
 
     for (int i = 0; i < max_reads; ++i) {
-        thingino_error_t res = usb_device_bulk_transfer(device, endpoint, buf, sizeof(buf), &transferred, 10);
-        if (res != THINGINO_SUCCESS || transferred <= 0) {
+        tdfu_error_t res = usb_device_bulk_transfer(device, endpoint, buf, sizeof(buf), &transferred, 10);
+        if (res != TDFU_SUCCESS || transferred <= 0) {
             break;
         }
 
@@ -89,11 +89,11 @@ __attribute__((unused)) static void firmware_drain_logs(usb_device_t *device, ui
  *   3. Bulk IN for chunk data
  *   4. VR_FW_READ (0x10) 4-byte status read (ack)
  */
-thingino_error_t firmware_handshake_read_chunk(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
+tdfu_error_t firmware_handshake_read_chunk(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
                                                uint32_t chunk_size, uint32_t total_size, uint8_t **out_data,
                                                int *out_len) {
     if (!device || !out_data || !out_len || chunk_size == 0) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     uint32_t remaining = total_size - chunk_offset;
@@ -101,7 +101,7 @@ thingino_error_t firmware_handshake_read_chunk(usb_device_t *device, uint32_t ch
     DEBUG_PRINT("FirmwareHandshakeReadChunk: index=%u, offset=0x%08X, size=%u, remaining=%u\n", chunk_index,
                 chunk_offset, chunk_size, remaining);
 
-    thingino_error_t result;
+    tdfu_error_t result;
 
     /* Build 40-byte read handshake — platform dependent layout.
      *
@@ -168,8 +168,8 @@ thingino_error_t firmware_handshake_read_chunk(usb_device_t *device, uint32_t ch
     result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, handshake_cmd_code, 0, 0, handshake_cmd,
                                        FW_HANDSHAKE_SIZE, NULL, &response_len);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("Failed to send read handshake: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("Failed to send read handshake: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -184,8 +184,8 @@ thingino_error_t firmware_handshake_read_chunk(usb_device_t *device, uint32_t ch
     result = usb_device_vendor_request(device, REQUEST_TYPE_VENDOR, VR_FW_READ_STATUS2, 0, 0, NULL, 8, status_buffer,
                                        &status_len);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("Failed to read status handshake: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("Failed to read status handshake: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -220,7 +220,7 @@ thingino_error_t firmware_handshake_read_chunk(usb_device_t *device, uint32_t ch
 
     uint8_t *data_buffer = (uint8_t *)malloc(chunk_size);
     if (!data_buffer) {
-        return THINGINO_ERROR_MEMORY;
+        return TDFU_ERROR_MEMORY;
     }
 
     int transferred = 0;
@@ -228,8 +228,8 @@ thingino_error_t firmware_handshake_read_chunk(usb_device_t *device, uint32_t ch
 
     result = usb_device_bulk_transfer(device, ENDPOINT_IN, data_buffer, chunk_size, &transferred, timeout);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("Bulk-in transfer failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("Bulk-in transfer failed: %s\n", tdfu_error_to_string(result));
         free(data_buffer);
         return result;
     }
@@ -275,7 +275,7 @@ thingino_error_t firmware_handshake_read_chunk(usb_device_t *device, uint32_t ch
 
     DEBUG_PRINT("firmware_handshake_read_chunk returning: transferred=%d, *out_len=%d\n", transferred, *out_len);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /**
@@ -288,10 +288,10 @@ thingino_error_t firmware_handshake_read_chunk(usb_device_t *device, uint32_t ch
  *    - Bulk-out transfer firmware data chunk
  *    - Device logs progress via bulk-IN and FW_READ
  */
-thingino_error_t firmware_handshake_write_chunk(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
+tdfu_error_t firmware_handshake_write_chunk(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
                                                 const uint8_t *data, uint32_t data_size) {
     if (!device || !data || data_size == 0) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("FirmwareHandshakeWriteChunk: index=%u, offset=0x%08X, size=%u\n", chunk_index, chunk_offset,
@@ -405,11 +405,11 @@ thingino_error_t firmware_handshake_write_chunk(usb_device_t *device, uint32_t c
     DEBUG_PRINT("\n");
 
     int response_len = 0;
-    thingino_error_t result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, handshake_cmd_code, 0, 0,
+    tdfu_error_t result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, handshake_cmd_code, 0, 0,
                                                         handshake_cmd, FW_HANDSHAKE_SIZE, NULL, &response_len);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("Failed to send write handshake: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("Failed to send write handshake: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -421,8 +421,8 @@ thingino_error_t firmware_handshake_write_chunk(usb_device_t *device, uint32_t c
     int transferred = 0;
     result = usb_device_bulk_transfer(device, ENDPOINT_OUT, (uint8_t *)data, data_size, &transferred, 6000);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("Bulk-out transfer failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("Bulk-out transfer failed: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -494,7 +494,7 @@ thingino_error_t firmware_handshake_write_chunk(usb_device_t *device, uint32_t c
     DEBUG_PRINT("Waiting 300ms for device to finish processing chunk...\n");
     platform_sleep_ms(300);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /**
@@ -510,10 +510,10 @@ thingino_error_t firmware_handshake_write_chunk(usb_device_t *device, uint32_t c
  *   Bytes 24-31: zeros
  *   Bytes 32-39: A1 trailer (30 24 00 D4 02 75 00 00)
  */
-thingino_error_t firmware_handshake_write_chunk_a1(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
+tdfu_error_t firmware_handshake_write_chunk_a1(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
                                                    const uint8_t *data, uint32_t data_size) {
     if (!device || !data || data_size == 0) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("FirmwareHandshakeWriteChunkA1: index=%u, offset=0x%08X, size=%u\n", chunk_index, chunk_offset,
@@ -587,11 +587,11 @@ thingino_error_t firmware_handshake_write_chunk_a1(usb_device_t *device, uint32_
     DEBUG_PRINT("\n");
 
     int response_len = 0;
-    thingino_error_t result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, handshake_cmd_code, 0, 0,
+    tdfu_error_t result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, handshake_cmd_code, 0, 0,
                                                         handshake_cmd, FW_HANDSHAKE_SIZE, NULL, &response_len);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("Failed to send A1 write handshake: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("Failed to send A1 write handshake: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -603,8 +603,8 @@ thingino_error_t firmware_handshake_write_chunk_a1(usb_device_t *device, uint32_
     int transferred = 0;
     result = usb_device_bulk_transfer(device, ENDPOINT_OUT, (uint8_t *)data, data_size, &transferred, 6000);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("[A1] Bulk-out transfer failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("[A1] Bulk-out transfer failed: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -614,7 +614,7 @@ thingino_error_t firmware_handshake_write_chunk_a1(usb_device_t *device, uint32_
     DEBUG_PRINT("[A1] Waiting 300ms for device to process chunk...\n");
     platform_sleep_ms(300);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /**
@@ -629,10 +629,10 @@ thingino_error_t firmware_handshake_write_chunk_a1(usb_device_t *device, uint32_
  *   [28-31] uint32_t crc = CRC32 (raw, no final XOR)
  *   [32-39] ignored by device
  */
-thingino_error_t firmware_handshake_write_chunk_vendor(usb_device_t *device, uint32_t chunk_index,
+tdfu_error_t firmware_handshake_write_chunk_vendor(usb_device_t *device, uint32_t chunk_index,
                                                        uint32_t chunk_offset, const uint8_t *data, uint32_t data_size) {
     if (!device || !data || data_size == 0) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("FirmwareHandshakeWriteChunkVendor: index=%u, offset=0x%08X, size=%u\n", chunk_index, chunk_offset,
@@ -684,11 +684,11 @@ thingino_error_t firmware_handshake_write_chunk_vendor(usb_device_t *device, uin
 
     /* Send via VR_WRITE (0x12) with vendor timeout (200s) */
     int response_len = 0;
-    thingino_error_t result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_WRITE, 0, 0, handshake_cmd,
+    tdfu_error_t result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_WRITE, 0, 0, handshake_cmd,
                                                         FW_HANDSHAKE_SIZE, NULL, &response_len);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("Failed to send vendor write handshake: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("Failed to send vendor write handshake: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -700,8 +700,8 @@ thingino_error_t firmware_handshake_write_chunk_vendor(usb_device_t *device, uin
     int transferred = 0;
     result = usb_device_bulk_transfer(device, ENDPOINT_OUT, (uint8_t *)data, data_size, &transferred, 20000);
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("[Vendor] Bulk-out failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("[Vendor] Bulk-out failed: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -710,7 +710,7 @@ thingino_error_t firmware_handshake_write_chunk_vendor(usb_device_t *device, uin
     /* Brief settle time */
     platform_sleep_ms(50);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /**
@@ -719,28 +719,28 @@ thingino_error_t firmware_handshake_write_chunk_vendor(usb_device_t *device, uin
  * Vendor flow (stage2_init behavior from USB capture analysis):
  *   1. Send VR_FW_HANDSHAKE (0x11) with up to 5 retries
  *   2. Poll VR_FW_READ (0x10) for ACK with up to 50s timeout
- * The handshake triggers cloner_init() on the device which probes
+ * The handshake triggers tdfu_init() on the device which probes
  * the SFC flash and performs chip erase. The ACK poll waits for
  * erase completion before proceeding to write chunks.
  */
-thingino_error_t firmware_handshake_init(usb_device_t *device) {
+tdfu_error_t firmware_handshake_init(usb_device_t *device) {
     if (!device) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("Initializing firmware handshake protocol...\n");
 
     /* Send VR_FW_HANDSHAKE (0x11) with retries (vendor does up to 5) */
-    thingino_error_t result = THINGINO_ERROR_TIMEOUT;
+    tdfu_error_t result = TDFU_ERROR_TIMEOUT;
     for (int retry = 0; retry < 5; retry++) {
         result = protocol_fw_handshake(device);
-        if (result == THINGINO_SUCCESS)
+        if (result == TDFU_SUCCESS)
             break;
-        DEBUG_PRINT("FW handshake retry %d/5: %s\n", retry + 1, thingino_error_to_string(result));
+        DEBUG_PRINT("FW handshake retry %d/5: %s\n", retry + 1, tdfu_error_to_string(result));
         platform_sleep_ms(100);
     }
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("Firmware handshake failed after retries: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("Firmware handshake failed after retries: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -803,5 +803,5 @@ thingino_error_t firmware_handshake_init(usb_device_t *device) {
         platform_sleep_ms(100);
     }
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }

@@ -16,7 +16,7 @@ int main(void) {
     printf("Testing T31X DDR generation...\n");
 
     platform_config_t platform_cfg;
-    if (ddr_get_platform_config_by_variant(VARIANT_T31X, &platform_cfg) != 0) {
+    if (ddr_get_platform_config_by_variant(TDFU_VARIANT_T31X, &platform_cfg) != 0) {
         printf("[FAIL] Failed to get platform config\n");
         return 1;
     }

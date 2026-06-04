@@ -8,20 +8,20 @@
 // BOOTSTRAP IMPLEMENTATION
 // ============================================================================
 
-thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t *config) {
+tdfu_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t *config) {
     if (!device || !config) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     // Only bootstrap if device is in bootrom stage
-    if (device->info.stage != STAGE_BOOTROM) {
+    if (device->info.stage != TDFU_STAGE_BOOTROM) {
         if (config->verbose) {
             LOG_INFO("Device already in firmware stage, skipping bootstrap\n");
         }
-        return THINGINO_SUCCESS;
+        return TDFU_SUCCESS;
     }
 
-    const char *variant_str = processor_variant_to_string(device->info.variant);
+    const char *variant_str = tdfu_variant_to_string(device->info.variant);
     LOG_INFO("Starting bootstrap sequence for %s\n", variant_str);
 
     // Reopen device to clean USB state from enumeration probes.
@@ -33,9 +33,9 @@ thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t
     // Get CPU info to understand current device state
     DEBUG_PRINT("Getting CPU info...\n");
     cpu_info_t cpu_info;
-    thingino_error_t result = usb_device_get_cpu_info(device, &cpu_info);
-    if (result != THINGINO_SUCCESS) {
-        LOG_INFO("Warning: failed to get CPU info: %s\n", thingino_error_to_string(result));
+    tdfu_error_t result = usb_device_get_cpu_info(device, &cpu_info);
+    if (result != TDFU_SUCCESS) {
+        LOG_INFO("Warning: failed to get CPU info: %s\n", tdfu_error_to_string(result));
         LOG_INFO("Continuing with bootstrap anyway - device may not be ready\n");
         // Don't exit - continue with bootstrap and let it fail gracefully if needed
     } else {
@@ -46,16 +46,16 @@ thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t
         }
         LOG_INFO("\n");
 
-        LOG_INFO("CPU info: stage=%s, magic='%.8s'\n", device_stage_to_string(cpu_info.stage), cpu_info.magic);
+        LOG_INFO("CPU info: stage=%s, magic='%.8s'\n", tdfu_stage_to_string(cpu_info.stage), cpu_info.magic);
 
         // Detect and display processor variant
-        processor_variant_t detected_variant = detect_variant_from_magic(cpu_info.clean_magic);
-        LOG_INFO("Detected processor variant: %s (from magic: '%s')\n", processor_variant_to_string(detected_variant),
+        tdfu_variant_t detected_variant = detect_variant_from_magic(cpu_info.clean_magic);
+        LOG_INFO("Detected processor variant: %s (from magic: '%s')\n", tdfu_variant_to_string(detected_variant),
                  cpu_info.clean_magic);
 
         // Update device stage based on actual CPU info
-        if (cpu_info.stage == STAGE_FIRMWARE) {
-            device->info.stage = STAGE_FIRMWARE;
+        if (cpu_info.stage == TDFU_STAGE_FIRMWARE) {
+            device->info.stage = TDFU_STAGE_FIRMWARE;
             LOG_INFO("Device stage updated to firmware based on CPU info\n");
         }
     }
@@ -81,8 +81,8 @@ thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t
         result = firmware_load_from_dir(device->info.variant, config->firmware_dir, &fw);
     }
 
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("Firmware load failed: %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("Firmware load failed: %s\n", tdfu_error_to_string(result));
         return result;
     }
 
@@ -90,7 +90,7 @@ thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t
              fw.uboot_size);
 
     // Get platform config for memory addresses
-    const char *platform_name = processor_variant_to_string(device->info.variant);
+    const char *platform_name = tdfu_variant_to_string(device->info.variant);
     const processor_config_t *plat = processor_config_get(platform_name);
     uint32_t ginfo_addr = plat ? plat->ginfo_addr : 0x80001000;
     uint32_t spl_addr = plat ? plat->spl_addr : 0x80001800;
@@ -100,7 +100,7 @@ thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t
     if (!config->skip_ddr) {
         LOG_INFO("Loading DDR configuration\n");
         result = bootstrap_load_data_to_memory(device, fw.config, fw.config_size, ginfo_addr);
-        if (result != THINGINO_SUCCESS) {
+        if (result != TDFU_SUCCESS) {
             firmware_cleanup(&fw);
             return result;
         }
@@ -112,7 +112,7 @@ thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t
     // Step 2: Load SPL to memory (NOT executed yet)
     LOG_INFO("Loading SPL (Stage 1 bootloader)\n");
     result = bootstrap_load_data_to_memory(device, fw.spl, fw.spl_size, spl_addr);
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         firmware_cleanup(&fw);
         return result;
     }
@@ -121,14 +121,14 @@ thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t
     // Step 3: Set execution size (d2i_len) and execute SPL
     DEBUG_PRINT("Setting execution size (d2i_len) to 0x%x for %s\n", d2i_len, platform_name);
     result = protocol_set_data_length(device, d2i_len);
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         firmware_cleanup(&fw);
         return result;
     }
 
     DEBUG_PRINT("Executing SPL from entry point 0x%x\n", spl_addr);
     result = protocol_prog_stage1(device, spl_addr);
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         firmware_cleanup(&fw);
         return result;
     }
@@ -150,10 +150,10 @@ thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t
         cpu_info_t poll_info;
         bool spl_ready = false;
         for (int attempt = 0; attempt < SPL_POLL_MAX_ATTEMPTS; attempt++) {
-            thingino_error_t poll_result = usb_device_get_cpu_info(device, &poll_info);
-            if (poll_result == THINGINO_SUCCESS) {
+            tdfu_error_t poll_result = usb_device_get_cpu_info(device, &poll_info);
+            if (poll_result == TDFU_SUCCESS) {
                 DEBUG_PRINT("SPL ready after %d attempt(s): stage=%s, magic='%s'\n", attempt + 1,
-                            device_stage_to_string(poll_info.stage), poll_info.clean_magic);
+                            tdfu_stage_to_string(poll_info.stage), poll_info.clean_magic);
                 spl_ready = true;
                 break;
             }
@@ -166,9 +166,9 @@ thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t
 
     if (profile->reopen_usb_after_spl) {
         DEBUG_PRINT("Reopening USB device handle after SPL for %s\n", profile->name);
-        thingino_error_t reopen_result = usb_device_reopen(device);
-        if (reopen_result != THINGINO_SUCCESS) {
-            LOG_INFO("Error: failed to re-open USB device after SPL: %s\n", thingino_error_to_string(reopen_result));
+        tdfu_error_t reopen_result = usb_device_reopen(device);
+        if (reopen_result != TDFU_SUCCESS) {
+            LOG_INFO("Error: failed to re-open USB device after SPL: %s\n", tdfu_error_to_string(reopen_result));
             firmware_cleanup(&fw);
             return reopen_result;
         }
@@ -179,7 +179,7 @@ thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t
     // Step 4: Load and program U-Boot (Stage 2 bootloader)
     LOG_INFO("Loading U-Boot (Stage 2 bootloader)\n");
     result = bootstrap_program_stage2(device, fw.uboot, fw.uboot_size);
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         firmware_cleanup(&fw);
         return result;
     }
@@ -190,11 +190,11 @@ thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t
     DEBUG_PRINT("Checking CPU info immediately after PROG_START2 (vendor sequence)...\n");
     cpu_info_t cpu_info_after;
     result = usb_device_get_cpu_info(device, &cpu_info_after);
-    if (result == THINGINO_SUCCESS) {
-        DEBUG_PRINT("CPU info after PROG_START2: stage=%s, magic='%s'\n", device_stage_to_string(cpu_info_after.stage),
+    if (result == TDFU_SUCCESS) {
+        DEBUG_PRINT("CPU info after PROG_START2: stage=%s, magic='%s'\n", tdfu_stage_to_string(cpu_info_after.stage),
                     cpu_info_after.clean_magic);
     } else {
-        DEBUG_PRINT("GET_CPU_INFO after PROG_START2 failed (may be expected): %s\n", thingino_error_to_string(result));
+        DEBUG_PRINT("GET_CPU_INFO after PROG_START2 failed (may be expected): %s\n", tdfu_error_to_string(result));
     }
 
     // NOTE (T31 doorbell): Factory T31 burner U-Boot logs show that sending
@@ -207,81 +207,81 @@ thingino_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t
     LOG_INFO("Bootstrap sequence completed successfully\n");
 
     firmware_cleanup(&fw);
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t bootstrap_ensure_bootstrapped(usb_device_t *device, const bootstrap_config_t *config) {
+tdfu_error_t bootstrap_ensure_bootstrapped(usb_device_t *device, const bootstrap_config_t *config) {
     if (!device || !config) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     // If device is already in firmware stage, no bootstrap needed
-    if (device->info.stage == STAGE_FIRMWARE) {
-        return THINGINO_SUCCESS;
+    if (device->info.stage == TDFU_STAGE_FIRMWARE) {
+        return TDFU_SUCCESS;
     }
 
     // Device needs bootstrap
     return bootstrap_device(device, config);
 }
 
-thingino_error_t bootstrap_load_data_to_memory(usb_device_t *device, const uint8_t *data, size_t size,
+tdfu_error_t bootstrap_load_data_to_memory(usb_device_t *device, const uint8_t *data, size_t size,
                                                uint32_t address) {
 
     if (!device || !data || size == 0) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     // Step 1: Set target address
     DEBUG_PRINT("Setting data address to 0x%08x\n", address);
-    thingino_error_t result = protocol_set_data_address(device, address);
-    if (result != THINGINO_SUCCESS) {
+    tdfu_error_t result = protocol_set_data_address(device, address);
+    if (result != TDFU_SUCCESS) {
         return result;
     }
 
     // Step 2: Set data length
     DEBUG_PRINT("Setting data length to %zu bytes\n", size);
     result = protocol_set_data_length(device, (uint32_t)size);
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         return result;
     }
 
     // Step 3: Transfer data
     DEBUG_PRINT("Transferring data (%zu bytes)...\n", size);
     result = bootstrap_transfer_data(device, data, size);
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         return result;
     }
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t bootstrap_program_stage2(usb_device_t *device, const uint8_t *data, size_t size) {
+tdfu_error_t bootstrap_program_stage2(usb_device_t *device, const uint8_t *data, size_t size) {
 
     if (!device || !data || size == 0) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     // Step 1: Set target address for U-Boot from platform config
-    const char *uboot_plat_name = processor_variant_to_string(device->info.variant);
+    const char *uboot_plat_name = tdfu_variant_to_string(device->info.variant);
     const processor_config_t *uboot_plat = processor_config_get(uboot_plat_name);
     uint32_t uboot_address = uboot_plat ? uboot_plat->uboot_addr : 0x80100000;
     DEBUG_PRINT("Setting U-Boot data address to 0x%08x\n", uboot_address);
-    thingino_error_t result = protocol_set_data_address(device, uboot_address);
-    if (result != THINGINO_SUCCESS) {
+    tdfu_error_t result = protocol_set_data_address(device, uboot_address);
+    if (result != TDFU_SUCCESS) {
         return result;
     }
 
     // Step 2: Set data length
     DEBUG_PRINT("Setting U-Boot data length to %zu bytes\n", size);
     result = protocol_set_data_length(device, (uint32_t)size);
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         return result;
     }
 
     // Step 3: Transfer data
     DEBUG_PRINT("Transferring U-Boot data (%zu bytes)...\n", size);
     result = bootstrap_transfer_data(device, data, size);
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         return result;
     }
 
@@ -293,8 +293,8 @@ thingino_error_t bootstrap_program_stage2(usb_device_t *device, const uint8_t *d
     // Step 4: Flush cache before executing U-Boot
     DEBUG_PRINT("Flushing cache before U-Boot execution\n");
     result = protocol_flush_cache(device);
-    if (result != THINGINO_SUCCESS) {
-        DEBUG_PRINT("FlushCache error (non-fatal): %s\n", thingino_error_to_string(result));
+    if (result != TDFU_SUCCESS) {
+        DEBUG_PRINT("FlushCache error (non-fatal): %s\n", tdfu_error_to_string(result));
     }
 
     // Step 5: Execute U-Boot using ProgStage2 (vendor protocol)
@@ -306,25 +306,25 @@ thingino_error_t bootstrap_program_stage2(usb_device_t *device, const uint8_t *d
     // Platform-specific sleep
     platform_sleep_ms(1000);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
-thingino_error_t bootstrap_transfer_data(usb_device_t *device, const uint8_t *data, size_t size) {
+tdfu_error_t bootstrap_transfer_data(usb_device_t *device, const uint8_t *data, size_t size) {
 
     if (!device || !data || size == 0) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     DEBUG_PRINT("TransferData starting: %zu bytes total\n", size);
 
     // Claim interface before bulk transfers (required on Linux)
-    thingino_error_t claim_result = usb_device_claim_interface(device);
-    if (claim_result != THINGINO_SUCCESS) {
+    tdfu_error_t claim_result = usb_device_claim_interface(device);
+    if (claim_result != TDFU_SUCCESS) {
         DEBUG_PRINT("TransferData: failed to claim interface, trying with kernel driver detach\n");
         libusb_detach_kernel_driver(device->handle, 0);
         claim_result = usb_device_claim_interface(device);
-        if (claim_result != THINGINO_SUCCESS) {
-            DEBUG_PRINT("TransferData: still failed to claim interface: %s\n", thingino_error_to_string(claim_result));
+        if (claim_result != TDFU_SUCCESS) {
+            DEBUG_PRINT("TransferData: still failed to claim interface: %s\n", tdfu_error_to_string(claim_result));
             return claim_result;
         }
     }
@@ -358,10 +358,10 @@ thingino_error_t bootstrap_transfer_data(usb_device_t *device, const uint8_t *da
             if (timeout < 5000)
                 timeout = 5000; // Minimum 5 seconds
 
-            thingino_error_t result = usb_device_bulk_transfer(device, ENDPOINT_OUT, (uint8_t *)&data[offset],
+            tdfu_error_t result = usb_device_bulk_transfer(device, ENDPOINT_OUT, (uint8_t *)&data[offset],
                                                                (int)current_chunk_size, &transferred, timeout);
 
-            if (result == THINGINO_SUCCESS && transferred > 0) {
+            if (result == TDFU_SUCCESS && transferred > 0) {
                 // Success - at least some bytes written
                 DEBUG_PRINT("TransferData chunk written: %d bytes (attempt %d)\n", transferred, retry + 1);
                 total_written += transferred;
@@ -380,8 +380,8 @@ thingino_error_t bootstrap_transfer_data(usb_device_t *device, const uint8_t *da
             }
 
             // Handle write error
-            if (result != THINGINO_SUCCESS) {
-                DEBUG_PRINT("TransferData error on attempt %d: %s\n", retry + 1, thingino_error_to_string(result));
+            if (result != TDFU_SUCCESS) {
+                DEBUG_PRINT("TransferData error on attempt %d: %s\n", retry + 1, tdfu_error_to_string(result));
 
                 // For other errors or if retry limit reached
                 if (retry < max_retries - 1) {
@@ -401,7 +401,7 @@ thingino_error_t bootstrap_transfer_data(usb_device_t *device, const uint8_t *da
             if (retry == max_retries - 1) {
                 DEBUG_PRINT("Bulk write returned 0 bytes and no error at offset %zu\n", offset);
                 usb_device_release_interface(device);
-                return THINGINO_ERROR_TRANSFER_FAILED;
+                return TDFU_ERROR_TRANSFER_FAILED;
             }
         }
 
@@ -419,5 +419,5 @@ thingino_error_t bootstrap_transfer_data(usb_device_t *device, const uint8_t *da
 
     DEBUG_PRINT("TransferData complete: %zu bytes written successfully\n", total_written);
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }

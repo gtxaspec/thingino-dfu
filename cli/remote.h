@@ -1,5 +1,5 @@
-#ifndef CLONER_REMOTE_H
-#define CLONER_REMOTE_H
+#ifndef TDFU_REMOTE_H
+#define TDFU_REMOTE_H
 
 int remote_connect(const char *host, int port, const char *token);
 void remote_disconnect(void);

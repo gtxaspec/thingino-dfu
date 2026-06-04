@@ -48,7 +48,7 @@ int ddr_get_platform_config(const char *platform_name, platform_config_t *config
 /**
  * Get default platform configuration by processor variant
  *
- * Wrapper around ddr_get_platform_config() that accepts processor_variant_t enum.
+ * Wrapper around ddr_get_platform_config() that accepts tdfu_variant_t enum.
  * Maps variant enums to platform name strings.
  */
 int ddr_get_platform_config_by_variant(int variant, platform_config_t *config) {
@@ -56,54 +56,54 @@ int ddr_get_platform_config_by_variant(int variant, platform_config_t *config) {
         return -1;
 
     // Map processor variant enum to platform name
-    // These values match the processor_variant_t enum from thingino.h:
-    // VARIANT_T20 = 0, VARIANT_T21 = 1, VARIANT_T30 = 3, VARIANT_T31X = 5,
-    // VARIANT_T31ZX = 6, VARIANT_T41 = 9
+    // These values match the tdfu_variant_t enum from thingino.h:
+    // TDFU_VARIANT_T20 = 0, TDFU_VARIANT_T21 = 1, TDFU_VARIANT_T30 = 3, TDFU_VARIANT_T31X = 5,
+    // TDFU_VARIANT_T31ZX = 6, TDFU_VARIANT_T41 = 9
     const char *platform_name;
 
     switch (variant) {
-    case VARIANT_T10:
+    case TDFU_VARIANT_T10:
         platform_name = "t10";
         break;
-    case VARIANT_T20:
+    case TDFU_VARIANT_T20:
         platform_name = "t20";
         break;
-    case VARIANT_T21:
+    case TDFU_VARIANT_T21:
         platform_name = "t21";
         break;
-    case VARIANT_T23:
+    case TDFU_VARIANT_T23:
         platform_name = "t23";
         break;
-    case VARIANT_T23DL:
+    case TDFU_VARIANT_T23DL:
         platform_name = "t23dl";
         break;
-    case VARIANT_T32:
+    case TDFU_VARIANT_T32:
         platform_name = "t32";
         break;
-    case VARIANT_T30:
+    case TDFU_VARIANT_T30:
         platform_name = "t30";
         break;
-    case VARIANT_T31X:
-    case VARIANT_T31ZX:
-    case VARIANT_T31:
+    case TDFU_VARIANT_T31X:
+    case TDFU_VARIANT_T31ZX:
+    case TDFU_VARIANT_T31:
         platform_name = "t31";
         break;
-    case VARIANT_T31A:
+    case TDFU_VARIANT_T31A:
         platform_name = "t31a";
         break;
-    case VARIANT_T31AL:
+    case TDFU_VARIANT_T31AL:
         platform_name = "t31al";
         break;
-    case VARIANT_T40:
+    case TDFU_VARIANT_T40:
         platform_name = "t40";
         break;
-    case VARIANT_T40XP:
+    case TDFU_VARIANT_T40XP:
         platform_name = "t40xp";
         break;
-    case VARIANT_T41:
+    case TDFU_VARIANT_T41:
         platform_name = "t41";
         break;
-    case VARIANT_A1:
+    case TDFU_VARIANT_A1:
         platform_name = "a1";
         break;
     default:
@@ -500,13 +500,13 @@ void ddr_chip_to_phy_params(const ddr_chip_config_t *chip, uint32_t ddr_freq_hz,
 #undef PS2CYC
 }
 
-thingino_error_t ddr_validate_binary(const uint8_t *data, size_t size) {
+tdfu_error_t ddr_validate_binary(const uint8_t *data, size_t size) {
     if (!data)
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     /* Minimum: FIDB header(8) + some data + RDD(132) */
     if (size < DDR_FIDB_HEADER_SIZE + 24 + DDR_RDD_SIZE)
-        return THINGINO_ERROR_PROTOCOL;
+        return TDFU_ERROR_PROTOCOL;
     if (data[0] != 'F' || data[1] != 'I' || data[2] != 'D' || data[3] != 'B')
-        return THINGINO_ERROR_PROTOCOL;
-    return THINGINO_SUCCESS;
+        return TDFU_ERROR_PROTOCOL;
+    return TDFU_SUCCESS;
 }

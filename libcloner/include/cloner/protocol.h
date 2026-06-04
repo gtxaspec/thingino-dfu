@@ -5,15 +5,15 @@
  * Single client at a time, no multiplexing.
  */
 
-#ifndef CLONER_PROTOCOL_H
-#define CLONER_PROTOCOL_H
+#ifndef TDFU_PROTOCOL_H
+#define TDFU_PROTOCOL_H
 
 #include <stdint.h>
 #include <stddef.h>
 
-#define CLONER_PROTO_MAGIC   0x434C4E52 /* "CLNR" */
-#define CLONER_PROTO_VERSION 1
-#define CLONER_DEFAULT_PORT  5050
+#define TDFU_PROTO_MAGIC   0x434C4E52 /* "CLNR" */
+#define TDFU_PROTO_VERSION 1
+#define TDFU_DEFAULT_PORT  5050
 
 /* CLI exit codes */
 #define EXIT_SUCCESS_CODE   0
@@ -21,7 +21,7 @@
 #define EXIT_TRANSFER_ERROR 2
 #define EXIT_FILE_ERROR     3
 #define EXIT_PROTOCOL_ERROR 4
-#define CLONER_MAX_PAYLOAD  (64 * 1024 * 1024) /* 64MB max */
+#define TDFU_MAX_PAYLOAD  (64 * 1024 * 1024) /* 64MB max */
 
 /* Commands (client -> daemon) */
 enum {
@@ -43,25 +43,25 @@ enum {
 
 /* Wire format - all fields big-endian */
 typedef struct __attribute__((packed)) {
-    uint32_t magic;       /* CLONER_PROTO_MAGIC */
-    uint8_t version;      /* CLONER_PROTO_VERSION */
+    uint32_t magic;       /* TDFU_PROTO_MAGIC */
+    uint8_t version;      /* TDFU_PROTO_VERSION */
     uint8_t command;      /* CMD_* */
     uint32_t payload_len; /* length of payload following this header */
-} cloner_msg_header_t;
+} tdfu_msg_header_t;
 
 typedef struct __attribute__((packed)) {
     uint32_t magic;
     uint8_t version;
     uint8_t status; /* RESP_* */
     uint32_t payload_len;
-} cloner_resp_header_t;
+} tdfu_resp_header_t;
 
 /* Bootstrap request payload */
 typedef struct __attribute__((packed)) {
     uint8_t device_index;
     uint8_t variant_len; /* length of variant string */
     /* followed by: variant string, then firmware_dir string (null-terminated) */
-} cloner_bootstrap_req_t;
+} tdfu_bootstrap_req_t;
 
 /* Discover response - per device */
 typedef struct __attribute__((packed)) {
@@ -70,18 +70,18 @@ typedef struct __attribute__((packed)) {
     uint16_t vendor;
     uint16_t product;
     uint8_t stage;   /* 0=bootrom, 1=firmware */
-    uint8_t variant; /* processor_variant_t enum value */
-} cloner_device_entry_t;
+    uint8_t variant; /* tdfu_variant_t enum value */
+} tdfu_device_entry_t;
 
 /* Progress update payload */
 typedef struct __attribute__((packed)) {
     uint8_t percent;  /* 0-100 */
     uint8_t stage;    /* what's happening */
     uint16_t msg_len; /* length of message string following */
-} cloner_progress_t;
+} tdfu_progress_t;
 
 /* Helpers for big-endian encoding (protocol is network byte order) */
-static inline uint32_t cloner_htonl(uint32_t h) {
+static inline uint32_t tdfu_htonl(uint32_t h) {
     uint8_t b[4];
     b[0] = (h >> 24) & 0xFF;
     b[1] = (h >> 16) & 0xFF;
@@ -92,18 +92,18 @@ static inline uint32_t cloner_htonl(uint32_t h) {
     return n;
 }
 
-static inline uint32_t cloner_ntohl(uint32_t n) {
+static inline uint32_t tdfu_ntohl(uint32_t n) {
     uint8_t b[4];
     __builtin_memcpy(b, &n, 4);
     return ((uint32_t)b[0] << 24) | ((uint32_t)b[1] << 16) | ((uint32_t)b[2] << 8) | b[3];
 }
 
-static inline uint16_t cloner_htons(uint16_t h) {
+static inline uint16_t tdfu_htons(uint16_t h) {
     return (uint16_t)((h >> 8) | (h << 8));
 }
 
-static inline uint16_t cloner_ntohs(uint16_t n) {
-    return cloner_htons(n);
+static inline uint16_t tdfu_ntohs(uint16_t n) {
+    return tdfu_htons(n);
 }
 
-#endif /* CLONER_PROTOCOL_H */
+#endif /* TDFU_PROTOCOL_H */

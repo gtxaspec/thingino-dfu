@@ -46,7 +46,7 @@ static void firmware_wait_for_erase_ready(usb_device_t *device, int min_wait_ms,
 
     // Only do firmware-stage polling for variants that use it.
     // Platforms with ERASE_WAIT_FIXED never reach this function.
-    if (device->info.stage != STAGE_FIRMWARE) {
+    if (device->info.stage != TDFU_STAGE_FIRMWARE) {
         platform_sleep_ms(min_wait_ms);
         return;
     }
@@ -65,9 +65,9 @@ static void firmware_wait_for_erase_ready(usb_device_t *device, int min_wait_ms,
 
     while (elapsed_ms < max_wait_ms) {
         uint32_t status = 0;
-        thingino_error_t st = protocol_fw_read_status(device, VR_FW_READ_STATUS2, &status);
+        tdfu_error_t st = protocol_fw_read_status(device, VR_FW_READ_STATUS2, &status);
 
-        if (st == THINGINO_SUCCESS) {
+        if (st == TDFU_SUCCESS) {
             DEBUG_PRINT("Erase status (VR_FW_READ_STATUS2) at %d ms: 0x%08X\n", elapsed_ms, status);
 
             if (elapsed_ms >= min_wait_ms) {
@@ -96,7 +96,7 @@ static void firmware_wait_for_erase_ready(usb_device_t *device, int min_wait_ms,
                 }
             }
         } else {
-            DEBUG_PRINT("Erase status poll error at %d ms: %s\n", elapsed_ms, thingino_error_to_string(st));
+            DEBUG_PRINT("Erase status poll error at %d ms: %s\n", elapsed_ms, tdfu_error_to_string(st));
         }
 
         platform_sleep_ms(poll_interval_ms);
@@ -119,12 +119,12 @@ static void firmware_wait_for_erase_ready(usb_device_t *device, int min_wait_ms,
  * - Send metadata
  * - Send firmware in 128KB chunks (T31x) or 1MB chunks (A1)
  */
-thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firmware_file,
+tdfu_error_t write_firmware_to_device(usb_device_t *device, const char *firmware_file,
                                           const firmware_binary_t *fw_binary, bool no_erase, bool is_a1_board,
                                           uint32_t chunk_size_arg) {
 
     if (!device || !firmware_file) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     (void)no_erase; // Erase control is in the flash descriptor, not the writer
@@ -141,7 +141,7 @@ thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firm
     FILE *file = fopen(firmware_file, "rb");
     if (!file) {
         LOG_ERROR("Cannot open firmware file: %s\n", firmware_file);
-        return THINGINO_ERROR_FILE_IO;
+        return TDFU_ERROR_FILE_IO;
     }
 
     // Get file size
@@ -152,12 +152,12 @@ thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firm
     if (firmware_size <= 0) {
         LOG_ERROR("Invalid firmware file size\n");
         fclose(file);
-        return THINGINO_ERROR_FILE_IO;
+        return TDFU_ERROR_FILE_IO;
     }
     if ((unsigned long)firmware_size > (unsigned long)UINT32_MAX) {
         LOG_ERROR("Firmware file too large (%ld bytes)\n", firmware_size);
         fclose(file);
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     uint32_t firmware_size_u = (uint32_t)firmware_size;
@@ -168,7 +168,7 @@ thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firm
     if (!firmware_data) {
         LOG_ERROR("Cannot allocate memory for firmware\n");
         fclose(file);
-        return THINGINO_ERROR_MEMORY;
+        return TDFU_ERROR_MEMORY;
     }
 
     // Read firmware
@@ -178,11 +178,11 @@ thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firm
     if (bytes_read != (size_t)firmware_size_u) {
         LOG_ERROR("Failed to read firmware file\n");
         free(firmware_data);
-        return THINGINO_ERROR_FILE_IO;
+        return TDFU_ERROR_FILE_IO;
     }
 
     // Step 2: Prepare flash address and length for firmware write
-    thingino_error_t result;
+    tdfu_error_t result;
     const platform_profile_t *profile = platform_get_profile(device->info.variant);
 
     LOG_INFO("\nStep 1: Preparing firmware write (address/length)...\n");
@@ -194,8 +194,8 @@ thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firm
         int addr_resp_len = 0;
         result = usb_device_vendor_request(device, REQUEST_TYPE_OUT, VR_SET_DATA_ADDR,
                                            (uint16_t)(flash_base_address & 0xFFFF), 0, NULL, 0, NULL, &addr_resp_len);
-        if (result != THINGINO_SUCCESS) {
-            LOG_ERROR("Failed to set flash base address: %s\n", thingino_error_to_string(result));
+        if (result != TDFU_SUCCESS) {
+            LOG_ERROR("Failed to set flash base address: %s\n", tdfu_error_to_string(result));
             free(firmware_data);
             return result;
         }
@@ -233,8 +233,8 @@ thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firm
 
         DEBUG_PRINT("Setting firmware write length with SetDataLength: %lu bytes\n", (unsigned long)set_length);
         result = protocol_set_data_length(device, set_length);
-        if (result != THINGINO_SUCCESS) {
-            LOG_ERROR("Failed to set firmware write length: %s\n", thingino_error_to_string(result));
+        if (result != TDFU_SUCCESS) {
+            LOG_ERROR("Failed to set firmware write length: %s\n", tdfu_error_to_string(result));
             free(firmware_data);
             return result;
         }
@@ -258,7 +258,7 @@ thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firm
 
     uint32_t bytes_written = 0;
     uint32_t chunk_num = 0;
-    result = THINGINO_SUCCESS;
+    result = TDFU_SUCCESS;
 
     while (bytes_written < (uint32_t)firmware_size) {
         uint32_t chunk_size = chunk_size_arg ? chunk_size_arg : profile->default_chunk_size;
@@ -288,7 +288,7 @@ thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firm
                 result = firmware_handshake_write_chunk(device, chunk_num - 1, chunk_offset,
                                                         firmware_data + bytes_written, chunk_size);
             }
-            if (result != THINGINO_SUCCESS)
+            if (result != TDFU_SUCCESS)
                 break;
 
             // Check GET_ACK - vendor does this after each chunk.
@@ -327,7 +327,7 @@ thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firm
                 }
             }
         }
-        if (result != THINGINO_SUCCESS) {
+        if (result != TDFU_SUCCESS) {
             LOG_ERROR("Failed to write chunk %u\n", chunk_num);
             libusb_release_interface(device->handle, 0);
             free(firmware_data);
@@ -343,7 +343,7 @@ thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firm
     // Flush cache after all writes
     LOG_INFO("\nFlushing cache...\n");
     result = protocol_flush_cache(device);
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         LOG_WARN("Failed to flush cache\n");
         // Don't fail on flush error
     }
@@ -352,15 +352,15 @@ thingino_error_t write_firmware_to_device(usb_device_t *device, const char *firm
     LOG_INFO("  Total written: %u bytes in %u chunks\n", bytes_written, chunk_num);
 
     free(firmware_data);
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }
 
 /**
  * Send bulk data to device
  */
-thingino_error_t send_bulk_data(usb_device_t *device, uint8_t endpoint, const uint8_t *data, uint32_t size) {
+tdfu_error_t send_bulk_data(usb_device_t *device, uint8_t endpoint, const uint8_t *data, uint32_t size) {
     if (!device || !data || size == 0) {
-        return THINGINO_ERROR_INVALID_PARAMETER;
+        return TDFU_ERROR_INVALID_PARAMETER;
     }
 
     int transferred = 0;
@@ -369,13 +369,13 @@ thingino_error_t send_bulk_data(usb_device_t *device, uint8_t endpoint, const ui
 
     if (result != LIBUSB_SUCCESS) {
         LOG_ERROR("Bulk transfer failed: %s\n", libusb_error_name(result));
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
     if (transferred != (int)size) {
         LOG_ERROR("Incomplete transfer: sent %d of %u bytes\n", transferred, size);
-        return THINGINO_ERROR_TRANSFER_FAILED;
+        return TDFU_ERROR_TRANSFER_FAILED;
     }
 
-    return THINGINO_SUCCESS;
+    return TDFU_SUCCESS;
 }

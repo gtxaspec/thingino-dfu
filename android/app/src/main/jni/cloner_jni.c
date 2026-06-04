@@ -28,7 +28,7 @@
 #include "spi_nor_db.h"
 
 /* Functions defined in libcloner but not exposed via headers */
-extern thingino_error_t protocol_read_flash_id(usb_device_t *device, uint32_t *jedec_id);
+extern tdfu_error_t protocol_read_flash_id(usb_device_t *device, uint32_t *jedec_id);
 
 #define TAG "ClonerJNI"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
@@ -97,7 +97,7 @@ static void jni_progress(int percent, const char *stage, const char *message) {
     }
 }
 
-/* Progress callback for cloner_bootstrap / cloner_read / cloner_write */
+/* Progress callback for tdfu_bootstrap / tdfu_read / tdfu_write */
 static void progress_callback(int percent, const char *stage,
                                const char *message, void *user_data) {
     (void)user_data;
@@ -166,8 +166,8 @@ static usb_device_t *device_from_fd(int fd) {
         dev->info.address = libusb_get_device_address(dev->device);
     }
 
-    dev->info.stage = STAGE_BOOTROM;
-    dev->info.variant = VARIANT_T31X;
+    dev->info.stage = TDFU_STAGE_BOOTROM;
+    dev->info.variant = TDFU_VARIANT_T31X;
 
     return dev;
 }
@@ -278,11 +278,11 @@ Java_com_thingino_dfu_ClonerBridge_nativeDetectSoc(
 
     /* Get CPU info first to determine stage */
     cpu_info_t cpu_info;
-    thingino_error_t result = usb_device_get_cpu_info(dev, &cpu_info);
-    if (result != THINGINO_SUCCESS) {
+    tdfu_error_t result = usb_device_get_cpu_info(dev, &cpu_info);
+    if (result != TDFU_SUCCESS) {
         char msg[128];
         snprintf(msg, sizeof(msg), "WARNING: CPU info query failed: %s\n",
-                 thingino_error_to_string(result));
+                 tdfu_error_to_string(result));
         jni_log(msg);
         device_close(dev);
         return (*env)->NewStringUTF(env, "");
@@ -292,26 +292,26 @@ Java_com_thingino_dfu_ClonerBridge_nativeDetectSoc(
     char msg[256];
     snprintf(msg, sizeof(msg), "CPU magic: '%s' (stage: %s)\n",
              cpu_info.clean_magic,
-             device_stage_to_string(cpu_info.stage));
+             tdfu_stage_to_string(cpu_info.stage));
     jni_log(msg);
 
     const char *variant_str;
 
-    if (cpu_info.stage == STAGE_BOOTROM) {
+    if (cpu_info.stage == TDFU_STAGE_BOOTROM) {
         /* Try auto-detect via MIPS code upload */
-        processor_variant_t detected = VARIANT_T31X;
+        tdfu_variant_t detected = TDFU_VARIANT_T31X;
         result = protocol_detect_soc(dev, &detected);
-        if (result == THINGINO_SUCCESS) {
-            variant_str = processor_variant_to_string(detected);
+        if (result == TDFU_SUCCESS) {
+            variant_str = tdfu_variant_to_string(detected);
         } else {
             /* Fall back to magic-based detection */
-            processor_variant_t from_magic = detect_variant_from_magic(cpu_info.clean_magic);
-            variant_str = processor_variant_to_string(from_magic);
+            tdfu_variant_t from_magic = detect_variant_from_magic(cpu_info.clean_magic);
+            variant_str = tdfu_variant_to_string(from_magic);
         }
     } else {
         /* Already in firmware stage, use magic */
-        processor_variant_t from_magic = detect_variant_from_magic(cpu_info.clean_magic);
-        variant_str = processor_variant_to_string(from_magic);
+        tdfu_variant_t from_magic = detect_variant_from_magic(cpu_info.clean_magic);
+        variant_str = tdfu_variant_to_string(from_magic);
     }
 
     snprintf(msg, sizeof(msg), "Detected SoC: %s\n", variant_str);
@@ -358,11 +358,11 @@ Java_com_thingino_dfu_ClonerBridge_nativeBootstrap(
     }
 
     /* Set variant */
-    processor_variant_t variant = string_to_processor_variant(variant_cstr);
+    tdfu_variant_t variant = tdfu_variant_from_string(variant_cstr);
     dev->info.variant = variant;
 
     /* Extract firmware files from APK assets to cache dir */
-    const char *variant_name = processor_variant_to_string(variant);
+    const char *variant_name = tdfu_variant_to_string(variant);
     char spl_asset[256], uboot_asset[256];
     char spl_path[512], uboot_path[512];
 
@@ -370,11 +370,11 @@ Java_com_thingino_dfu_ClonerBridge_nativeBootstrap(
      * We need to map variant names to directory names (some share dirs) */
     const char *fw_subdir = variant_name;
     /* Handle variants that share firmware directories */
-    if (variant == VARIANT_T31X || variant == VARIANT_T31ZX) {
+    if (variant == TDFU_VARIANT_T31X || variant == TDFU_VARIANT_T31ZX) {
         fw_subdir = "t31x";
-    } else if (variant == VARIANT_T31A) {
+    } else if (variant == TDFU_VARIANT_T31A) {
         fw_subdir = "t31a";
-    } else if (variant == VARIANT_A1) {
+    } else if (variant == TDFU_VARIANT_A1) {
         fw_subdir = "a1_n_ne_x";
     }
 
@@ -422,15 +422,15 @@ Java_com_thingino_dfu_ClonerBridge_nativeBootstrap(
 
     jni_progress(50, "bootstrap", "Running bootstrap sequence...");
 
-    thingino_error_t result = bootstrap_device(dev, &config);
+    tdfu_error_t result = bootstrap_device(dev, &config);
 
     /* Clean up temp files */
     unlink(spl_path);
     unlink(uboot_path);
 
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         snprintf(msg, sizeof(msg), "ERROR: Bootstrap failed: %s\n",
-                 thingino_error_to_string(result));
+                 tdfu_error_to_string(result));
         jni_log(msg);
         device_close_android(dev);
         (*env)->ReleaseStringUTFChars(env, variant_str, variant_cstr);
@@ -483,28 +483,28 @@ Java_com_thingino_dfu_ClonerBridge_nativeReadFirmware(
     }
     LOGI("Device opened: handle=%p", dev->handle);
 
-    processor_variant_t variant = string_to_processor_variant(variant_cstr);
+    tdfu_variant_t variant = tdfu_variant_from_string(variant_cstr);
     dev->info.variant = variant;
-    LOGI("Variant set to: %s (%d)", processor_variant_to_string(variant), variant);
+    LOGI("Variant set to: %s (%d)", tdfu_variant_to_string(variant), variant);
 
     /* Check if device needs bootstrap first */
     cpu_info_t cpu_info;
     LOGI("Getting CPU info...");
-    thingino_error_t result = usb_device_get_cpu_info(dev, &cpu_info);
-    LOGI("CPU info result: %d (%s)", result, thingino_error_to_string(result));
-    if (result == THINGINO_SUCCESS) {
+    tdfu_error_t result = usb_device_get_cpu_info(dev, &cpu_info);
+    LOGI("CPU info result: %d (%s)", result, tdfu_error_to_string(result));
+    if (result == TDFU_SUCCESS) {
         dev->info.stage = cpu_info.stage;
-        LOGI("Device stage: %s, magic: %s", device_stage_to_string(cpu_info.stage), cpu_info.clean_magic);
+        LOGI("Device stage: %s, magic: %s", tdfu_stage_to_string(cpu_info.stage), cpu_info.clean_magic);
     }
 
-    if (dev->info.stage == STAGE_BOOTROM) {
+    if (dev->info.stage == TDFU_STAGE_BOOTROM) {
         LOGI("Device in bootrom, need bootstrap");
 
         /* Extract firmware assets for bootstrap */
-        const char *fw_subdir = processor_variant_to_string(variant);
-        if (variant == VARIANT_T31X || variant == VARIANT_T31ZX) fw_subdir = "t31x";
-        else if (variant == VARIANT_T31A) fw_subdir = "t31a";
-        else if (variant == VARIANT_A1) fw_subdir = "a1_n_ne_x";
+        const char *fw_subdir = tdfu_variant_to_string(variant);
+        if (variant == TDFU_VARIANT_T31X || variant == TDFU_VARIANT_T31ZX) fw_subdir = "t31x";
+        else if (variant == TDFU_VARIANT_T31A) fw_subdir = "t31a";
+        else if (variant == TDFU_VARIANT_A1) fw_subdir = "a1_n_ne_x";
 
         char spl_asset[256], uboot_asset[256];
         char spl_path[512], uboot_path[512];
@@ -536,14 +536,14 @@ Java_com_thingino_dfu_ClonerBridge_nativeReadFirmware(
 
         LOGI("Starting bootstrap_device...");
         result = bootstrap_device(dev, &config);
-        LOGI("bootstrap_device returned: %d (%s)", result, thingino_error_to_string(result));
+        LOGI("bootstrap_device returned: %d (%s)", result, tdfu_error_to_string(result));
 
         unlink(spl_path);
         unlink(uboot_path);
 
-        if (result != THINGINO_SUCCESS) {
+        if (result != TDFU_SUCCESS) {
             snprintf(msg, sizeof(msg), "ERROR: Bootstrap failed: %s\n",
-                     thingino_error_to_string(result));
+                     tdfu_error_to_string(result));
             jni_log(msg);
             device_close_android(dev);
             goto read_err;
@@ -556,15 +556,15 @@ Java_com_thingino_dfu_ClonerBridge_nativeReadFirmware(
         /* After bootstrap, device should be in firmware stage.
          * The USB handle from wrap_sys_device should still be valid
          * since the physical connection hasn't changed. */
-        dev->info.stage = STAGE_FIRMWARE;
+        dev->info.stage = TDFU_STAGE_FIRMWARE;
     }
 
     jni_progress(35, "read", "Initiating flash read...");
 
-    /* Use the cloner_op_read_firmware path which handles the full
+    /* Use the tdfu_op_read_firmware path which handles the full
      * flash descriptor / handshake / chunked read protocol.
      *
-     * However, cloner_op_read_firmware uses usb_manager to find devices,
+     * However, tdfu_op_read_firmware uses usb_manager to find devices,
      * which won't work on Android. We need to replicate the read logic
      * using our wrapped device handle directly. */
 
@@ -572,9 +572,9 @@ Java_com_thingino_dfu_ClonerBridge_nativeReadFirmware(
     jni_log("Sending partition marker...\n");
     jni_progress(40, "read", "Sending partition marker...");
     result = flash_partition_marker_send(dev);
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         snprintf(msg, sizeof(msg), "ERROR: Partition marker failed: %s\n",
-                 thingino_error_to_string(result));
+                 tdfu_error_to_string(result));
         jni_log(msg);
         device_close_android(dev);
         goto read_err;
@@ -594,7 +594,7 @@ Java_com_thingino_dfu_ClonerBridge_nativeReadFirmware(
 
     uint32_t jedec_id = 0;
     const spi_nor_chip_t *flash_chip = NULL;
-    if (protocol_read_flash_id(dev, &jedec_id) == THINGINO_SUCCESS) {
+    if (protocol_read_flash_id(dev, &jedec_id) == TDFU_SUCCESS) {
         flash_chip = spi_nor_find_by_id(jedec_id);
         if (flash_chip) {
             snprintf(msg, sizeof(msg), "Flash chip: %s (JEDEC 0x%06X, %u MB)\n",
@@ -627,7 +627,7 @@ Java_com_thingino_dfu_ClonerBridge_nativeReadFirmware(
         uint8_t desc[FLASH_DESCRIPTOR_SIZE_XB2];
         flash_descriptor_create_xb2_read(flash_chip, desc);
         result = flash_descriptor_send_sized(dev, desc, FLASH_DESCRIPTOR_SIZE_XB2);
-    } else if (dev->info.variant == VARIANT_T32) {
+    } else if (dev->info.variant == TDFU_VARIANT_T32) {
         uint8_t desc[FLASH_DESCRIPTOR_SIZE_T32];
         flash_descriptor_create_t32_read(flash_chip, desc);
         result = flash_descriptor_send_sized(dev, desc, FLASH_DESCRIPTOR_SIZE_T32);
@@ -637,9 +637,9 @@ Java_com_thingino_dfu_ClonerBridge_nativeReadFirmware(
         result = flash_descriptor_send(dev, desc);
     }
 
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         snprintf(msg, sizeof(msg), "ERROR: Failed to send read descriptor: %s\n",
-                 thingino_error_to_string(result));
+                 tdfu_error_to_string(result));
         jni_log(msg);
         device_close_android(dev);
         goto read_err;
@@ -652,9 +652,9 @@ Java_com_thingino_dfu_ClonerBridge_nativeReadFirmware(
     jni_progress(55, "read", "Handshaking...");
 
     result = firmware_handshake_init(dev);
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         snprintf(msg, sizeof(msg), "ERROR: Handshake failed: %s\n",
-                 thingino_error_to_string(result));
+                 tdfu_error_to_string(result));
         jni_log(msg);
         device_close_android(dev);
         goto read_err;
@@ -671,9 +671,9 @@ Java_com_thingino_dfu_ClonerBridge_nativeReadFirmware(
     uint32_t firmware_size = 0;
     result = firmware_read_full(dev, read_size, &firmware_data, &firmware_size);
 
-    if (result != THINGINO_SUCCESS || !firmware_data) {
+    if (result != TDFU_SUCCESS || !firmware_data) {
         snprintf(msg, sizeof(msg), "ERROR: Read failed: %s\n",
-                 thingino_error_to_string(result));
+                 tdfu_error_to_string(result));
         jni_log(msg);
         free(firmware_data);
         device_close_android(dev);
@@ -754,24 +754,24 @@ Java_com_thingino_dfu_ClonerBridge_nativeWriteFirmware(
         goto write_err;
     }
 
-    processor_variant_t variant = string_to_processor_variant(variant_cstr);
+    tdfu_variant_t variant = tdfu_variant_from_string(variant_cstr);
     dev->info.variant = variant;
 
     /* Check if device needs bootstrap */
     cpu_info_t cpu_info;
-    thingino_error_t result = usb_device_get_cpu_info(dev, &cpu_info);
-    if (result == THINGINO_SUCCESS) {
+    tdfu_error_t result = usb_device_get_cpu_info(dev, &cpu_info);
+    if (result == TDFU_SUCCESS) {
         dev->info.stage = cpu_info.stage;
     }
 
-    if (dev->info.stage == STAGE_BOOTROM) {
+    if (dev->info.stage == TDFU_STAGE_BOOTROM) {
         jni_progress(5, "write", "Device in bootrom, bootstrapping first...");
         jni_log("Device in bootrom stage, bootstrapping...\n");
 
-        const char *fw_subdir = processor_variant_to_string(variant);
-        if (variant == VARIANT_T31X || variant == VARIANT_T31ZX) fw_subdir = "t31x";
-        else if (variant == VARIANT_T31A) fw_subdir = "t31a";
-        else if (variant == VARIANT_A1) fw_subdir = "a1_n_ne_x";
+        const char *fw_subdir = tdfu_variant_to_string(variant);
+        if (variant == TDFU_VARIANT_T31X || variant == TDFU_VARIANT_T31ZX) fw_subdir = "t31x";
+        else if (variant == TDFU_VARIANT_T31A) fw_subdir = "t31a";
+        else if (variant == TDFU_VARIANT_A1) fw_subdir = "a1_n_ne_x";
 
         char spl_asset[256], uboot_asset[256];
         char spl_path[512], uboot_path[512];
@@ -801,9 +801,9 @@ Java_com_thingino_dfu_ClonerBridge_nativeWriteFirmware(
         unlink(spl_path);
         unlink(uboot_path);
 
-        if (result != THINGINO_SUCCESS) {
+        if (result != TDFU_SUCCESS) {
             snprintf(msg, sizeof(msg), "ERROR: Bootstrap failed: %s\n",
-                     thingino_error_to_string(result));
+                     tdfu_error_to_string(result));
             jni_log(msg);
             device_close_android(dev);
             goto write_err;
@@ -812,7 +812,7 @@ Java_com_thingino_dfu_ClonerBridge_nativeWriteFirmware(
         jni_log("Bootstrap complete, waiting for device...\n");
         jni_progress(25, "write", "Waiting for device...");
         usleep(2000000);
-        dev->info.stage = STAGE_FIRMWARE;
+        dev->info.stage = TDFU_STAGE_FIRMWARE;
     }
 
     /* Prepare flash descriptor and handshake */
@@ -823,9 +823,9 @@ Java_com_thingino_dfu_ClonerBridge_nativeWriteFirmware(
     if (profile->descriptor_mode == DESC_MARKER_THEN_SEND) {
         jni_log("Sending partition marker...\n");
         result = flash_partition_marker_send(dev);
-        if (result != THINGINO_SUCCESS) {
+        if (result != TDFU_SUCCESS) {
             snprintf(msg, sizeof(msg), "ERROR: Partition marker failed: %s\n",
-                     thingino_error_to_string(result));
+                     tdfu_error_to_string(result));
             jni_log(msg);
             device_close_android(dev);
             goto write_err;
@@ -845,7 +845,7 @@ Java_com_thingino_dfu_ClonerBridge_nativeWriteFirmware(
 
         uint32_t jedec_id = 0;
         const spi_nor_chip_t *flash_chip = NULL;
-        if (protocol_read_flash_id(dev, &jedec_id) == THINGINO_SUCCESS) {
+        if (protocol_read_flash_id(dev, &jedec_id) == TDFU_SUCCESS) {
             flash_chip = spi_nor_find_by_id(jedec_id);
             if (flash_chip) {
                 snprintf(msg, sizeof(msg), "Flash chip: %s (JEDEC 0x%06X)\n",
@@ -872,7 +872,7 @@ Java_com_thingino_dfu_ClonerBridge_nativeWriteFirmware(
             uint8_t desc[FLASH_DESCRIPTOR_SIZE_XB2];
             flash_descriptor_create_xb2(flash_chip, desc);
             result = flash_descriptor_send_sized(dev, desc, FLASH_DESCRIPTOR_SIZE_XB2);
-        } else if (dev->info.variant == VARIANT_T32) {
+        } else if (dev->info.variant == TDFU_VARIANT_T32) {
             uint8_t desc[FLASH_DESCRIPTOR_SIZE_T32];
             flash_descriptor_create_t32(flash_chip, desc);
             result = flash_descriptor_send_sized(dev, desc, FLASH_DESCRIPTOR_SIZE_T32);
@@ -882,9 +882,9 @@ Java_com_thingino_dfu_ClonerBridge_nativeWriteFirmware(
             result = flash_descriptor_send(dev, desc);
         }
 
-        if (result != THINGINO_SUCCESS) {
+        if (result != TDFU_SUCCESS) {
             snprintf(msg, sizeof(msg), "ERROR: Flash descriptor failed: %s\n",
-                     thingino_error_to_string(result));
+                     tdfu_error_to_string(result));
             jni_log(msg);
             device_close_android(dev);
             goto write_err;
@@ -895,9 +895,9 @@ Java_com_thingino_dfu_ClonerBridge_nativeWriteFirmware(
         /* VR_INIT handshake */
         jni_progress(45, "write", "Initializing flash...");
         result = firmware_handshake_init(dev);
-        if (result != THINGINO_SUCCESS) {
+        if (result != TDFU_SUCCESS) {
             snprintf(msg, sizeof(msg), "ERROR: Handshake failed: %s\n",
-                     thingino_error_to_string(result));
+                     tdfu_error_to_string(result));
             jni_log(msg);
             device_close_android(dev);
             goto write_err;
@@ -912,9 +912,9 @@ Java_com_thingino_dfu_ClonerBridge_nativeWriteFirmware(
     bool is_a1 = profile->use_a1_handshake;
     result = write_firmware_to_device(dev, input_cstr, NULL, false, is_a1, 0);
 
-    if (result != THINGINO_SUCCESS) {
+    if (result != TDFU_SUCCESS) {
         snprintf(msg, sizeof(msg), "ERROR: Write failed: %s\n",
-                 thingino_error_to_string(result));
+                 tdfu_error_to_string(result));
         jni_log(msg);
         device_close_android(dev);
         goto write_err;

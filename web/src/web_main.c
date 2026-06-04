@@ -11,7 +11,7 @@
 /* libcloner references this; default off for web builds */
 bool g_debug_enabled = false;
 
-const char *cloner_get_version(void) {
+const char *tdfu_get_version(void) {
     return VERSION;
 }
 

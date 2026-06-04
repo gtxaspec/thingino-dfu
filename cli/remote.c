@@ -126,9 +126,9 @@ int remote_connect(const char *host, int port, const char *token) {
     if (token) {
         uint8_t token_len = (uint8_t)strlen(token);
         uint8_t auth_hdr[6];
-        uint32_t magic = cloner_htonl(CLONER_PROTO_MAGIC);
+        uint32_t magic = tdfu_htonl(TDFU_PROTO_MAGIC);
         memcpy(auth_hdr, &magic, 4);
-        auth_hdr[4] = CLONER_PROTO_VERSION;
+        auth_hdr[4] = TDFU_PROTO_VERSION;
         auth_hdr[5] = token_len;
         if (net_send_all(remote_fd, auth_hdr, 6) < 0 || net_send_all(remote_fd, token, token_len) < 0) {
             fprintf(stderr, "Failed to send auth token\n");
@@ -137,10 +137,10 @@ int remote_connect(const char *host, int port, const char *token) {
             return -1;
         }
         /* Read auth response */
-        cloner_resp_header_t resp;
+        tdfu_resp_header_t resp;
         if (net_recv_all(remote_fd, &resp, sizeof(resp)) < 0 || resp.status != RESP_OK) {
             /* Read error payload if present */
-            uint32_t err_len = cloner_ntohl(resp.payload_len);
+            uint32_t err_len = tdfu_ntohl(resp.payload_len);
             if (err_len > 0 && err_len < 256) {
                 char err[256] = {0};
                 net_recv_all(remote_fd, err, err_len);
@@ -153,7 +153,7 @@ int remote_connect(const char *host, int port, const char *token) {
             return -1;
         }
         /* Drain auth OK payload */
-        uint32_t ok_len = cloner_ntohl(resp.payload_len);
+        uint32_t ok_len = tdfu_ntohl(resp.payload_len);
         if (ok_len > 0 && ok_len < 256) {
             char buf[256];
             net_recv_all(remote_fd, buf, ok_len);
@@ -171,11 +171,11 @@ void remote_disconnect(void) {
 }
 
 static int send_command(uint8_t cmd, const void *payload, uint32_t len) {
-    cloner_msg_header_t hdr = {
-        .magic = cloner_htonl(CLONER_PROTO_MAGIC),
-        .version = CLONER_PROTO_VERSION,
+    tdfu_msg_header_t hdr = {
+        .magic = tdfu_htonl(TDFU_PROTO_MAGIC),
+        .version = TDFU_PROTO_VERSION,
         .command = cmd,
-        .payload_len = cloner_htonl(len),
+        .payload_len = tdfu_htonl(len),
     };
     if (net_send_all(remote_fd, &hdr, sizeof(hdr)) < 0)
         return -1;
@@ -193,13 +193,13 @@ static int send_command(uint8_t cmd, const void *payload, uint32_t len) {
  */
 static int recv_response(uint8_t *status, uint8_t **payload, uint32_t *payload_len) {
     for (;;) {
-        cloner_resp_header_t hdr;
+        tdfu_resp_header_t hdr;
         if (net_recv_all(remote_fd, &hdr, sizeof(hdr)) < 0)
             return -1;
-        if (cloner_ntohl(hdr.magic) != CLONER_PROTO_MAGIC)
+        if (tdfu_ntohl(hdr.magic) != TDFU_PROTO_MAGIC)
             return -1;
 
-        uint32_t plen = cloner_ntohl(hdr.payload_len);
+        uint32_t plen = tdfu_ntohl(hdr.payload_len);
 
         if (hdr.status == RESP_PROGRESS || hdr.status == RESP_LOG) {
             /* Intermediate message — display and keep reading */
@@ -239,7 +239,7 @@ static int recv_response(uint8_t *status, uint8_t **payload, uint32_t *payload_l
         *status = hdr.status;
         *payload_len = plen;
 
-        if (*payload_len > 0 && *payload_len < CLONER_MAX_PAYLOAD) {
+        if (*payload_len > 0 && *payload_len < TDFU_MAX_PAYLOAD) {
             *payload = malloc(*payload_len + 1);
             if (!*payload)
                 return -1;
@@ -309,8 +309,8 @@ int remote_list_devices(void) {
         return -1;
     }
 
-    int count = payload_len / sizeof(cloner_device_entry_t);
-    cloner_device_entry_t *entries = (cloner_device_entry_t *)payload;
+    int count = payload_len / sizeof(tdfu_device_entry_t);
+    tdfu_device_entry_t *entries = (tdfu_device_entry_t *)payload;
 
     printf("Found %d device(s) (remote):\n", count);
     printf("Index | Bus | Addr | Vendor  | Product | Stage    | Variant\n");
@@ -319,7 +319,7 @@ int remote_list_devices(void) {
     for (int i = 0; i < count; i++) {
         const char *stage = entries[i].stage == 1 ? "firmware" : "bootrom";
         printf("  %3d | %3d | %4d | 0x%04X  | 0x%04X  | %-8s | %d\n", i, entries[i].bus, entries[i].address,
-               cloner_ntohs(entries[i].vendor), cloner_ntohs(entries[i].product), stage, entries[i].variant);
+               tdfu_ntohs(entries[i].vendor), tdfu_ntohs(entries[i].product), stage, entries[i].variant);
     }
 
     free(payload);
@@ -341,15 +341,15 @@ const char *remote_detect_variant(int device_index) {
         return NULL;
     }
 
-    int count = (int)(payload_len / sizeof(cloner_device_entry_t));
+    int count = (int)(payload_len / sizeof(tdfu_device_entry_t));
     if (device_index >= count) {
         fprintf(stderr, "Device index %d out of range (found %d devices)\n", device_index, count);
         free(payload);
         return NULL;
     }
 
-    cloner_device_entry_t *entries = (cloner_device_entry_t *)payload;
-    const char *name = processor_variant_to_string((processor_variant_t)entries[device_index].variant);
+    tdfu_device_entry_t *entries = (tdfu_device_entry_t *)payload;
+    const char *name = tdfu_variant_to_string((tdfu_variant_t)entries[device_index].variant);
     free(payload);
     return name;
 }
@@ -373,7 +373,7 @@ int remote_bootstrap(int device_index, const char *cpu_variant, const char *firm
     uint8_t *ddr = NULL, *spl = NULL, *uboot = NULL;
     size_t ddr_len = 0, spl_len = 0, uboot_len = 0;
 
-    processor_variant_t variant_enum = string_to_processor_variant(cpu_variant);
+    tdfu_variant_t variant_enum = tdfu_variant_from_string(cpu_variant);
     platform_config_t platform;
     if (ddr_get_platform_config_by_variant(variant_enum, &platform) != 0) {
         fprintf(stderr, "Unknown platform: %s\n", cpu_variant);
