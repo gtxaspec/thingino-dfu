@@ -20,6 +20,8 @@ import android.widget.Spinner
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.materialswitch.MaterialSwitch
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -38,6 +40,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         private const val PREF_HOST = "remote_host"
         private const val PREF_PORT = "remote_port"
         private const val PREF_USE_DFU = "use_dfu"
+        private const val PREF_DEBUG = "debug_logging"
     }
 
     private lateinit var usbHelper: UsbHelper
@@ -56,7 +59,6 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
     // Mode selection UI
     private lateinit var modeRadioGroup: RadioGroup
-    private lateinit var backendRadioGroup: RadioGroup
     private lateinit var remoteInputRow: LinearLayout
     private lateinit var hostInput: EditText
     private lateinit var portInput: EditText
@@ -122,7 +124,6 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
         // Mode selection UI
         modeRadioGroup = findViewById(R.id.modeRadioGroup)
-        backendRadioGroup = findViewById(R.id.backendRadioGroup)
         remoteInputRow = findViewById(R.id.remoteInputRow)
         hostInput = findViewById(R.id.hostInput)
         portInput = findViewById(R.id.portInput)
@@ -133,9 +134,14 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         val savedPort = prefs.getInt(PREF_PORT, 0)
         if (savedPort > 0) portInput.setText(savedPort.toString())
 
-        // Restore backend choice (DFU default)
+        // Restore backend + debug choices (DFU default, debug off). Both live in
+        // the Settings dialog now; apply the saved debug level to native.
         useDfu = prefs.getBoolean(PREF_USE_DFU, true)
-        backendRadioGroup.check(if (useDfu) R.id.radioDfu else R.id.radioCloner)
+        TdfuBridge.nativeSetDebug(prefs.getBoolean(PREF_DEBUG, false))
+
+        findViewById<android.widget.ImageButton>(R.id.settingsButton).setOnClickListener {
+            showSettingsDialog()
+        }
 
         logText.movementMethod = ScrollingMovementMethod()
 
@@ -159,14 +165,6 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                 updateStatus("No device connected")
                 scanForDevices()
             }
-        }
-
-        // Backend toggle (DFU default / legacy cloner)
-        backendRadioGroup.setOnCheckedChangeListener { _, checkedId ->
-            useDfu = checkedId == R.id.radioDfu
-            prefs.edit().putBoolean(PREF_USE_DFU, useDfu).apply()
-            remoteClient?.useCloner = !useDfu
-            appendLog("Backend: ${if (useDfu) "DFU" else "cloner (legacy)"}\n")
         }
 
         connectButton.setOnClickListener {
@@ -798,6 +796,38 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         writeButton.isEnabled = enabled
         readButton.alpha = if (enabled) 1.0f else 0.5f
         writeButton.alpha = if (enabled) 1.0f else 0.5f
+    }
+
+    /** Settings window: flashing backend (DFU/cloner) + debug logging toggle. */
+    private fun showSettingsDialog() {
+        val view = layoutInflater.inflate(R.layout.dialog_settings, null)
+        val backendGroup = view.findViewById<RadioGroup>(R.id.dlgBackendGroup)
+        val debugSwitch = view.findViewById<MaterialSwitch>(R.id.dlgDebugSwitch)
+
+        backendGroup.check(if (useDfu) R.id.dlgRadioDfu else R.id.dlgRadioCloner)
+        val debugWas = prefs.getBoolean(PREF_DEBUG, false)
+        debugSwitch.isChecked = debugWas
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.settings)
+            .setView(view)
+            .setNegativeButton(R.string.btn_cancel, null)
+            .setPositiveButton(R.string.btn_save) { _, _ ->
+                val newUseDfu = backendGroup.checkedRadioButtonId == R.id.dlgRadioDfu
+                if (newUseDfu != useDfu) {
+                    useDfu = newUseDfu
+                    prefs.edit().putBoolean(PREF_USE_DFU, useDfu).apply()
+                    remoteClient?.useCloner = !useDfu
+                    appendLog("Backend: ${if (useDfu) "DFU" else "cloner (legacy)"}\n")
+                }
+                val newDebug = debugSwitch.isChecked
+                if (newDebug != debugWas) {
+                    prefs.edit().putBoolean(PREF_DEBUG, newDebug).apply()
+                    TdfuBridge.nativeSetDebug(newDebug)
+                    appendLog("Debug logging ${if (newDebug) "enabled" else "disabled"}\n")
+                }
+            }
+            .show()
     }
 
     private fun updateStatus(text: String) {

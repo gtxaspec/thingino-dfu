@@ -13,4 +13,12 @@
     <string name="btn_connect">Connect</string>
     <string name="btn_disconnect">Disconnect</string>
     <string name="status_dfu_gadget">U-Boot DFU gadget ready</string>
+    <string name="settings">Settings</string>
+    <string name="settings_backend">Flashing backend</string>
+    <string name="settings_backend_dfu">DFU — U-Boot DFU mode (default)</string>
+    <string name="settings_backend_cloner">Cloner — legacy Ingenic USB-boot</string>
+    <string name="settings_debug">Debug logging</string>
+    <string name="settings_debug_desc">Verbose libtdfu diagnostics in the log</string>
+    <string name="btn_save">Save</string>
+    <string name="btn_cancel">Cancel</string>
 </resources>

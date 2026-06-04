@@ -3,6 +3,23 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// Derive versionName from the repo's latest git tag - the same source the web
+// build uses (CMake `git describe --tags`) - so the app and web flasher match.
+// Falls back to a default when no tags are present (e.g. shallow CI checkout).
+val computedVersionName: String = run {
+    try {
+        val p = ProcessBuilder("git", "describe", "--tags", "--abbrev=0")
+            .directory(rootProject.projectDir)
+            .redirectErrorStream(true)
+            .start()
+        val out = p.inputStream.bufferedReader().readText().trim()
+        p.waitFor()
+        out.removePrefix("v").ifEmpty { "0.0.0" }
+    } catch (e: Exception) {
+        "0.0.0"
+    }
+}
+
 android {
     namespace = "com.thingino.dfu"
     compileSdk = 34
@@ -12,7 +29,7 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = computedVersionName
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
