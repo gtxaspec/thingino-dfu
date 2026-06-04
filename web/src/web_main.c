@@ -1,14 +1,14 @@
 /**
  * Web WASM entry point.
  *
- * Provides the global debug flag required by libcloner and an
+ * Provides the global debug flag required by libtdfu and an
  * empty main() so Emscripten has an entry point.  The real work
  * is driven from JavaScript via the exported C API (core.h).
  */
 
 #include <stdbool.h>
 
-/* libcloner references this; default off for web builds */
+/* libtdfu references this; default off for web builds */
 bool g_debug_enabled = false;
 
 const char *tdfu_get_version(void) {

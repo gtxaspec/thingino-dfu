@@ -2,13 +2,13 @@
 
 add_executable(dfu-remote main.c)
 target_include_directories(dfu-remote PRIVATE
-    ${CMAKE_SOURCE_DIR}/libcloner/src
-    ${CMAKE_SOURCE_DIR}/libcloner/src/ddr
-    ${CMAKE_SOURCE_DIR}/libcloner/src/firmware
+    ${CMAKE_SOURCE_DIR}/libtdfu/src
+    ${CMAKE_SOURCE_DIR}/libtdfu/src/ddr
+    ${CMAKE_SOURCE_DIR}/libtdfu/src/firmware
 )
 if (WIN32)
-    target_link_libraries(dfu-remote cloner ws2_32)
+    target_link_libraries(dfu-remote tdfu ws2_32)
 else()
-    target_link_libraries(dfu-remote cloner z)
+    target_link_libraries(dfu-remote tdfu z)
 endif()
 install(TARGETS dfu-remote DESTINATION bin)

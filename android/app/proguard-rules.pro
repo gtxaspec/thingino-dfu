@@ -4,6 +4,6 @@
     native <methods>;
 }
 
-# Keep the ClonerBridge callback interface
--keep class com.thingino.dfu.ClonerBridge$NativeCallback { *; }
--keep class com.thingino.dfu.ClonerBridge { *; }
+# Keep the TdfuBridge callback interface
+-keep class com.thingino.dfu.TdfuBridge$NativeCallback { *; }
+-keep class com.thingino.dfu.TdfuBridge { *; }

@@ -11,7 +11,7 @@
 #include <string.h>
 #include "ddr/ddr_binary_builder.h"
 #include "ddr/ddr_config_database.h"
-#include "thingino.h"
+#include "tdfu/tdfu.h"
 
 bool g_debug_enabled = false;
 

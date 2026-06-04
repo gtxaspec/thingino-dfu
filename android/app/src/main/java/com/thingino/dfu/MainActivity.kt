@@ -30,11 +30,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, ClonerBridge.NativeCallback {
+class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.NativeCallback {
 
     companion object {
         private const val TAG = "ThinginoDfu"
-        private const val PREFS_NAME = "cloner_prefs"
+        private const val PREFS_NAME = "tdfu_prefs"
         private const val PREF_HOST = "remote_host"
         private const val PREF_PORT = "remote_port"
     }
@@ -166,7 +166,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, ClonerBridge
         usbHelper.setListener(this)
 
         // Set up native callback
-        ClonerBridge.nativeSetCallback(this)
+        TdfuBridge.nativeSetCallback(this)
 
         appendLog("Thingino DFU ready.\n")
         appendLog("Connect a device via USB OTG or remote daemon.\n")
@@ -214,7 +214,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, ClonerBridge
 
     override fun onDestroy() {
         super.onDestroy()
-        ClonerBridge.nativeSetCallback(null)
+        TdfuBridge.nativeSetCallback(null)
         usbHelper.closeDevice()
         remoteClient?.disconnect()
     }
@@ -373,7 +373,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, ClonerBridge
     }
 
     // ======================================================================
-    // ClonerBridge.NativeCallback (called from native or remote thread)
+    // TdfuBridge.NativeCallback (called from native or remote thread)
     // ======================================================================
 
     override fun onLog(message: String) {
@@ -395,7 +395,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, ClonerBridge
 
     private fun detectSoc(fd: Int) {
         lifecycleScope.launch(Dispatchers.IO) {
-            val soc = ClonerBridge.nativeDetectSoc(fd)
+            val soc = TdfuBridge.nativeDetectSoc(fd)
 
             withContext(Dispatchers.Main) {
                 if (soc.isNotEmpty()) {
@@ -468,7 +468,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, ClonerBridge
                 return@launch
             }
 
-            val result = ClonerBridge.nativeReadFirmware(
+            val result = TdfuBridge.nativeReadFirmware(
                 newFd, detectedSoc, outputFile.absolutePath, cacheDir, assetManager
             )
 
@@ -593,7 +593,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, ClonerBridge
                 return@launch
             }
 
-            val result = ClonerBridge.nativeWriteFirmware(
+            val result = TdfuBridge.nativeWriteFirmware(
                 newFd, detectedSoc, tempFile.absolutePath, cacheDir, assetManager
             )
 

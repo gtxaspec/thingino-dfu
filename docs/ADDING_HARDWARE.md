@@ -4,7 +4,7 @@ Guide for adding new flash chips, DDR chips, and platform profiles to thingino-d
 
 ## Adding a SPI NOR Flash Chip
 
-**File:** `libcloner/src/flash/spi_nor_db.c`
+**File:** `libtdfu/src/flash/spi_nor_db.c`
 
 Add an entry to the `spi_nor_chips[]` array:
 
@@ -47,7 +47,7 @@ Add an entry to the `spi_nor_chips[]` array:
 
 ## Adding a NAND Flash Chip
 
-**File:** `libcloner/src/flash/nand_db.c`
+**File:** `libtdfu/src/flash/nand_db.c`
 
 Add an entry to the `nand_chips[]` array:
 
@@ -81,7 +81,7 @@ Add an entry to the `nand_chips[]` array:
 
 ## Adding a DDR Chip
 
-**File:** `libcloner/src/ddr/ddr_config_database.c`
+**File:** `libtdfu/src/ddr/ddr_config_database.c`
 
 Add an entry to the `ddr_chips[]` array. All timing values are in **picoseconds** unless noted as clock cycles (tck).
 
@@ -151,7 +151,7 @@ Adding a new Ingenic SoC requires changes in several files:
 
 ### 1. Add variant enum
 
-**File:** `libcloner/include/cloner/thingino.h`
+**File:** `libtdfu/include/tdfu/tdfu.h`
 
 ```c
 typedef enum processor_variant {
@@ -162,10 +162,10 @@ typedef enum processor_variant {
 
 ### 2. Create platform profile
 
-**File:** `libcloner/src/platforms/new_soc.c`
+**File:** `libtdfu/src/platforms/new_soc.c`
 
 ```c
-#include "cloner/platform_profile.h"
+#include "tdfu/platform_profile.h"
 
 const platform_profile_t platform_new_soc = {
     .name = "NEW_SOC",
@@ -192,7 +192,7 @@ Key decisions based on SoC architecture:
 
 ### 3. Register the platform
 
-**File:** `libcloner/src/platforms/platform.c`
+**File:** `libtdfu/src/platforms/platform.c`
 
 ```c
 extern const platform_profile_t platform_new_soc;
@@ -208,7 +208,7 @@ const platform_profile_t *platform_get_profile(processor_variant_t variant) {
 
 ### 4. Add processor config
 
-**File:** `libcloner/src/ddr/ddr_config_database.c`
+**File:** `libtdfu/src/ddr/ddr_config_database.c`
 
 Add to `processor_configs[]`:
 
@@ -238,7 +238,7 @@ Add to `processor_configs[]`:
 
 ### 5. Add DDR mapping
 
-**File:** `libcloner/src/ddr/ddr_config_database.c`
+**File:** `libtdfu/src/ddr/ddr_config_database.c`
 
 In `platform_ddr_map[]`:
 
@@ -248,7 +248,7 @@ In `platform_ddr_map[]`:
 
 ### 6. Map variant name to DDR builder
 
-**File:** `libcloner/src/ddr/ddr_binary_builder.c`
+**File:** `libtdfu/src/ddr/ddr_binary_builder.c`
 
 In `ddr_generate_config()`:
 
@@ -260,7 +260,7 @@ case VARIANT_NEW_SOC:
 
 ### 7. Add variant string mapping
 
-**File:** `libcloner/src/utils.c`
+**File:** `libtdfu/src/utils.c`
 
 In `processor_variant_to_string()` and `string_to_processor_variant()`:
 
@@ -282,7 +282,7 @@ These are extracted from the Ingenic vendor cloner tool for the target SoC.
 
 ### 9. Add auto-detect support
 
-**File:** `libcloner/src/usb/protocol.c`
+**File:** `libtdfu/src/usb/protocol.c`
 
 In `protocol_detect_soc()`, add the CPU ID to the switch:
 
@@ -296,10 +296,10 @@ And add the chip name mapping for the log output.
 
 ### 10. Add to CMakeLists
 
-**File:** `libcloner/CMakeLists.txt`
+**File:** `libtdfu/CMakeLists.txt`
 
 ```cmake
-set(LIBCLONER_SOURCES
+set(LIBTDFU_SOURCES
     # ...existing...
     src/platforms/new_soc.c
 )

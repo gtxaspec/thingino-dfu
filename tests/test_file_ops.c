@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include "thingino.h"
+#include "tdfu/tdfu.h"
 
 bool g_debug_enabled = false;
 

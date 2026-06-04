@@ -38,7 +38,7 @@ cd web
 bash build.sh
 ```
 
-Output: `web/dist/cloner.js` + `web/dist/cloner.wasm`. Serve `web/` with any HTTP server and open in Chrome/Edge. Copy `firmware/` to `web/public/firmware/` for the bootstrap binaries.
+Output: `web/dist/tdfu.js` + `web/dist/tdfu.wasm`. Serve `web/` with any HTTP server and open in Chrome/Edge. Copy `firmware/` to `web/public/firmware/` for the bootstrap binaries.
 
 The web flasher compiles the entire C library to WebAssembly and replaces libusb with a WebUSB shim. Supports detect, bootstrap, read, and write directly from the browser — no install required. Requires HTTPS or localhost.
 
@@ -68,7 +68,7 @@ Output binaries:
 - ARM64: `build-aarch64/cli/thingino-dfu`
 - Windows: `build-win64/cli/thingino-dfu.exe` + `libusb-1.0.dll`
 - Android: `android/app/build/outputs/apk/release/app-release.apk`
-- Web: `web/dist/cloner.js` + `web/dist/cloner.wasm` (serve with any HTTP server)
+- Web: `web/dist/tdfu.js` + `web/dist/tdfu.wasm` (serve with any HTTP server)
 
 ## Usage
 

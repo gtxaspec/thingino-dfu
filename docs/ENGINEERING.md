@@ -11,7 +11,7 @@ Technical documentation for thingino-dfu internals. Covers the USB protocol, fla
 [thingino-dfu]  -- TCP --  [dfu-remote]  -- USB --  [device]   (remote mode)
 ```
 
-- **libcloner** -- Core library: DDR generation, USB protocol, flash read/write, chip databases
+- **libtdfu** -- Core library: DDR generation, USB protocol, flash read/write, chip databases
 - **cli** (`thingino-dfu`) -- CLI frontend, local or remote mode
 - **dfu-remote** -- Daemon on USB host, accepts network commands from CLI
 
@@ -27,8 +27,8 @@ Dependencies: `libusb-1.0`, `zlib` (for CRC32).
 ### Source Layout
 
 ```
-libcloner/
-  include/cloner/      # Public headers (thingino.h, platform_profile.h, etc.)
+libtdfu/
+  include/tdfu/      # Public headers (tdfu.h, platform_profile.h, etc.)
   src/
     bootstrap.c         # DDR + SPL + U-Boot loading
     operations.c        # High-level bootstrap/read/write orchestration

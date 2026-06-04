@@ -1,7 +1,7 @@
 /**
  * Thingino Web Flasher — Application Logic
  *
- * Loads the WASM module, drives the cloner C API from JS,
+ * Loads the WASM module, drives the tdfu C API from JS,
  * and manages the UI state machine.
  */
 
@@ -10,7 +10,7 @@
 /* ------------------------------------------------------------------ */
 
 var Module = null;
-var clonerReady = false;
+var tdfuReady = false;
 var currentState = 'idle';
 var firmwareData = null;
 var firmwareFileName = '';
@@ -215,7 +215,7 @@ async function initModule() {
     console.log('Loading WASM module...');
 
     try {
-        Module = await createClonerModule({
+        Module = await createTdfuModule({
             printErr: function(text) {
                 if (text.startsWith('[DEBUG]')) {
                     log(text, 'debug');
@@ -245,7 +245,7 @@ async function initModule() {
         // Create /tmp for the C code's temp file operations
         try { Module.FS.mkdir('/tmp'); } catch (e) { /* exists */ }
 
-        clonerReady = true;
+        tdfuReady = true;
 
         // Display version
         var verPtr = Module.ccall('tdfu_get_version', 'number', [], []);
@@ -265,7 +265,7 @@ async function initModule() {
 /* ------------------------------------------------------------------ */
 
 async function connectDevice() {
-    if (!clonerReady) {
+    if (!tdfuReady) {
         log('Module not ready', 'warn');
         return;
     }
@@ -335,7 +335,7 @@ async function connectDevice() {
 /* ------------------------------------------------------------------ */
 
 async function doBootstrap() {
-    if (!clonerReady || detectedVariant < 0) return;
+    if (!tdfuReady || detectedVariant < 0) return;
 
     setState('bootstrapping');
     showProgress(10, 'Loading firmware files...');
@@ -417,7 +417,7 @@ function firmwareSelected(input) {
 }
 
 async function doWrite() {
-    if (!clonerReady || !firmwareData) return;
+    if (!tdfuReady || !firmwareData) return;
 
     // Always bootstrap from JS if device is in bootrom — the internal
     // bootstrap in tdfu_op_write_firmware doesn't handle WebUSB re-enumeration
@@ -490,7 +490,7 @@ async function doWrite() {
 /* ------------------------------------------------------------------ */
 
 async function doRead() {
-    if (!clonerReady) return;
+    if (!tdfuReady) return;
 
     // Always bootstrap from JS if device is in bootrom
     var info = await discoverDevices();

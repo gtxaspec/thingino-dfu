@@ -3,7 +3,7 @@
  *
  * Started manually on the machine with physical USB access.
  * Listens on TCP port, accepts one client at a time, dispatches
- * commands to libcloner.
+ * commands to libtdfu.
  */
 
 #ifdef _WIN32
@@ -11,8 +11,8 @@
 #include <ws2tcpip.h>
 #endif
 
-#include "thingino.h"
-#include "cloner/protocol.h"
+#include "tdfu/tdfu.h"
+#include "tdfu/protocol.h"
 #include "platform.h"
 
 #include <stdio.h>
@@ -288,9 +288,9 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len, con
     /* Write firmware to temp file */
     char tmpfile[256];
 #ifdef _WIN32
-    snprintf(tmpfile, sizeof(tmpfile), "%s\\cloner-fw-tmp.bin", getenv("TEMP") ? getenv("TEMP") : ".");
+    snprintf(tmpfile, sizeof(tmpfile), "%s\\tdfu-fw-tmp.bin", getenv("TEMP") ? getenv("TEMP") : ".");
 #else
-    snprintf(tmpfile, sizeof(tmpfile), "/tmp/cloner-fw-XXXXXX");
+    snprintf(tmpfile, sizeof(tmpfile), "/tmp/tdfu-fw-XXXXXX");
     int tmpfd = mkstemp(tmpfile);
     if (tmpfd < 0)
         return send_error(client_fd, "failed to create temp file");
@@ -361,10 +361,10 @@ static int handle_read(int client_fd, const uint8_t *payload, uint32_t len) {
     /* Read into a temp file, then send contents back */
     char tmpfile[256];
 #ifdef _WIN32
-    snprintf(tmpfile, sizeof(tmpfile), "%s\\cloner-read-tmp.bin", getenv("TEMP") ? getenv("TEMP") : ".");
+    snprintf(tmpfile, sizeof(tmpfile), "%s\\tdfu-read-tmp.bin", getenv("TEMP") ? getenv("TEMP") : ".");
 #else
     {
-        snprintf(tmpfile, sizeof(tmpfile), "/tmp/cloner-read-XXXXXX");
+        snprintf(tmpfile, sizeof(tmpfile), "/tmp/tdfu-read-XXXXXX");
         int tmpfd = mkstemp(tmpfile);
         if (tmpfd < 0)
             return send_error(client_fd, "failed to create temp file");

@@ -1,6 +1,6 @@
-#include "thingino.h"
-#include "cloner/core.h"
-#include "cloner/protocol.h"
+#include "tdfu/tdfu.h"
+#include "tdfu/core.h"
+#include "tdfu/protocol.h"
 #include "remote.h"
 #include "ddr_config_database.h"
 #include <unistd.h>
@@ -273,7 +273,7 @@ tdfu_error_t list_devices(usb_manager_t *manager) {
 }
 
 /* bootstrap_device_by_index, read_firmware_from_device, write_firmware_from_file
- * moved to libcloner/src/operations.c as tdfu_op_bootstrap(),
+ * moved to libtdfu/src/operations.c as tdfu_op_bootstrap(),
  * tdfu_op_read_firmware(), tdfu_op_write_firmware(). */
 
 int main(int argc, char *argv[]) {

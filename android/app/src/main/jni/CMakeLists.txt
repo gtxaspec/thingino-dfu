@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(tdfu_jni C)
 
-# Path to libcloner sources (relative to this CMakeLists.txt)
+# Path to libtdfu sources (relative to this CMakeLists.txt)
 # CMAKE_CURRENT_SOURCE_DIR = android/app/src/main/jni/
-# libcloner is at the repo root: thingino-dfu/libcloner/
+# libtdfu is at the repo root: thingino-dfu/libtdfu/
 # jni/ -> main/ -> src/ -> app/ -> android/ -> thingino-dfu/
-set(LIBCLONER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../libcloner")
+set(LIBTDFU_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../libtdfu")
 
 # ---------------------------------------------------------------------------
 # libusb -- fetch source for Android cross-compile
@@ -23,7 +23,7 @@ FetchContent_Populate(libusb)
 set(LIBUSB_SRC_DIR "${libusb_SOURCE_DIR}/libusb")
 
 # Create a directory layout so #include <libusb-1.0/libusb.h> works.
-# libcloner uses this include path; libusb source tree has libusb/libusb.h.
+# libtdfu uses this include path; libusb source tree has libusb/libusb.h.
 set(LIBUSB_COMPAT_DIR "${CMAKE_CURRENT_BINARY_DIR}/libusb-compat")
 file(MAKE_DIRECTORY "${LIBUSB_COMPAT_DIR}/libusb-1.0")
 # Copy the header (done at configure time)
@@ -98,74 +98,74 @@ target_compile_definitions(usb1.0 PRIVATE
 target_link_libraries(usb1.0 log)
 
 # ---------------------------------------------------------------------------
-# libcloner sources (compiled directly into the JNI shared library)
+# libtdfu sources (compiled directly into the JNI shared library)
 # ---------------------------------------------------------------------------
-set(LIBCLONER_SOURCES
-    "${LIBCLONER_DIR}/src/core.c"
-    "${LIBCLONER_DIR}/src/usb/manager.c"
-    "${LIBCLONER_DIR}/src/usb/device.c"
-    "${LIBCLONER_DIR}/src/usb/protocol.c"
-    "${LIBCLONER_DIR}/src/firmware/loader.c"
-    "${LIBCLONER_DIR}/src/firmware/reader.c"
-    "${LIBCLONER_DIR}/src/firmware/writer.c"
-    "${LIBCLONER_DIR}/src/firmware/handshake.c"
-    "${LIBCLONER_DIR}/src/firmware/flash_descriptor.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_utils.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_controller.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_param_builder.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_phy.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_phy_ddr2.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_ctrl_txx.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_generator.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_binary_builder.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_rdd_ddr2.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_rdd_ddr3.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_fidb_xb1.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_fidb_xb2.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_rdd_xb2.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_config_database.c"
-    "${LIBCLONER_DIR}/src/ddr/ddr_reg_compute.c"
-    "${LIBCLONER_DIR}/src/flash/spi_nor_db.c"
-    "${LIBCLONER_DIR}/src/flash/nand_db.c"
-    "${LIBCLONER_DIR}/src/platforms/platform.c"
-    "${LIBCLONER_DIR}/src/platforms/t10.c"
-    "${LIBCLONER_DIR}/src/platforms/t20.c"
-    "${LIBCLONER_DIR}/src/platforms/t21.c"
-    "${LIBCLONER_DIR}/src/platforms/t30.c"
-    "${LIBCLONER_DIR}/src/platforms/t31.c"
-    "${LIBCLONER_DIR}/src/platforms/t31a.c"
-    "${LIBCLONER_DIR}/src/platforms/t40.c"
-    "${LIBCLONER_DIR}/src/platforms/t41.c"
-    "${LIBCLONER_DIR}/src/platforms/a1.c"
-    "${LIBCLONER_DIR}/src/platform.c"
-    "${LIBCLONER_DIR}/src/bootstrap.c"
-    "${LIBCLONER_DIR}/src/utils.c"
-    "${LIBCLONER_DIR}/src/operations.c"
+set(LIBTDFU_SOURCES
+    "${LIBTDFU_DIR}/src/core.c"
+    "${LIBTDFU_DIR}/src/usb/manager.c"
+    "${LIBTDFU_DIR}/src/usb/device.c"
+    "${LIBTDFU_DIR}/src/usb/protocol.c"
+    "${LIBTDFU_DIR}/src/firmware/loader.c"
+    "${LIBTDFU_DIR}/src/firmware/reader.c"
+    "${LIBTDFU_DIR}/src/firmware/writer.c"
+    "${LIBTDFU_DIR}/src/firmware/handshake.c"
+    "${LIBTDFU_DIR}/src/firmware/flash_descriptor.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_utils.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_controller.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_param_builder.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_phy.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_phy_ddr2.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_ctrl_txx.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_generator.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_binary_builder.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_rdd_ddr2.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_rdd_ddr3.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_fidb_xb1.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_fidb_xb2.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_rdd_xb2.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_config_database.c"
+    "${LIBTDFU_DIR}/src/ddr/ddr_reg_compute.c"
+    "${LIBTDFU_DIR}/src/flash/spi_nor_db.c"
+    "${LIBTDFU_DIR}/src/flash/nand_db.c"
+    "${LIBTDFU_DIR}/src/platforms/platform.c"
+    "${LIBTDFU_DIR}/src/platforms/t10.c"
+    "${LIBTDFU_DIR}/src/platforms/t20.c"
+    "${LIBTDFU_DIR}/src/platforms/t21.c"
+    "${LIBTDFU_DIR}/src/platforms/t30.c"
+    "${LIBTDFU_DIR}/src/platforms/t31.c"
+    "${LIBTDFU_DIR}/src/platforms/t31a.c"
+    "${LIBTDFU_DIR}/src/platforms/t40.c"
+    "${LIBTDFU_DIR}/src/platforms/t41.c"
+    "${LIBTDFU_DIR}/src/platforms/a1.c"
+    "${LIBTDFU_DIR}/src/platform.c"
+    "${LIBTDFU_DIR}/src/bootstrap.c"
+    "${LIBTDFU_DIR}/src/utils.c"
+    "${LIBTDFU_DIR}/src/operations.c"
 )
 
 # ---------------------------------------------------------------------------
 # JNI shared library: tdfu_jni
-# Contains the JNI bridge code + all libcloner sources compiled in.
+# Contains the JNI bridge code + all libtdfu sources compiled in.
 # Statically links libusb.
 # ---------------------------------------------------------------------------
 add_library(tdfu_jni SHARED
     tdfu_jni.c
-    ${LIBCLONER_SOURCES}
+    ${LIBTDFU_SOURCES}
 )
 
 # Include paths:
 # - LIBUSB_COMPAT_DIR provides <libusb-1.0/libusb.h>
 # - LIBUSB_SRC_DIR provides "libusbi.h" (internal, needed by libusb itself)
-# - LIBCLONER_DIR/include provides <cloner/...> and <thingino.h>
-# - LIBCLONER_DIR/src/* provide internal headers (ddr, firmware, flash, platform)
+# - LIBTDFU_DIR/include provides <tdfu/...> and <tdfu.h>
+# - LIBTDFU_DIR/src/* provide internal headers (ddr, firmware, flash, platform)
 target_include_directories(tdfu_jni PRIVATE
     "${LIBUSB_COMPAT_DIR}"
     "${LIBUSB_SRC_DIR}"
-    "${LIBCLONER_DIR}/include"
-    "${LIBCLONER_DIR}/src"
-    "${LIBCLONER_DIR}/src/ddr"
-    "${LIBCLONER_DIR}/src/firmware"
-    "${LIBCLONER_DIR}/src/flash"
+    "${LIBTDFU_DIR}/include"
+    "${LIBTDFU_DIR}/src"
+    "${LIBTDFU_DIR}/src/ddr"
+    "${LIBTDFU_DIR}/src/firmware"
+    "${LIBTDFU_DIR}/src/flash"
     "${CMAKE_CURRENT_BINARY_DIR}"
 )
 

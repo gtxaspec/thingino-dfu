@@ -3,8 +3,8 @@
  */
 
 #include "ddr_binary_builder.h"
-#include "cloner/thingino.h"
-#include "cloner/constants.h"
+#include "tdfu/tdfu.h"
+#include "tdfu/constants.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

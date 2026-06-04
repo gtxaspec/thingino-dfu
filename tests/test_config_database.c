@@ -4,7 +4,7 @@
 
 #include "ddr_config_database.h"
 #include "ddr_binary_builder.h"
-#include "cloner/constants.h"
+#include "tdfu/constants.h"
 #include <stdio.h>
 #include <stdlib.h>
 

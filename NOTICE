@@ -6,7 +6,7 @@ This file documents the origins of components in this project.
 1. Original Code
 ================================================================================
 
-All source code in this repository (libcloner/, cli/, dfu-remote/, android/,
+All source code in this repository (libtdfu/, cli/, dfu-remote/, android/,
 tests/, scripts/) was written independently by the thingino project contributors.
 No source code was copied from Ingenic's proprietary cloner tool or any other
 proprietary software.

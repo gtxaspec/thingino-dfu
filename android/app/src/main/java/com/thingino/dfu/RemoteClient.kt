@@ -12,7 +12,7 @@ import java.util.zip.CRC32
  * TCP client for the dfu-remote daemon binary protocol.
  * Pure Kotlin — no JNI or USB dependency.
  */
-class RemoteClient(private val callback: ClonerBridge.NativeCallback?) {
+class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
 
     companion object {
         const val MAGIC = 0x434C4E52 // "CLNR"

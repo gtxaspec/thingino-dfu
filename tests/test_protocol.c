@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include "cloner/protocol.h"
+#include "tdfu/protocol.h"
 
 static int passed = 0;
 static int failed = 0;

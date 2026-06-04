@@ -131,7 +131,7 @@ endif()
 enable_testing()
 
 # Build targets
-add_subdirectory(libcloner)
+add_subdirectory(libtdfu)
 add_subdirectory(cli)
 add_subdirectory(dfu-remote)
 add_subdirectory(tests)
@@ -139,18 +139,18 @@ add_subdirectory(tests)
 # Install targets
 # Binaries and firmware install to the same directory so that the binary
 # can find firmware/ relative to its own location via /proc/self/exe.
-# Default: /usr/local/lib/thingino-dfu/  (override with -DCLONER_INSTALL_DIR=)
-set(CLONER_INSTALL_DIR "lib/thingino-dfu" CACHE STRING "Install directory for cloner binaries and firmware")
-install(TARGETS thingino-dfu dfu-remote RUNTIME DESTINATION ${CLONER_INSTALL_DIR})
-install(DIRECTORY firmware/ DESTINATION ${CLONER_INSTALL_DIR}/firmware)
+# Default: /usr/local/lib/thingino-dfu/  (override with -DTDFU_INSTALL_DIR=)
+set(TDFU_INSTALL_DIR "lib/thingino-dfu" CACHE STRING "Install directory for thingino-dfu binaries and firmware")
+install(TARGETS thingino-dfu dfu-remote RUNTIME DESTINATION ${TDFU_INSTALL_DIR})
+install(DIRECTORY firmware/ DESTINATION ${TDFU_INSTALL_DIR}/firmware)
 
 # Symlinks in bin/ for convenience
 install(CODE "
     file(MAKE_DIRECTORY \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin)
     execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
-        ../${CLONER_INSTALL_DIR}/thingino-dfu
+        ../${TDFU_INSTALL_DIR}/thingino-dfu
         \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/thingino-dfu)
     execute_process(COMMAND \${CMAKE_COMMAND} -E create_symlink
-        ../${CLONER_INSTALL_DIR}/dfu-remote
+        ../${TDFU_INSTALL_DIR}/dfu-remote
         \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/dfu-remote)
 ")

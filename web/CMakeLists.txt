@@ -26,63 +26,63 @@ add_definitions(-DVERSION="${WEB_VERSION}" -DGIT_HASH="wasm")
 # Use our stub libusb header (functions implemented by JS shim)
 set(LIBUSB_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/libusb-stub")
 
-# Pull in all libcloner sources
-set(LIBCLONER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../libcloner")
+# Pull in all libtdfu sources
+set(LIBTDFU_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../libtdfu")
 
-set(LIBCLONER_SOURCES
-    ${LIBCLONER_DIR}/src/core.c
-    ${LIBCLONER_DIR}/src/usb/manager.c
-    ${LIBCLONER_DIR}/src/usb/device.c
-    ${LIBCLONER_DIR}/src/usb/protocol.c
-    ${LIBCLONER_DIR}/src/firmware/loader.c
-    ${LIBCLONER_DIR}/src/firmware/reader.c
-    ${LIBCLONER_DIR}/src/firmware/writer.c
-    ${LIBCLONER_DIR}/src/firmware/handshake.c
-    ${LIBCLONER_DIR}/src/firmware/flash_descriptor.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_utils.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_controller.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_param_builder.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_phy.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_phy_ddr2.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_ctrl_txx.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_generator.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_binary_builder.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_rdd_ddr2.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_rdd_ddr3.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_fidb_xb1.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_fidb_xb2.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_rdd_xb2.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_config_database.c
-    ${LIBCLONER_DIR}/src/ddr/ddr_reg_compute.c
-    ${LIBCLONER_DIR}/src/flash/spi_nor_db.c
-    ${LIBCLONER_DIR}/src/flash/nand_db.c
-    ${LIBCLONER_DIR}/src/platforms/platform.c
-    ${LIBCLONER_DIR}/src/platforms/t10.c
-    ${LIBCLONER_DIR}/src/platforms/t20.c
-    ${LIBCLONER_DIR}/src/platforms/t21.c
-    ${LIBCLONER_DIR}/src/platforms/t30.c
-    ${LIBCLONER_DIR}/src/platforms/t31.c
-    ${LIBCLONER_DIR}/src/platforms/t31a.c
-    ${LIBCLONER_DIR}/src/platforms/t40.c
-    ${LIBCLONER_DIR}/src/platforms/t41.c
-    ${LIBCLONER_DIR}/src/platforms/a1.c
-    ${LIBCLONER_DIR}/src/platform.c
-    ${LIBCLONER_DIR}/src/bootstrap.c
-    ${LIBCLONER_DIR}/src/utils.c
-    ${LIBCLONER_DIR}/src/operations.c
+set(LIBTDFU_SOURCES
+    ${LIBTDFU_DIR}/src/core.c
+    ${LIBTDFU_DIR}/src/usb/manager.c
+    ${LIBTDFU_DIR}/src/usb/device.c
+    ${LIBTDFU_DIR}/src/usb/protocol.c
+    ${LIBTDFU_DIR}/src/firmware/loader.c
+    ${LIBTDFU_DIR}/src/firmware/reader.c
+    ${LIBTDFU_DIR}/src/firmware/writer.c
+    ${LIBTDFU_DIR}/src/firmware/handshake.c
+    ${LIBTDFU_DIR}/src/firmware/flash_descriptor.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_utils.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_controller.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_param_builder.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_phy.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_phy_ddr2.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_ctrl_txx.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_generator.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_binary_builder.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_rdd_ddr2.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_rdd_ddr3.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_fidb_xb1.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_fidb_xb2.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_rdd_xb2.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_config_database.c
+    ${LIBTDFU_DIR}/src/ddr/ddr_reg_compute.c
+    ${LIBTDFU_DIR}/src/flash/spi_nor_db.c
+    ${LIBTDFU_DIR}/src/flash/nand_db.c
+    ${LIBTDFU_DIR}/src/platforms/platform.c
+    ${LIBTDFU_DIR}/src/platforms/t10.c
+    ${LIBTDFU_DIR}/src/platforms/t20.c
+    ${LIBTDFU_DIR}/src/platforms/t21.c
+    ${LIBTDFU_DIR}/src/platforms/t30.c
+    ${LIBTDFU_DIR}/src/platforms/t31.c
+    ${LIBTDFU_DIR}/src/platforms/t31a.c
+    ${LIBTDFU_DIR}/src/platforms/t40.c
+    ${LIBTDFU_DIR}/src/platforms/t41.c
+    ${LIBTDFU_DIR}/src/platforms/a1.c
+    ${LIBTDFU_DIR}/src/platform.c
+    ${LIBTDFU_DIR}/src/bootstrap.c
+    ${LIBTDFU_DIR}/src/utils.c
+    ${LIBTDFU_DIR}/src/operations.c
     # Web glue: provides g_debug_enabled and main()
     ${CMAKE_CURRENT_SOURCE_DIR}/src/web_main.c
 )
 
-add_executable(cloner_web ${LIBCLONER_SOURCES})
+add_executable(tdfu_web ${LIBTDFU_SOURCES})
 
-target_include_directories(cloner_web PRIVATE
+target_include_directories(tdfu_web PRIVATE
     ${LIBUSB_INCLUDE_DIRS}
-    ${LIBCLONER_DIR}/include
-    ${LIBCLONER_DIR}/src
-    ${LIBCLONER_DIR}/src/ddr
-    ${LIBCLONER_DIR}/src/firmware
-    ${LIBCLONER_DIR}/src/flash
+    ${LIBTDFU_DIR}/include
+    ${LIBTDFU_DIR}/src
+    ${LIBTDFU_DIR}/src/ddr
+    ${LIBTDFU_DIR}/src/firmware
+    ${LIBTDFU_DIR}/src/flash
 )
 
 # Asyncify: write imports list to a JSON file to avoid shell quoting issues
@@ -112,16 +112,16 @@ set(EXPORTED_FUNCTIONS
 )
 list(JOIN EXPORTED_FUNCTIONS "," EXPORTED_FUNCS_STR)
 
-target_compile_options(cloner_web PRIVATE -Wall -Wextra -Wno-unused-parameter)
+target_compile_options(tdfu_web PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
-target_link_options(cloner_web PRIVATE
+target_link_options(tdfu_web PRIVATE
     "SHELL:-s ASYNCIFY=1"
     "SHELL:-s ASYNCIFY_IMPORTS=@${CMAKE_CURRENT_BINARY_DIR}/asyncify_imports.json"
     "SHELL:-s EXPORTED_FUNCTIONS=[${EXPORTED_FUNCS_STR}]"
     "SHELL:-s EXPORTED_RUNTIME_METHODS=[\"ccall\",\"cwrap\",\"UTF8ToString\",\"stringToUTF8\",\"HEAPU8\",\"HEAPU32\",\"FS\"]"
     "SHELL:-s ALLOW_MEMORY_GROWTH=1"
     "SHELL:-s MODULARIZE=1"
-    "SHELL:-s EXPORT_NAME=createClonerModule"
+    "SHELL:-s EXPORT_NAME=createTdfuModule"
     "SHELL:-s ASYNCIFY_STACK_SIZE=131072"
     "SHELL:-s ASSERTIONS=1"
     "SHELL:-s INITIAL_MEMORY=16777216"
@@ -129,8 +129,8 @@ target_link_options(cloner_web PRIVATE
 )
 
 # Output to web/public/wasm/ so Vite treats it as a static asset
-set_target_properties(cloner_web PROPERTIES
+set_target_properties(tdfu_web PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/public/wasm"
-    OUTPUT_NAME "cloner"
+    OUTPUT_NAME "tdfu"
     SUFFIX ".js"
 )

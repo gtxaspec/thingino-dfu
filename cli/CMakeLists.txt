@@ -2,13 +2,13 @@
 
 add_executable(thingino-dfu main.c remote.c)
 target_include_directories(thingino-dfu PRIVATE
-    ${CMAKE_SOURCE_DIR}/libcloner/src
-    ${CMAKE_SOURCE_DIR}/libcloner/src/ddr
-    ${CMAKE_SOURCE_DIR}/libcloner/src/firmware
-    ${CMAKE_SOURCE_DIR}/libcloner/src/flash
+    ${CMAKE_SOURCE_DIR}/libtdfu/src
+    ${CMAKE_SOURCE_DIR}/libtdfu/src/ddr
+    ${CMAKE_SOURCE_DIR}/libtdfu/src/firmware
+    ${CMAKE_SOURCE_DIR}/libtdfu/src/flash
 )
 if (WIN32)
-    target_link_libraries(thingino-dfu cloner ws2_32)
+    target_link_libraries(thingino-dfu tdfu ws2_32)
     # Copy libusb-1.0.dll next to the .exe so it can find it at runtime
     if (_VENDORED_LIBUSB_ROOT)
         file(GLOB _libusb_dlls "${_VENDORED_LIBUSB_ROOT}/bin/*.dll")
@@ -18,6 +18,6 @@ if (WIN32)
         endforeach()
     endif()
 else()
-    target_link_libraries(thingino-dfu cloner z)
+    target_link_libraries(thingino-dfu tdfu z)
 endif()
 install(TARGETS thingino-dfu DESTINATION bin)

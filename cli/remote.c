@@ -11,8 +11,8 @@
 #include <ws2tcpip.h>
 #endif
 
-#include "cloner/protocol.h"
-#include "thingino.h"
+#include "tdfu/protocol.h"
+#include "tdfu/tdfu.h"
 #include "ddr_binary_builder.h"
 #include "ddr_config_database.h"
 
