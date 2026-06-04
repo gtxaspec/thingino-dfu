@@ -106,8 +106,11 @@ static tdfu_error_t dfu_make_idle(usb_device_t *dev, uint16_t iface) {
     dfu_status_t st;
     for (int retry = 0; retry < 3; retry++) {
         tdfu_error_t gr = dfu_get_status(dev, iface, &st);
-        if (gr != TDFU_SUCCESS)
+        if (gr != TDFU_SUCCESS) {
+            LOG_DEBUG("make_idle: GET_STATUS failed (%s)\n", tdfu_error_to_string(gr));
             return gr;
+        }
+        LOG_DEBUG("make_idle: try %d -> state=%u status=%u\n", retry, st.bState, st.bStatus);
         if (st.bState == DFU_STATE_dfuIDLE)
             return TDFU_SUCCESS;
         if (st.bState == DFU_STATE_dfuERROR)
@@ -115,6 +118,7 @@ static tdfu_error_t dfu_make_idle(usb_device_t *dev, uint16_t iface) {
         else
             dfu_abort(dev, iface);
     }
+    LOG_DEBUG("make_idle: not idle after 3 tries (last state=%u) -> PROTOCOL\n", st.bState);
     return TDFU_ERROR_PROTOCOL;
 }
 
@@ -556,6 +560,8 @@ tdfu_error_t tdfu_dfu_read_device(usb_device_t *dev, int alt, const char *path, 
     }
 
     LOG_INFO("DFU upload: alt %d -> %s\n", alt, path);
+    LOG_DEBUG("DFU upload: transfer_size=%u bcdDFU=0x%04x %d alt(s) iface=%d\n", info.transfer_size, info.bcd_dfu,
+              info.alt_count, info.interface);
 
     uint8_t *buf = (uint8_t *)malloc(info.transfer_size);
     if (!buf) {
@@ -579,8 +585,11 @@ tdfu_error_t tdfu_dfu_read_device(usb_device_t *dev, int alt, const char *path, 
         for (;;) {
             int got = 0;
             r = dfu_upload_block(dev, info.interface, block, buf, info.transfer_size, &got);
-            if (r != TDFU_SUCCESS)
+            if (r != TDFU_SUCCESS) {
+                LOG_DEBUG("upload: block %u transfer failed (%s) after %u bytes\n", block,
+                          tdfu_error_to_string(r), total);
                 break;
+            }
             if (got > 0) {
                 if (fwrite(buf, 1, got, f) != (size_t)got) {
                     r = TDFU_ERROR_FILE_IO;
@@ -590,8 +599,11 @@ tdfu_error_t tdfu_dfu_read_device(usb_device_t *dev, int alt, const char *path, 
                 LOG_INFO("\r  %u bytes", total);
             }
             block++;
-            if (got < (int)info.transfer_size)
+            if (got < (int)info.transfer_size) {
+                LOG_DEBUG("upload: short block %u got=%d (transfer_size=%u) -> end of upload, total=%u\n",
+                          block - 1, got, info.transfer_size, total);
                 break; /* short block = end of upload */
+            }
             if (size && total >= size)
                 break;
         }
