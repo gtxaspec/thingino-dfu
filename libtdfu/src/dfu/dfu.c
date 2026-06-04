@@ -459,38 +459,38 @@ int tdfu_dfu_find_alt(const tdfu_dfu_info_t *info, const char *name_or_num) {
     return -1;
 }
 
-static tdfu_error_t dfu_download_impl(usb_manager_t *manager, int device_index, int alt, const char *path) {
-    usb_device_t *dev = NULL;
+/* ====================================================================== */
+/* Device-level DFU read/write: operate on an already-open usb_device_t.   */
+/* Used by the manager-based wrappers (after dfu_open_device) AND by the    */
+/* Android JNI (which wraps an OS-provided fd - no manager enumeration).    */
+/* alt < 0 selects the single/first alt setting. The caller owns dev.       */
+/* ====================================================================== */
+
+tdfu_error_t tdfu_dfu_write_device(usb_device_t *dev, int alt, const char *path) {
     tdfu_dfu_info_t info;
     uint8_t *data = NULL;
     size_t len = 0;
 
-    tdfu_error_t r = dfu_open_device(manager, device_index, &dev);
+    tdfu_error_t r = dfu_read_info(dev, &info);
     if (r != TDFU_SUCCESS)
         return r;
-    r = dfu_read_info(dev, &info);
-    if (r != TDFU_SUCCESS) {
-        dfu_close_device(dev, 0);
-        return r;
-    }
+    if (alt < 0)
+        alt = info.alt_count > 0 ? info.alts[0].alt : 0;
     r = dfu_claim_alt(dev, info.interface, alt);
-    if (r != TDFU_SUCCESS) {
-        dfu_close_device(dev, info.interface);
+    if (r != TDFU_SUCCESS)
         return r;
-    }
 
     r = load_file(path, &data, &len);
     if (r != TDFU_SUCCESS) {
         LOG_ERROR("Failed to read %s\n", path);
-        dfu_close_device(dev, info.interface);
         return r;
     }
 
     LOG_INFO("DFU download: %s -> alt %d (%zu bytes, %u-byte blocks)\n", path, alt, len, info.transfer_size);
 
-    /* See the upload path: a reload mid-transfer can leave U-Boot expecting a
-     * stale block sequence. The first block-0 write trips its cleanup + STALL,
-     * so on a block-0 failure we clear the error and retry once. */
+    /* A reload mid-transfer can leave U-Boot expecting a stale block sequence.
+     * The first block-0 write trips its cleanup + STALL, so on a block-0 failure
+     * we clear the error and retry once. */
     uint16_t block = 0;
     size_t offset = 0;
     dfu_status_t st;
@@ -534,33 +534,24 @@ static tdfu_error_t dfu_download_impl(usb_manager_t *manager, int device_index, 
     }
 
     free(data);
-    dfu_close_device(dev, info.interface);
     return r;
 }
 
-static tdfu_error_t dfu_upload_impl(usb_manager_t *manager, int device_index, int alt, const char *path,
-                                    uint32_t size) {
-    usb_device_t *dev = NULL;
+tdfu_error_t tdfu_dfu_read_device(usb_device_t *dev, int alt, const char *path, uint32_t size) {
     tdfu_dfu_info_t info;
 
-    tdfu_error_t r = dfu_open_device(manager, device_index, &dev);
+    tdfu_error_t r = dfu_read_info(dev, &info);
     if (r != TDFU_SUCCESS)
         return r;
-    r = dfu_read_info(dev, &info);
-    if (r != TDFU_SUCCESS) {
-        dfu_close_device(dev, 0);
-        return r;
-    }
+    if (alt < 0)
+        alt = info.alt_count > 0 ? info.alts[0].alt : 0;
     r = dfu_claim_alt(dev, info.interface, alt);
-    if (r != TDFU_SUCCESS) {
-        dfu_close_device(dev, info.interface);
+    if (r != TDFU_SUCCESS)
         return r;
-    }
 
     FILE *f = fopen(path, "wb");
     if (!f) {
         LOG_ERROR("Failed to create %s\n", path);
-        dfu_close_device(dev, info.interface);
         return TDFU_ERROR_FILE_IO;
     }
 
@@ -569,16 +560,11 @@ static tdfu_error_t dfu_upload_impl(usb_manager_t *manager, int device_index, in
     uint8_t *buf = (uint8_t *)malloc(info.transfer_size);
     if (!buf) {
         fclose(f);
-        dfu_close_device(dev, info.interface);
         return TDFU_ERROR_MEMORY;
     }
 
-    /* A page reload / unplug mid-transfer leaves U-Boot's DFU expecting the next
-     * block of the OLD sequence. The first block-0 request then trips its
-     * "Wrong sequence number" path, which resets the transaction (i_blk_seq_num,
-     * inited) and STALLs into dfuERROR. So on a block-0 failure we clear the
-     * error (CLRSTATUS via make_idle) and retry once - the retry starts clean.
-     * A healthy device completes on the first attempt and never retries. */
+    /* See tdfu_dfu_write_device: a block-0 failure means a stale transaction -
+     * the failed request resets it, so CLRSTATUS (make_idle) + retry recovers. */
     uint16_t block = 0;
     uint32_t total = 0;
     for (int attempt = 0; attempt < 2; attempt++) {
@@ -619,7 +605,27 @@ static tdfu_error_t dfu_upload_impl(usb_manager_t *manager, int device_index, in
 
     free(buf);
     fclose(f);
-    dfu_close_device(dev, info.interface);
+    return r;
+}
+
+static tdfu_error_t dfu_download_impl(usb_manager_t *manager, int device_index, int alt, const char *path) {
+    usb_device_t *dev = NULL;
+    tdfu_error_t r = dfu_open_device(manager, device_index, &dev);
+    if (r != TDFU_SUCCESS)
+        return r;
+    r = tdfu_dfu_write_device(dev, alt, path);
+    dfu_close_device(dev, 0);
+    return r;
+}
+
+static tdfu_error_t dfu_upload_impl(usb_manager_t *manager, int device_index, int alt, const char *path,
+                                    uint32_t size) {
+    usb_device_t *dev = NULL;
+    tdfu_error_t r = dfu_open_device(manager, device_index, &dev);
+    if (r != TDFU_SUCCESS)
+        return r;
+    r = tdfu_dfu_read_device(dev, alt, path, size);
+    dfu_close_device(dev, 0);
     return r;
 }
 
@@ -689,6 +695,33 @@ static const char *dfu_variant_dir(tdfu_variant_t v) {
     }
 }
 
+/* Device-level DFU bootstrap: USB-boot the given SPL + U-Boot on an already-open
+ * bootrom device (mirrors t31-usbboot.py). The device then re-enumerates as a
+ * DFU gadget. The caller owns dev. Used by tdfu_dfu_bootstrap and the Android
+ * JNI (which provides its own fd-wrapped device). */
+tdfu_error_t tdfu_dfu_bootstrap_device(usb_device_t *dev, const uint8_t *spl, size_t spl_len, const uint8_t *uboot,
+                                       size_t uboot_len) {
+    LOG_INFO("stage1 SPL: %zu bytes -> 0x%08x (entry 0x%08x)\n", spl_len, DFU_SPL_ADDR, DFU_SPL_ENTRY);
+    tdfu_error_t r = bootstrap_load_data_to_memory(dev, spl, spl_len, DFU_SPL_ADDR);
+    if (r != TDFU_SUCCESS)
+        return r;
+    r = protocol_prog_stage1(dev, DFU_SPL_ENTRY);
+    if (r != TDFU_SUCCESS)
+        return r;
+
+    /* stage1 brings up clk+DDR and returns to the bootrom; let it settle. */
+    tdfu_sleep_milliseconds(1000);
+
+    LOG_INFO("stage2 U-Boot: %zu bytes -> 0x%08x\n", uboot_len, DFU_UBOOT_ADDR);
+    r = bootstrap_load_data_to_memory(dev, uboot, uboot_len, DFU_UBOOT_ADDR);
+    if (r != TDFU_SUCCESS)
+        return r;
+    protocol_flush_cache(dev);
+    protocol_prog_stage2(dev, DFU_UBOOT_ADDR); /* tolerates the re-enumeration error */
+    LOG_INFO("U-Boot starting; device will re-enumerate in DFU mode\n");
+    return TDFU_SUCCESS;
+}
+
 tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const char *firmware_dir,
                                 const char *force_cpu, const char *spl_override, const char *uboot_override) {
     tdfu_device_info_t *devs = NULL;
@@ -751,25 +784,7 @@ tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const 
     }
 
     /* 3) USB-boot sequence (mirrors t31-usbboot.py). */
-    LOG_INFO("stage1 SPL: %zu bytes -> 0x%08x (entry 0x%08x)\n", spl_len, DFU_SPL_ADDR, DFU_SPL_ENTRY);
-    r = bootstrap_load_data_to_memory(dev, spl, spl_len, DFU_SPL_ADDR);
-    if (r != TDFU_SUCCESS)
-        goto out;
-    r = protocol_prog_stage1(dev, DFU_SPL_ENTRY);
-    if (r != TDFU_SUCCESS)
-        goto out;
-
-    /* stage1 brings up clk+DDR and returns to the bootrom; let it settle. */
-    tdfu_sleep_milliseconds(1000);
-
-    LOG_INFO("stage2 U-Boot: %zu bytes -> 0x%08x\n", uboot_len, DFU_UBOOT_ADDR);
-    r = bootstrap_load_data_to_memory(dev, uboot, uboot_len, DFU_UBOOT_ADDR);
-    if (r != TDFU_SUCCESS)
-        goto out;
-    protocol_flush_cache(dev);
-    protocol_prog_stage2(dev, DFU_UBOOT_ADDR); /* tolerates the re-enumeration error */
-    LOG_INFO("U-Boot starting; device will re-enumerate in DFU mode\n");
-    r = TDFU_SUCCESS;
+    r = tdfu_dfu_bootstrap_device(dev, spl, spl_len, uboot, uboot_len);
 
 out:
     free(spl);

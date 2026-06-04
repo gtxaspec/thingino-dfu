@@ -75,4 +75,13 @@ tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const 
  * Safe to poll - does not open, probe, or reset any device. */
 bool tdfu_dfu_gadget_present(usb_manager_t *manager);
 
+/* Device-level DFU operations on an ALREADY-OPEN usb_device_t (the caller owns
+ * it). These back the manager-based functions above and are also used directly
+ * by the Android JNI, which wraps an OS-provided fd (no manager enumeration).
+ * For read/write, alt < 0 selects the single/first alt setting. */
+tdfu_error_t tdfu_dfu_read_device(usb_device_t *dev, int alt, const char *path, uint32_t size);
+tdfu_error_t tdfu_dfu_write_device(usb_device_t *dev, int alt, const char *path);
+tdfu_error_t tdfu_dfu_bootstrap_device(usb_device_t *dev, const uint8_t *spl, size_t spl_len, const uint8_t *uboot,
+                                       size_t uboot_len);
+
 #endif /* TDFU_DFU_H */
