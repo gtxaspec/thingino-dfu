@@ -544,14 +544,18 @@ tdfu_error_t tdfu_dfu_write_device(usb_device_t *dev, int alt, const char *path)
 tdfu_error_t tdfu_dfu_read_device(usb_device_t *dev, int alt, const char *path, uint32_t size) {
     tdfu_dfu_info_t info;
 
+    LOG_DEBUG("dfu_read_device: reading DFU descriptors...\n");
     tdfu_error_t r = dfu_read_info(dev, &info);
     if (r != TDFU_SUCCESS)
         return r;
     if (alt < 0)
         alt = info.alt_count > 0 ? info.alts[0].alt : 0;
+    LOG_DEBUG("dfu_read_device: descriptors ok (xfer=%u alts=%d); claiming alt %d...\n", info.transfer_size,
+              info.alt_count, alt);
     r = dfu_claim_alt(dev, info.interface, alt);
     if (r != TDFU_SUCCESS)
         return r;
+    LOG_DEBUG("dfu_read_device: interface/alt claimed; beginning upload\n");
 
     FILE *f = fopen(path, "wb");
     if (!f) {

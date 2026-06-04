@@ -561,11 +561,20 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
         lifecycleScope.launch(Dispatchers.IO) {
             val newFd = withContext(Dispatchers.Main) {
-                val device = usbHelper.getDevice()
-                if (device != null) {
-                    usbHelper.closeDevice()
-                    usbHelper.openDevice(device)
-                } else -1
+                // A U-Boot DFU gadget's connection is already open and stable.
+                // Reopening it (close+open) disturbs the device's USB controller
+                // and can wedge EP0 so DFU control transfers hang forever. Reuse
+                // the existing fd. The cloner path still reopens for a fresh fd
+                // after its bootrom->firmware transition.
+                if (isDfuGadget) {
+                    usbHelper.getFileDescriptor()
+                } else {
+                    val device = usbHelper.getDevice()
+                    if (device != null) {
+                        usbHelper.closeDevice()
+                        usbHelper.openDevice(device)
+                    } else -1
+                }
             }
 
             if (newFd < 0) {
@@ -696,11 +705,20 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             }
 
             val newFd = withContext(Dispatchers.Main) {
-                val device = usbHelper.getDevice()
-                if (device != null) {
-                    usbHelper.closeDevice()
-                    usbHelper.openDevice(device)
-                } else -1
+                // A U-Boot DFU gadget's connection is already open and stable.
+                // Reopening it (close+open) disturbs the device's USB controller
+                // and can wedge EP0 so DFU control transfers hang forever. Reuse
+                // the existing fd. The cloner path still reopens for a fresh fd
+                // after its bootrom->firmware transition.
+                if (isDfuGadget) {
+                    usbHelper.getFileDescriptor()
+                } else {
+                    val device = usbHelper.getDevice()
+                    if (device != null) {
+                        usbHelper.closeDevice()
+                        usbHelper.openDevice(device)
+                    } else -1
+                }
             }
 
             if (newFd < 0) {

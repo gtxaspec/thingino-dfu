@@ -574,8 +574,15 @@ Java_com_thingino_dfu_TdfuBridge_nativeReadFirmware(
         jni_log("DFU read (U-Boot gadget)...\n");
         jni_progress(0, "read", "Opening DFU gadget...");
         usb_device_t *ddev = device_from_fd(fd);
-        tdfu_error_t dr = ddev ? tdfu_dfu_read_device(ddev, -1, output_cstr, 0) : TDFU_ERROR_OPEN_FAILED;
-        if (ddev) device_close_android(ddev);
+        tdfu_error_t dr;
+        if (ddev) {
+            jni_log("DFU read: device wrapped; reading descriptors then uploading...\n");
+            dr = tdfu_dfu_read_device(ddev, -1, output_cstr, 0);
+            device_close_android(ddev);
+        } else {
+            jni_log("ERROR: failed to wrap USB device (bad fd?)\n");
+            dr = TDFU_ERROR_OPEN_FAILED;
+        }
         if (dr == TDFU_SUCCESS) {
             jni_progress(100, "read", "Read complete!");
             jni_log("DFU read complete.\n");
