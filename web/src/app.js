@@ -5,6 +5,8 @@
  * and manages the UI state machine.
  */
 
+import { RemoteClient } from './remote.js';
+
 /* ------------------------------------------------------------------ */
 /*  State                                                              */
 /* ------------------------------------------------------------------ */
@@ -28,6 +30,13 @@ var customUboot = null;
  * USB-boot flash protocol. Persisted across reloads. */
 var backendMode = localStorage.getItem('tdfu_backend') || 'dfu';
 var inDfuMode = false; /* connected device is a U-Boot DFU gadget (a108:4d44) */
+
+/* Remote daemon (WebSocket) backend state. */
+var remoteClient = null;
+var remoteDevices = [];
+var selectedRemoteIndex = 0;
+var remoteUrl = localStorage.getItem('tdfu_remote_url') || '';
+var remoteToken = localStorage.getItem('tdfu_remote_token') || '';
 
 /* Verbose [DEBUG]/[shim] diagnostics are gated behind ?debug in the URL. The
  * shim reads window.__tdfu_debug; the C side is toggled via tdfu_web_set_debug()
@@ -177,10 +186,13 @@ function setState(state) {
     //    before Read/Write work, so only Bootstrap is live with a bootrom, and
     //    only Read/Write are live once we're in DFU mode.
     //  - Cloner backend: Read/Write/Bootstrap all act on the connected device.
+    //  - Remote backend: the daemon owns the bootstrap/flash flow, so once a
+    //    device is discovered, Bootstrap/Read/Write are all live.
     var hasDevice = state === 'done';
     var dfu = backendMode === 'dfu';
-    var canBoot = hasDevice && !busy && !inDfuMode;          // bootstrap a bootrom (pointless once in DFU)
-    var canRW = hasDevice && !busy && (dfu ? inDfuMode : true);
+    var remote = backendMode === 'remote';
+    var canBoot = hasDevice && !busy && (remote ? true : !inDfuMode);
+    var canRW = hasDevice && !busy && (remote ? true : (dfu ? inDfuMode : true));
 
     document.getElementById('btn-connect').disabled = busy;
     document.getElementById('btn-bootstrap').disabled = !canBoot;
@@ -398,6 +410,7 @@ async function initModule() {
 /* ------------------------------------------------------------------ */
 
 async function connectDevice() {
+    if (backendMode === 'remote') return doRemoteConnect();
     if (!tdfuReady) {
         log('Module not ready', 'warn');
         return;
@@ -532,6 +545,7 @@ async function autoAttachDevice(device) {
 /* ------------------------------------------------------------------ */
 
 async function doBootstrap() {
+    if (backendMode === 'remote') return doRemoteBootstrap();
     if (!tdfuReady) return;
     // DFU bootstrap handles its own variant/custom-file check (custom SPL+U-Boot
     // need no detected variant); the cloner path below requires a variant.
@@ -618,6 +632,7 @@ function firmwareSelected(input) {
 }
 
 async function doWrite() {
+    if (backendMode === 'remote') { if (firmwareData) return doRemoteWrite(firmwareData); return; }
     if (!tdfuReady || !firmwareData) return;
     if (backendMode === 'dfu') return doDfuWrite();
 
@@ -692,6 +707,7 @@ async function doWrite() {
 /* ------------------------------------------------------------------ */
 
 async function doRead() {
+    if (backendMode === 'remote') return doRemoteRead();
     if (!tdfuReady) return;
     if (backendMode === 'dfu') return doDfuRead();
 
@@ -948,23 +964,156 @@ async function doDfuWrite() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Remote daemon backend (dfu-remote over WebSocket)                  */
+/* ------------------------------------------------------------------ */
+
+async function doRemoteConnect() {
+    if (remoteClient && remoteClient.isConnected()) {
+        remoteClient.disconnect();
+        remoteClient = null;
+        remoteDevices = [];
+        log('Disconnected from daemon.');
+        document.getElementById('device-info').classList.add('d-none');
+        document.getElementById('device-disconnected').classList.remove('d-none');
+        setState('idle');
+        return;
+    }
+    if (!remoteUrl) { log('Set the daemon URL in Settings first.', 'warn'); openSettings(); return; }
+    setState('connecting');
+    setAttention('btn-connect', false);
+    log('Connecting to ' + remoteUrl + ' ...');
+    var client = new RemoteClient(
+        function(m) { log(m.replace(/\n+$/, ''), 'info'); },
+        function(p, msg) { showProgress(p, msg || ''); }
+    );
+    client.useCloner = false; // remote = DFU
+    try {
+        await client.connect(remoteUrl, remoteToken || null);
+    } catch (e) {
+        log('Connection failed: ' + (e && e.message ? e.message : e), 'error');
+        log('If Chrome blocked it, allow the "access your local network" prompt and retry.', 'warn');
+        setState('error');
+        return;
+    }
+    remoteClient = client;
+    log('Connected. Discovering devices...');
+    var devs = [];
+    try { devs = await client.discover(); } catch (e) { log('Discover failed: ' + e.message, 'error'); }
+    remoteDevices = devs;
+    if (!devs.length) {
+        log('No Ingenic devices found on the daemon.', 'warn');
+        showDeviceInfo('—', 'no device', 0, 0);
+        setState('idle');
+        return;
+    }
+    selectedRemoteIndex = 0;
+    var d = devs[0];
+    detectedVariantName = d.variantName;
+    detectedVariant = d.variant;
+    showDeviceInfo(d.variantName.toUpperCase(), d.stage === 0 ? 'Bootrom' : 'Firmware', d.vendor, d.product);
+    log('Found ' + devs.length + ' device(s); using ' + d.variantName.toUpperCase() + ' (' + d.stageName + ').');
+    setState('done');
+}
+
+function remoteReady() {
+    if (remoteClient && remoteClient.isConnected()) return true;
+    log('Not connected to a daemon.', 'warn');
+    return false;
+}
+
+async function doRemoteBootstrap() {
+    if (!remoteReady()) return;
+    setState('bootstrapping');
+    showProgressBusy('Bootstrapping via daemon...');
+    log('Remote bootstrap for ' + (detectedVariantName || '').toUpperCase() + '...');
+    try {
+        var ok = await remoteClient.bootstrap(selectedRemoteIndex, detectedVariantName);
+        if (!ok) { log('Remote bootstrap failed.', 'error'); hideProgress(); setState('error'); return; }
+        showProgress(100, 'Bootstrap complete');
+        log('Remote bootstrap complete.');
+        try {
+            remoteDevices = await remoteClient.discover();
+            var d = remoteDevices[selectedRemoteIndex];
+            if (d) showDeviceInfo(d.variantName.toUpperCase(), d.stage === 0 ? 'Bootrom' : 'Firmware', d.vendor, d.product);
+        } catch (e) { /* ignore */ }
+        setTimeout(hideProgress, 1500);
+        setState('done');
+    } catch (e) { log('Remote bootstrap error: ' + e.message, 'error'); hideProgress(); setState('error'); }
+}
+
+async function doRemoteRead() {
+    if (!remoteReady()) return;
+    setState('reading');
+    showProgressBusy('Reading flash via daemon...');
+    log('Remote read...');
+    try {
+        var data = await remoteClient.readFirmware(selectedRemoteIndex, detectedVariantName);
+        if (!data) { log('Remote read failed.', 'error'); hideProgress(); setState('error'); return; }
+        var fname = readFilename();
+        var blob = new Blob([data], { type: 'application/octet-stream' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a'); a.href = url; a.download = fname; a.click();
+        URL.revokeObjectURL(url);
+        showProgress(100, 'Read complete');
+        log('Read ' + data.length + ' bytes; saved as ' + fname);
+        await logSha256(data);
+        setTimeout(hideProgress, 1500);
+        setState('done');
+    } catch (e) { log('Remote read error: ' + e.message, 'error'); hideProgress(); setState('error'); }
+}
+
+async function doRemoteWrite(data) {
+    if (!remoteReady()) return;
+    setState('writing');
+    showProgressBusy('Writing flash via daemon...');
+    log('Remote write (' + data.length + ' bytes)...');
+    try {
+        var ok = await remoteClient.writeFirmware(selectedRemoteIndex, detectedVariantName, data);
+        if (!ok) { log('Remote write failed.', 'error'); hideProgress(); setState('error'); return; }
+        showProgress(100, 'Write complete');
+        log('Remote write complete.');
+        setTimeout(hideProgress, 1500);
+        setState('done');
+    } catch (e) { log('Remote write error: ' + e.message, 'error'); hideProgress(); setState('error'); }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Settings (backend selection)                                       */
 /* ------------------------------------------------------------------ */
 
 function applyBackendMode(mode) {
-    backendMode = (mode === 'cloner') ? 'cloner' : 'dfu';
+    backendMode = (mode === 'cloner' || mode === 'remote') ? mode : 'dfu';
     localStorage.setItem('tdfu_backend', backendMode);
     var ind = document.getElementById('mode-indicator');
-    if (ind) ind.textContent = backendMode === 'cloner' ? 'Cloner' : 'DFU';
-    // The custom SPL/U-Boot override is a DFU-bootstrap feature; hide it in cloner mode.
+    if (ind) ind.textContent = backendMode === 'cloner' ? 'Cloner' : backendMode === 'remote' ? 'Remote' : 'DFU';
+    // The custom SPL/U-Boot override is a DFU-bootstrap feature; hide it otherwise.
     var adv = document.getElementById('adv-wrap');
     if (adv) adv.classList.toggle('d-none', backendMode !== 'dfu');
+    // Leaving remote mode drops any open daemon connection.
+    if (backendMode !== 'remote' && remoteClient) {
+        remoteClient.disconnect();
+        remoteClient = null;
+        remoteDevices = [];
+    }
+    var cb = document.getElementById('btn-connect');
+    if (cb) cb.innerHTML = backendMode === 'remote'
+        ? '<i class="bi bi-hdd-network me-1"></i> Connect Daemon'
+        : '<i class="bi bi-usb-symbol me-1"></i> Connect Device';
     setState(currentState); // re-evaluate which action buttons are live for this backend
+}
+
+function toggleRemoteFields() {
+    var sel = document.getElementById('setting-remote');
+    var rf = document.getElementById('remote-fields');
+    if (rf) rf.classList.toggle('d-none', !(sel && sel.checked));
 }
 
 function openSettings() {
     var r = document.getElementById('setting-' + backendMode);
     if (r) r.checked = true;
+    var u = document.getElementById('remote-url'); if (u) u.value = remoteUrl;
+    var t = document.getElementById('remote-token'); if (t) t.value = remoteToken;
+    toggleRemoteFields();
     document.getElementById('settings-overlay').classList.remove('d-none');
 }
 
@@ -974,8 +1123,27 @@ function closeSettings() {
 
 function saveSettings() {
     var sel = document.querySelector('input[name="backend-mode"]:checked');
-    applyBackendMode(sel ? sel.value : 'dfu');
-    log('Backend: ' + (backendMode === 'cloner' ? 'Cloner (legacy)' : 'DFU'));
+    var mode = sel ? sel.value : 'dfu';
+    if (mode === 'remote') {
+        var u = document.getElementById('remote-url');
+        var t = document.getElementById('remote-token');
+        remoteUrl = (u ? u.value : '').trim();
+        remoteToken = (t ? t.value : '').trim();
+        localStorage.setItem('tdfu_remote_url', remoteUrl);
+        localStorage.setItem('tdfu_remote_token', remoteToken);
+    }
+    var changed = mode !== backendMode;
+    applyBackendMode(mode);
+    log('Backend: ' + (backendMode === 'cloner' ? 'Cloner (legacy)'
+        : backendMode === 'remote' ? 'Remote daemon (' + (remoteUrl || 'no URL set') + ')' : 'DFU'));
+    if (changed) {
+        detectedVariant = -1;
+        detectedVariantName = '';
+        inDfuMode = false;
+        document.getElementById('device-info').classList.add('d-none');
+        document.getElementById('device-disconnected').classList.remove('d-none');
+        setState('idle');
+    }
     closeSettings();
 }
 
@@ -985,7 +1153,7 @@ function saveSettings() {
 
 // Expose handlers referenced by HTML onclick/onchange attributes
 Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSelected, doRead,
-                        openSettings, closeSettings, saveSettings,
+                        openSettings, closeSettings, saveSettings, toggleRemoteFields,
                         toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader });
 
 (function() {
