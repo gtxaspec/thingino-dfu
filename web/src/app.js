@@ -315,6 +315,19 @@ async function initModule() {
     try {
         Module = await createTdfuModule({
             printErr: function(text) {
+                // Read/write progress is emitted as repeated "\r  <N> bytes" on a
+                // single line (terminal overwrite). The log uses white-space:
+                // pre-wrap, where every \r becomes a line break -> thousands of
+                // lines. Emulate the terminal: text after the LAST \r is the live
+                // value (-> progress label); only text BEFORE the first \r is real
+                // output to log.
+                if (text.indexOf('\r') !== -1) {
+                    var pl = document.getElementById('progress-label');
+                    var tail = text.slice(text.lastIndexOf('\r') + 1).trim();
+                    if (pl && tail) pl.textContent = tail;
+                    text = text.slice(0, text.indexOf('\r'));
+                    if (!text.trim()) return;
+                }
                 if (text.startsWith('[DEBUG]') || text.startsWith('[shim]')) {
                     log(text, 'debug');
                 } else if (text.startsWith('[WARN]')) {
