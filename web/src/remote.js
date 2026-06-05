@@ -1,14 +1,12 @@
 /**
- * WebSocket client for the dfu-remote daemon (CLNR binary protocol).
+ * HTTP client for the dfu-remote daemon (CLNR binary protocol over fetch()).
  *
- * A port of the Android RemoteClient, but the transport is a browser WebSocket
- * so the HTTPS flasher can reach a local/LAN daemon over plain ws:// - Chrome's
- * Local Network Access permission exempts ws:// to a local host from
- * mixed-content blocking, so no TLS/cert/proxy is needed.
- *
- * The daemon treats the WebSocket as a byte stream (it sends each protocol field
- * as its own binary frame), so this client buffers all inbound bytes and parses
- * complete CLNR response frames out of the stream.
+ * Each command is one POST whose body is the CLNR command frame; the daemon
+ * replies with a chunked stream of CLNR response frames (progress/log then
+ * OK/ERROR), which we parse as a byte stream. fetch() is used (not WebSocket)
+ * because Chrome's Local Network Access only exempts fetch({targetAddressSpace:
+ * 'local'}) from mixed-content blocking - so the HTTPS flasher can reach a
+ * local/LAN daemon over plain http:// with a one-time permission, no TLS.
  */
 
 const MAGIC = 0x434c4e52; // "CLNR"
@@ -40,137 +38,123 @@ function crc32(bytes) {
     return (~crc) >>> 0;
 }
 
+/* Accept ws://, wss://, http://, https:// or a bare host[:port]; the transport
+ * is plain HTTP (LNA can't exempt ws://). */
+function normalizeUrl(url) {
+    url = (url || '').trim();
+    if (url.startsWith('ws://')) return 'http://' + url.slice(5);
+    if (url.startsWith('wss://')) return 'https://' + url.slice(6);
+    if (!/^https?:\/\//.test(url)) return 'http://' + url;
+    return url;
+}
+
 export class RemoteClient {
     constructor(onLog, onProgress) {
-        this.ws = null;
+        this.url = '';
+        this.token = '';
         this.onLog = onLog || function () {};
         this.onProgress = onProgress || function () {};
-        this.rx = new Uint8Array(0);
-        this.waiters = [];
         this.useCloner = false;
-        this.closed = false;
+        this.connected = false;
     }
 
-    connect(url, token) {
-        return new Promise((resolve, reject) => {
-            let ws;
-            try {
-                ws = new WebSocket(url);
-            } catch (e) {
-                reject(e);
-                return;
-            }
-            ws.binaryType = 'arraybuffer';
-            this.ws = ws;
-            ws.onmessage = (ev) => this._onData(new Uint8Array(ev.data));
-            ws.onerror = () => {};
-            ws.onclose = () => { this.closed = true; this._failWaiters('connection closed'); };
-            ws.onopen = async () => {
-                try {
-                    if (token) {
-                        const tb = new TextEncoder().encode(token);
-                        const buf = new Uint8Array(6 + tb.length);
-                        new DataView(buf.buffer).setUint32(0, MAGIC);
-                        buf[4] = VERSION;
-                        buf[5] = tb.length;
-                        buf.set(tb, 6);
-                        ws.send(buf);
-                        const r = await this._readResponse();
-                        if (r.status !== RESP_OK) { reject(new Error('authentication failed')); return; }
-                    }
-                    resolve(true);
-                } catch (e) { reject(e); }
-            };
-        });
+    async connect(url, token) {
+        this.url = normalizeUrl(url);
+        this.token = token || '';
+        this.connected = true; // fetch() is stateless; the first command validates connectivity.
+        return true;
     }
 
-    disconnect() {
-        if (this.ws) { try { this.ws.close(); } catch (e) { /* ignore */ } }
-        this.ws = null;
-    }
+    disconnect() { this.connected = false; }
+    isConnected() { return this.connected; }
 
-    isConnected() { return !!this.ws && this.ws.readyState === WebSocket.OPEN; }
-
-    _onData(chunk) {
-        const merged = new Uint8Array(this.rx.length + chunk.length);
-        merged.set(this.rx);
-        merged.set(chunk, this.rx.length);
-        this.rx = merged;
-        this._service();
-    }
-
-    _service() {
-        while (this.waiters.length && this.rx.length >= this.waiters[0].need) {
-            const w = this.waiters.shift();
-            const out = this.rx.slice(0, w.need);
-            this.rx = this.rx.slice(w.need);
-            w.resolve(out);
-        }
-    }
-
-    _failWaiters(msg) {
-        while (this.waiters.length) this.waiters.shift().reject(new Error(msg));
-    }
-
-    _readExact(n) {
-        return new Promise((resolve, reject) => {
-            this.waiters.push({ need: n, resolve, reject });
-            this._service();
-            if (this.closed && this.rx.length < n) this._failWaiters('connection closed');
-        });
-    }
-
-    async _readResponse() {
-        const hdr = await this._readExact(10);
-        const dv = new DataView(hdr.buffer, hdr.byteOffset, 10);
-        if (dv.getUint32(0) !== MAGIC) throw new Error('bad response magic');
-        const status = hdr[5];
-        const plen = dv.getUint32(6);
-        const payload = plen > 0 ? await this._readExact(plen) : new Uint8Array(0);
-        return { status, payload };
-    }
-
-    _send(command, payload) {
+    /* POST a CLNR command and parse the streamed CLNR responses, surfacing
+     * PROGRESS/LOG, returning the OK payload (or null on ERROR). */
+    async _command(command, payload) {
         const cmd = this.useCloner ? (command | CMD_CLONER_FLAG) : command;
         const pl = payload || new Uint8Array(0);
-        const buf = new Uint8Array(10 + pl.length);
-        const dv = new DataView(buf.buffer);
+        const frame = new Uint8Array(10 + pl.length);
+        const dv = new DataView(frame.buffer);
         dv.setUint32(0, MAGIC);
-        buf[4] = VERSION;
-        buf[5] = cmd;
+        frame[4] = VERSION;
+        frame[5] = cmd;
         dv.setUint32(6, pl.length);
-        buf.set(pl, 10);
-        this.ws.send(buf);
-    }
+        frame.set(pl, 10);
 
-    /* Read responses, surfacing PROGRESS/LOG, until OK (returns payload) or
-     * ERROR (returns null). */
-    async _drain() {
+        const headers = { 'Content-Type': 'application/octet-stream' };
+        if (this.token) headers['X-Auth-Token'] = this.token;
+
+        const resp = await fetch(this.url, {
+            method: 'POST',
+            headers,
+            body: frame,
+            // Tell Chrome this targets the local network so LNA exempts it from
+            // mixed-content blocking (ignored by browsers without LNA).
+            targetAddressSpace: 'local',
+        });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + resp.statusText);
+        if (!resp.body) throw new Error('no response body');
+
+        const reader = resp.body.getReader();
+        const queue = [];
+        let queued = 0;
+        let streamDone = false;
+        const pump = async () => {
+            const { done, value } = await reader.read();
+            if (done) { streamDone = true; return false; }
+            queue.push(value);
+            queued += value.length;
+            return true;
+        };
+        const readExact = async (n) => {
+            while (queued < n) {
+                if (!(await pump())) throw new Error('stream ended early');
+            }
+            const out = new Uint8Array(n);
+            let o = 0;
+            while (o < n) {
+                const head = queue[0];
+                const take = Math.min(head.length, n - o);
+                out.set(head.subarray(0, take), o);
+                o += take;
+                queued -= take;
+                if (take === head.length) queue.shift();
+                else queue[0] = head.subarray(take);
+            }
+            return out;
+        };
+
         for (;;) {
-            const { status, payload } = await this._readResponse();
+            const hdr = await readExact(10);
+            const hv = new DataView(hdr.buffer, hdr.byteOffset, 10);
+            if (hv.getUint32(0) !== MAGIC) throw new Error('bad response magic');
+            const status = hdr[5];
+            const plen = hv.getUint32(6);
+            const body = plen > 0 ? await readExact(plen) : new Uint8Array(0);
             if (status === RESP_PROGRESS) {
-                if (payload.length >= 4) {
-                    const percent = payload[0];
-                    const msgLen = (payload[2] << 8) | payload[3];
-                    const msg = msgLen > 0 && payload.length >= 4 + msgLen
-                        ? new TextDecoder().decode(payload.subarray(4, 4 + msgLen)) : '';
+                if (body.length >= 4) {
+                    const percent = body[0];
+                    const msgLen = (body[2] << 8) | body[3];
+                    const msg = msgLen > 0 && body.length >= 4 + msgLen
+                        ? new TextDecoder().decode(body.subarray(4, 4 + msgLen)) : '';
                     this.onProgress(percent, msg);
                 }
             } else if (status === RESP_LOG) {
-                this.onLog(new TextDecoder().decode(payload));
+                this.onLog(new TextDecoder().decode(body));
             } else if (status === RESP_OK) {
-                return payload;
+                try { reader.cancel(); } catch (e) { /* ignore */ }
+                return body;
             } else {
-                const m = payload.length ? new TextDecoder().decode(payload) : 'unknown error';
+                const m = body.length ? new TextDecoder().decode(body) : 'unknown error';
                 this.onLog('ERROR: ' + m + '\n');
+                try { reader.cancel(); } catch (e) { /* ignore */ }
                 return null;
             }
         }
     }
 
     async discover() {
-        this._send(CMD_DISCOVER);
-        const payload = await this._drain();
+        const payload = await this._command(CMD_DISCOVER);
         if (!payload) return [];
         const dv = new DataView(payload.buffer, payload.byteOffset, payload.length);
         const devs = [];
@@ -198,13 +182,11 @@ export class RemoteClient {
     }
 
     async bootstrap(deviceIndex, variant) {
-        this._send(CMD_BOOTSTRAP, this._variantPayload(deviceIndex, variant));
-        return (await this._drain()) !== null;
+        return (await this._command(CMD_BOOTSTRAP, this._variantPayload(deviceIndex, variant))) !== null;
     }
 
     async readFirmware(deviceIndex, variant) {
-        this._send(CMD_READ, this._variantPayload(deviceIndex, variant));
-        const resp = await this._drain();
+        const resp = await this._command(CMD_READ, this._variantPayload(deviceIndex, variant));
         if (!resp || resp.length < 4) return null;
         const data = resp.subarray(0, resp.length - 4);
         const recvCrc = new DataView(resp.buffer, resp.byteOffset + resp.length - 4, 4).getUint32(0) >>> 0;
@@ -225,7 +207,6 @@ export class RemoteClient {
         buf.set(firmwareData, off);
         off += firmwareData.length;
         dv.setUint32(off, crc32(firmwareData));
-        this._send(CMD_WRITE, buf);
-        return (await this._drain()) !== null;
+        return (await this._command(CMD_WRITE, buf)) !== null;
     }
 }

@@ -35,7 +35,12 @@ typedef int socklen_t;
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <strings.h> /* strncasecmp */
 #define CLOSE_SOCKET close
+#endif
+
+#ifdef _WIN32
+#define strncasecmp _strnicmp
 #endif
 
 /* Simple CRC32 (avoids zlib dependency on Windows) */
@@ -69,6 +74,20 @@ static int g_log_client_fd = -1; /* client fd for log forwarding */
  * time, so a global is sufficient. */
 static ws_conn_t *g_ws = NULL;
 
+/* When non-NULL, the current client is an HTTP POST (the fetch() transport: the
+ * request body holds one CLNR command, the chunked response body streams the
+ * CLNR reply). net_recv_all reads from the buffered body, net_send_all writes
+ * HTTP chunks. This is the path the browser flasher uses - Chrome's Local
+ * Network Access exempts fetch({targetAddressSpace:'local'}) from mixed content,
+ * which WebSocket can't do yet. */
+typedef struct {
+    int fd;
+    const uint8_t *body;
+    size_t blen;
+    size_t bpos;
+} http_conn_t;
+static http_conn_t *g_http = NULL;
+
 static void signal_handler(int sig) {
     (void)sig;
     g_running = 0;
@@ -84,9 +103,7 @@ static void signal_handler(int sig) {
 /* Network helpers                                                     */
 /* ------------------------------------------------------------------ */
 
-static int net_send_all(int fd, const void *buf, size_t len) {
-    if (g_ws)
-        return ws_send(g_ws, buf, len);
+static int raw_send_all(int fd, const void *buf, size_t len) {
     const uint8_t *p = buf;
     while (len > 0) {
         ssize_t n = send(fd, (const char *)p, (int)len, MSG_NOSIGNAL);
@@ -98,9 +115,7 @@ static int net_send_all(int fd, const void *buf, size_t len) {
     return 0;
 }
 
-static int net_recv_all(int fd, void *buf, size_t len) {
-    if (g_ws)
-        return ws_recv(g_ws, buf, len);
+static int raw_recv_all(int fd, void *buf, size_t len) {
     uint8_t *p = buf;
     while (len > 0) {
         ssize_t n = recv(fd, (char *)p, (int)len, 0);
@@ -110,6 +125,35 @@ static int net_recv_all(int fd, void *buf, size_t len) {
         len -= n;
     }
     return 0;
+}
+
+static int net_send_all(int fd, const void *buf, size_t len) {
+    if (g_ws)
+        return ws_send(g_ws, buf, len);
+    if (g_http) {
+        /* HTTP chunked-transfer encoding: <hex-len>\r\n<data>\r\n */
+        char h[24];
+        int hl = snprintf(h, sizeof(h), "%zx\r\n", len);
+        if (raw_send_all(fd, h, (size_t)hl) < 0)
+            return -1;
+        if (len > 0 && raw_send_all(fd, buf, len) < 0)
+            return -1;
+        return raw_send_all(fd, "\r\n", 2);
+    }
+    return raw_send_all(fd, buf, len);
+}
+
+static int net_recv_all(int fd, void *buf, size_t len) {
+    if (g_ws)
+        return ws_recv(g_ws, buf, len);
+    if (g_http) {
+        if (g_http->bpos + len > g_http->blen)
+            return -1;
+        memcpy(buf, g_http->body + g_http->bpos, len);
+        g_http->bpos += len;
+        return 0;
+    }
+    return raw_recv_all(fd, buf, len);
 }
 
 static int send_response(int fd, uint8_t status, const void *payload, uint32_t len) {
@@ -510,6 +554,66 @@ static int handle_cancel(int client_fd) {
 /* Client connection handler                                           */
 /* ------------------------------------------------------------------ */
 
+/* Dispatch one already-parsed command. High bit of `command` selects the
+ * backend (set = legacy cloner, clear = DFU). */
+static int dispatch_command(int fd, uint8_t command, const uint8_t *payload, uint32_t payload_len,
+                            const char *firmware_dir) {
+    bool use_cloner = (command & TDFU_CMD_CLONER_FLAG) != 0;
+    switch (command & TDFU_CMD_MASK) {
+    case CMD_DISCOVER:
+        return handle_discover(fd);
+    case CMD_BOOTSTRAP:
+        return handle_bootstrap(fd, payload, payload_len, firmware_dir, use_cloner);
+    case CMD_WRITE:
+        return handle_write(fd, payload, payload_len, firmware_dir, use_cloner);
+    case CMD_READ:
+        return handle_read(fd, payload, payload_len, use_cloner);
+    case CMD_STATUS:
+        return handle_status(fd);
+    case CMD_CANCEL:
+        return handle_cancel(fd);
+    default:
+        return send_error(fd, "unknown command");
+    }
+}
+
+/* Read one CLNR command (header + payload) via net_recv_all (works over raw TCP,
+ * WebSocket, or the HTTP body buffer) and dispatch it. Returns the handler rc
+ * (0 ok, <0 stop) or -2 when the stream is exhausted. */
+static int process_one_command(int fd, const char *firmware_dir) {
+    tdfu_msg_header_t hdr;
+    if (net_recv_all(fd, &hdr, sizeof(hdr)) < 0)
+        return -2;
+    if (tdfu_ntohl(hdr.magic) != TDFU_PROTO_MAGIC) {
+        send_error(fd, "bad magic");
+        return -1;
+    }
+    if (hdr.version != TDFU_PROTO_VERSION) {
+        send_error(fd, "version mismatch");
+        return -1;
+    }
+    uint32_t payload_len = tdfu_ntohl(hdr.payload_len);
+    if (payload_len > TDFU_MAX_PAYLOAD) {
+        send_error(fd, "payload too large");
+        return -1;
+    }
+    uint8_t *payload = NULL;
+    if (payload_len > 0) {
+        payload = malloc(payload_len);
+        if (!payload) {
+            send_error(fd, "out of memory");
+            return -1;
+        }
+        if (net_recv_all(fd, payload, payload_len) < 0) {
+            free(payload);
+            return -2;
+        }
+    }
+    int rc = dispatch_command(fd, hdr.command, payload, payload_len, firmware_dir);
+    free(payload);
+    return rc;
+}
+
 static void handle_client(int client_fd, const char *firmware_dir) {
     printf("Client connected\n");
     g_tdfu_log_hook = daemon_log_hook;
@@ -554,66 +658,7 @@ static void handle_client(int client_fd, const char *firmware_dir) {
     }
 
     while (g_running) {
-        tdfu_msg_header_t hdr;
-        if (net_recv_all(client_fd, &hdr, sizeof(hdr)) < 0)
-            break;
-
-        if (tdfu_ntohl(hdr.magic) != TDFU_PROTO_MAGIC) {
-            send_error(client_fd, "bad magic");
-            break;
-        }
-        if (hdr.version != TDFU_PROTO_VERSION) {
-            send_error(client_fd, "version mismatch");
-            break;
-        }
-
-        uint32_t payload_len = tdfu_ntohl(hdr.payload_len);
-        if (payload_len > TDFU_MAX_PAYLOAD) {
-            send_error(client_fd, "payload too large");
-            break;
-        }
-
-        uint8_t *payload = NULL;
-        if (payload_len > 0) {
-            payload = malloc(payload_len);
-            if (!payload) {
-                send_error(client_fd, "out of memory");
-                break;
-            }
-            if (net_recv_all(client_fd, payload, payload_len) < 0) {
-                free(payload);
-                break;
-            }
-        }
-
-        int rc = 0;
-        /* High bit of command = backend: set means legacy cloner, clear = DFU. */
-        bool use_cloner = (hdr.command & TDFU_CMD_CLONER_FLAG) != 0;
-        switch (hdr.command & TDFU_CMD_MASK) {
-        case CMD_DISCOVER:
-            rc = handle_discover(client_fd);
-            break;
-        case CMD_BOOTSTRAP:
-            rc = handle_bootstrap(client_fd, payload, payload_len, firmware_dir, use_cloner);
-            break;
-        case CMD_WRITE:
-            rc = handle_write(client_fd, payload, payload_len, firmware_dir, use_cloner);
-            break;
-        case CMD_READ:
-            rc = handle_read(client_fd, payload, payload_len, use_cloner);
-            break;
-        case CMD_STATUS:
-            rc = handle_status(client_fd);
-            break;
-        case CMD_CANCEL:
-            rc = handle_cancel(client_fd);
-            break;
-        default:
-            rc = send_error(client_fd, "unknown command");
-            break;
-        }
-
-        free(payload);
+        int rc = process_one_command(client_fd, firmware_dir);
         if (rc < 0)
             break;
     }
@@ -621,6 +666,95 @@ static void handle_client(int client_fd, const char *firmware_dir) {
     g_tdfu_log_hook = NULL;
     g_log_client_fd = -1;
     printf("Client disconnected\n");
+}
+
+/* Handle one HTTP POST request: the body carries a single CLNR command, and the
+ * chunked response streams the CLNR reply (progress/log frames then OK/ERROR).
+ * This is the path the browser flasher uses via fetch({targetAddressSpace}). */
+static void handle_http(int client_fd, const char *firmware_dir) {
+    printf("HTTP client\n");
+
+    /* Read request line + headers (up to the blank line). */
+    char req[8192];
+    size_t n = 0;
+    while (n < sizeof(req) - 1) {
+        char ch;
+        if (raw_recv_all(client_fd, &ch, 1) < 0)
+            return;
+        req[n++] = ch;
+        if (n >= 4 && memcmp(req + n - 4, "\r\n\r\n", 4) == 0)
+            break;
+    }
+    req[n] = '\0';
+
+    long clen = 0;
+    char token[256] = {0};
+    for (char *p = req; *p; p++) {
+        if (strncasecmp(p, "Content-Length:", 15) == 0) {
+            clen = atol(p + 15);
+        } else if (strncasecmp(p, "X-Auth-Token:", 13) == 0) {
+            const char *v = p + 13;
+            while (*v == ' ')
+                v++;
+            size_t k = 0;
+            while (*v && *v != '\r' && *v != '\n' && k < sizeof(token) - 1)
+                token[k++] = *v++;
+            token[k] = '\0';
+        }
+    }
+    if (clen < 0 || clen > (long)TDFU_MAX_PAYLOAD) {
+        const char *r = "HTTP/1.1 413 Payload Too Large\r\nContent-Length: 0\r\n\r\n";
+        raw_send_all(client_fd, r, strlen(r));
+        return;
+    }
+
+    uint8_t *body = NULL;
+    if (clen > 0) {
+        body = malloc((size_t)clen);
+        if (!body || raw_recv_all(client_fd, body, (size_t)clen) < 0) {
+            free(body);
+            return;
+        }
+    }
+
+    if (g_auth_token) {
+        size_t tl = strlen(token), el = strlen(g_auth_token);
+        volatile uint8_t diff = 0;
+        for (size_t ci = 0; ci < el; ci++)
+            diff |= (uint8_t)(ci < tl ? token[ci] : 0xFF) ^ (uint8_t)g_auth_token[ci];
+        if (diff != 0 || tl != el) {
+            const char *r = "HTTP/1.1 403 Forbidden\r\nAccess-Control-Allow-Origin: *\r\n"
+                            "Access-Control-Allow-Private-Network: true\r\nContent-Length: 0\r\n\r\n";
+            raw_send_all(client_fd, r, strlen(r));
+            free(body);
+            return;
+        }
+    }
+
+    const char *preamble = "HTTP/1.1 200 OK\r\n"
+                           "Access-Control-Allow-Origin: *\r\n"
+                           "Access-Control-Allow-Private-Network: true\r\n"
+                           "Content-Type: application/octet-stream\r\n"
+                           "Cache-Control: no-store\r\n"
+                           "Transfer-Encoding: chunked\r\n"
+                           "\r\n";
+    if (raw_send_all(client_fd, preamble, strlen(preamble)) < 0) {
+        free(body);
+        return;
+    }
+
+    http_conn_t hc = {.fd = client_fd, .body = body, .blen = (size_t)(clen > 0 ? clen : 0), .bpos = 0};
+    g_http = &hc;
+    g_tdfu_log_hook = daemon_log_hook;
+    g_log_client_fd = client_fd;
+    process_one_command(client_fd, firmware_dir);
+    g_tdfu_log_hook = NULL;
+    g_log_client_fd = -1;
+    g_http = NULL;
+
+    raw_send_all(client_fd, "0\r\n\r\n", 5); /* terminating chunk */
+    free(body);
+    printf("HTTP request done\n");
 }
 
 /* ------------------------------------------------------------------ */
@@ -757,6 +891,8 @@ int main(int argc, char **argv) {
             } else {
                 printf("WebSocket handshake failed\n");
             }
+        } else if (pn >= 1 && peek[0] == 'P') {
+            handle_http(client_fd, firmware_dir); /* fetch() POST transport */
         } else if (pn >= 1 && peek[0] == 'O') {
             ws_preflight(client_fd); /* Local Network Access / CORS preflight */
         } else {

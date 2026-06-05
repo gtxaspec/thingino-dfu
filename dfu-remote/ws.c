@@ -231,9 +231,10 @@ int ws_handshake(int fd) {
 void ws_preflight(int fd) {
     const char *resp = "HTTP/1.1 200 OK\r\n"
                        "Access-Control-Allow-Origin: *\r\n"
-                       "Access-Control-Allow-Methods: GET, OPTIONS\r\n"
-                       "Access-Control-Allow-Headers: *\r\n"
+                       "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+                       "Access-Control-Allow-Headers: Content-Type, X-Auth-Token\r\n"
                        "Access-Control-Allow-Private-Network: true\r\n"
+                       "Access-Control-Max-Age: 600\r\n"
                        "Content-Length: 0\r\n"
                        "\r\n";
     raw_send_all(fd, resp, strlen(resp));

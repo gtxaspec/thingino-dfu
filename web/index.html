@@ -219,10 +219,10 @@
             </div>
             <div class="form-check">
                 <input class="form-check-input" type="radio" name="backend-mode" id="setting-remote" value="remote" onchange="toggleRemoteFields()">
-                <label class="form-check-label" for="setting-remote">Remote daemon - dfu-remote over WebSocket</label>
+                <label class="form-check-label" for="setting-remote">Remote daemon - dfu-remote (HTTP)</label>
             </div>
             <div id="remote-fields" class="mt-2 ms-4 d-none">
-                <input type="text" class="form-control form-control-sm mb-1" id="remote-url" placeholder="ws://10.25.1.26:5050" autocomplete="off" spellcheck="false">
+                <input type="text" class="form-control form-control-sm mb-1" id="remote-url" placeholder="http://10.25.1.26:5050" autocomplete="off" spellcheck="false">
                 <input type="text" class="form-control form-control-sm" id="remote-token" placeholder="auth token (optional)" autocomplete="off" spellcheck="false">
                 <div class="small text-secondary mt-1"><i class="bi bi-info-circle me-1"></i>Chrome will prompt once to allow local-network access.</div>
             </div>
