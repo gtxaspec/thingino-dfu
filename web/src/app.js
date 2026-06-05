@@ -983,7 +983,19 @@ async function doRemoteConnect() {
     setAttention('btn-connect', false);
     log('Connecting to ' + remoteUrl + ' ...');
     var client = new RemoteClient(
-        function(m) { log(m.replace(/\n+$/, ''), 'info'); },
+        function(m) {
+            // DFU read/write progress arrives as repeated "\r  <N> bytes" frames
+            // (terminal overwrite). Route the live value to the progress label
+            // instead of appending thousands of log lines (mirrors printErr).
+            if (m.indexOf('\r') !== -1) {
+                var pl = document.getElementById('progress-label');
+                var tail = m.slice(m.lastIndexOf('\r') + 1).trim();
+                if (pl && tail) pl.textContent = tail;
+                m = m.slice(0, m.indexOf('\r'));
+                if (!m.trim()) return;
+            }
+            log(m.replace(/\n+$/, ''), 'info');
+        },
         function(p, msg) { showProgress(p, msg || ''); }
     );
     client.useCloner = false; // remote = DFU
