@@ -93,7 +93,21 @@ function log(msg, level) {
 function showProgress(percent, label) {
     var container = document.getElementById('progress');
     container.classList.remove('d-none');
-    document.getElementById('progress-fill').style.width = percent + '%';
+    var fill = document.getElementById('progress-fill');
+    fill.classList.remove('progress-bar-striped', 'progress-bar-animated');
+    fill.style.width = percent + '%';
+    document.getElementById('progress-label').textContent = label || '';
+}
+
+/* Indeterminate progress (moving stripes) for operations whose total length the
+ * browser can't know up front - e.g. a DFU upload, where the device decides how
+ * much to send. The live byte count from the C side fills in the label. */
+function showProgressBusy(label) {
+    var container = document.getElementById('progress');
+    container.classList.remove('d-none');
+    var fill = document.getElementById('progress-fill');
+    fill.classList.add('progress-bar-striped', 'progress-bar-animated');
+    fill.style.width = '100%';
     document.getElementById('progress-label').textContent = label || '';
 }
 
@@ -892,7 +906,7 @@ async function doDfuBootstrap() {
 async function doDfuRead() {
     if (!inDfuMode) { log('Not a DFU device — bootstrap into DFU mode first', 'warn'); return; }
     setState('reading');
-    showProgress(20, 'Reading flash via DFU...');
+    showProgressBusy('Reading flash via DFU...');
     log('DFU upload (reading flash)...');
     try {
         var rc = await wasmCall('tdfu_web_dfu_upload', 'number',
@@ -918,7 +932,7 @@ async function doDfuWrite() {
     if (!firmwareData) { log('Select a firmware file first', 'warn'); return; }
     if (!inDfuMode) { log('Not a DFU device — bootstrap into DFU mode first', 'warn'); return; }
     setState('writing');
-    showProgress(20, 'Writing flash via DFU...');
+    showProgressBusy('Writing flash via DFU...');
     log('DFU download: ' + firmwareFileName + ' (' + firmwareData.length + ' bytes)...');
     try {
         Module.FS.writeFile('/tmp/dfu-wr.bin', firmwareData);
