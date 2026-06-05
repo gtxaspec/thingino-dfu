@@ -199,9 +199,12 @@ function setState(state) {
     document.getElementById('btn-write').disabled = !canRW;
     document.getElementById('btn-read').disabled = !canRW;
 
-    // Glow the single "next action" so it's obvious what to click. In DFU mode
-    // with a bootrom attached, that's Bootstrap.
+    // Glow the single "next action" so it's obvious what to click. In local DFU
+    // mode with a bootrom attached, that's Bootstrap. The remote flow sets its
+    // own Read/Bootstrap glow after discover/bootstrap, so clear Read on every
+    // state change here and let those re-apply it.
     setAttention('btn-bootstrap', canBoot && dfu);
+    setAttention('btn-read', false);
 }
 
 /* Toggle the pulsing "click me" glow on a button. */
@@ -1025,6 +1028,9 @@ async function doRemoteConnect() {
     showDeviceInfo(d.variantName.toUpperCase(), d.stage === 0 ? 'Bootrom' : (d.stage === 2 ? 'DFU' : 'Firmware'), d.vendor, d.product);
     log('Found ' + devs.length + ' device(s); using ' + d.variantName.toUpperCase() + ' (' + d.stageName + ').');
     setState('done');
+    // Guide the next action: a bootrom needs Bootstrap; a device already in
+    // DFU/firmware is ready to Read/Write.
+    setAttention(d.stage === 0 ? 'btn-bootstrap' : 'btn-read', true);
 }
 
 function remoteReady() {
@@ -1041,15 +1047,36 @@ async function doRemoteBootstrap() {
     try {
         var ok = await remoteClient.bootstrap(selectedRemoteIndex, detectedVariantName);
         if (!ok) { log('Remote bootstrap failed.', 'error'); hideProgress(); setState('error'); return; }
-        showProgress(100, 'Bootstrap complete');
         log('Remote bootstrap complete.');
-        try {
-            remoteDevices = await remoteClient.discover();
-            var d = remoteDevices[selectedRemoteIndex];
-            if (d) showDeviceInfo(d.variantName.toUpperCase(), d.stage === 0 ? 'Bootrom' : (d.stage === 2 ? 'DFU' : 'Firmware'), d.vendor, d.product);
-        } catch (e) { /* ignore */ }
-        setTimeout(hideProgress, 1500);
-        setState('done');
+        // The device re-enumerates bootrom -> U-Boot DFU gadget, which takes a
+        // few seconds. The daemon owns the USB (no browser reconnect, unlike
+        // local WebUSB), so just poll discover until it reappears past bootrom -
+        // then it's ready to Read/Write with no manual reconnect.
+        showProgressBusy('Waiting for DFU gadget to re-enumerate...');
+        var d = null;
+        for (var i = 0; i < 20 && !d; i++) {
+            await new Promise(function (r) { setTimeout(r, 700); });
+            try {
+                remoteDevices = await remoteClient.discover();
+            } catch (e) { remoteDevices = []; }
+            d = remoteDevices.find(function (x) { return x.stage !== 0; }) || null;
+        }
+        if (d) {
+            selectedRemoteIndex = remoteDevices.indexOf(d);
+            detectedVariantName = d.variantName;
+            detectedVariant = d.variant;
+            showDeviceInfo(d.variantName.toUpperCase(),
+                d.stage === 2 ? 'DFU' : (d.stage === 0 ? 'Bootrom' : 'Firmware'), d.vendor, d.product);
+            log('Device re-enumerated in ' + (d.stageName || 'dfu').toUpperCase() + ' mode - ready to Read/Write.');
+            showProgress(100, 'Ready');
+            setTimeout(hideProgress, 1200);
+            setState('done');
+            setAttention('btn-read', true);
+        } else {
+            log('Device did not reappear as a DFU gadget after bootstrap; try Connect again.', 'warn');
+            hideProgress();
+            setState('done');
+        }
     } catch (e) { log('Remote bootstrap error: ' + e.message, 'error'); hideProgress(); setState('error'); }
 }
 
