@@ -166,7 +166,7 @@ export class RemoteClient {
                 vendor: dv.getUint16(off + 2), product: dv.getUint16(off + 4),
                 stage, variant,
                 variantName: VARIANT_NAMES[variant] || 'unknown',
-                stageName: stage === 0 ? 'bootrom' : 'firmware',
+                stageName: stage === 0 ? 'bootrom' : (stage === 2 ? 'dfu' : 'firmware'),
             });
         }
         return devs;

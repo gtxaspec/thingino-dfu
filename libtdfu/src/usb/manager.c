@@ -22,7 +22,8 @@ tdfu_error_t usb_manager_init(usb_manager_t *manager) {
 }
 
 // Helper: check if a USB device is an Ingenic cloner device
-static bool is_ingenic_device(const struct libusb_device_descriptor *desc, bool *out_bootrom, bool *out_firmware) {
+static bool is_ingenic_device(const struct libusb_device_descriptor *desc, bool *out_bootrom, bool *out_firmware,
+                              bool *out_dfu) {
     bool is_ingenic = (desc->idVendor == VENDOR_ID_INGENIC || desc->idVendor == VENDOR_ID_INGENIC_ALT);
     if (!is_ingenic)
         return false;
@@ -30,7 +31,12 @@ static bool is_ingenic_device(const struct libusb_device_descriptor *desc, bool 
     *out_bootrom = (desc->idProduct == PRODUCT_ID_BOOTROM || desc->idProduct == PRODUCT_ID_BOOTROM2 ||
                     desc->idProduct == PRODUCT_ID_BOOTROM3);
     *out_firmware = (desc->idProduct == PRODUCT_ID_FIRMWARE || desc->idProduct == PRODUCT_ID_FIRMWARE2);
-    return *out_bootrom || *out_firmware;
+    /* A device already sitting in the U-Boot DFU gadget (e.g. mainline U-Boot
+     * that boots straight to DFU, or a previously-bootstrapped device). It has
+     * no bootrom CPU-info protocol, so it is reported as TDFU_STAGE_DFU and the
+     * DFU read/write path operates on it directly (no bootstrap). */
+    *out_dfu = (desc->idProduct == PRODUCT_ID_DFU);
+    return *out_bootrom || *out_firmware || *out_dfu;
 }
 
 tdfu_error_t usb_manager_find_devices(usb_manager_t *manager, tdfu_device_info_t **devices, int *count) {
@@ -63,9 +69,10 @@ tdfu_error_t usb_manager_find_devices(usb_manager_t *manager, tdfu_device_info_t
 
         DEBUG_PRINT("Device %zd: VID=0x%04X, PID=0x%04X\n", i, desc.idVendor, desc.idProduct);
 
-        bool is_bootrom, is_firmware;
-        if (!is_ingenic_device(&desc, &is_bootrom, &is_firmware))
+        bool is_bootrom, is_firmware, is_dfu;
+        if (!is_ingenic_device(&desc, &is_bootrom, &is_firmware, &is_dfu))
             continue;
+        (void)is_bootrom;
 
         DEBUG_PRINT("Found Ingenic device %zd (VID:0x%04X, PID:0x%04X)\n", i, desc.idVendor, desc.idProduct);
 
@@ -87,7 +94,7 @@ tdfu_error_t usb_manager_find_devices(usb_manager_t *manager, tdfu_device_info_t
         info->address = libusb_get_device_address(device_list[i]);
         info->vendor = desc.idVendor;
         info->product = desc.idProduct;
-        info->stage = is_firmware ? TDFU_STAGE_FIRMWARE : TDFU_STAGE_BOOTROM;
+        info->stage = is_dfu ? TDFU_STAGE_DFU : (is_firmware ? TDFU_STAGE_FIRMWARE : TDFU_STAGE_BOOTROM);
         info->variant = TDFU_VARIANT_T31X;
 
         // Query CPU info for bootrom devices
@@ -150,9 +157,10 @@ tdfu_error_t usb_manager_find_devices_fast(usb_manager_t *manager, tdfu_device_i
         if (libusb_get_device_descriptor(device_list[i], &desc) < 0)
             continue;
 
-        bool is_bootrom, is_firmware;
-        if (!is_ingenic_device(&desc, &is_bootrom, &is_firmware))
+        bool is_bootrom, is_firmware, is_dfu;
+        if (!is_ingenic_device(&desc, &is_bootrom, &is_firmware, &is_dfu))
             continue;
+        (void)is_bootrom;
 
         if (ingenic_count >= capacity) {
             capacity = capacity ? capacity * 2 : 4;
@@ -171,7 +179,7 @@ tdfu_error_t usb_manager_find_devices_fast(usb_manager_t *manager, tdfu_device_i
         info->address = libusb_get_device_address(device_list[i]);
         info->vendor = desc.idVendor;
         info->product = desc.idProduct;
-        info->stage = TDFU_STAGE_BOOTROM;
+        info->stage = is_dfu ? TDFU_STAGE_DFU : (is_firmware ? TDFU_STAGE_FIRMWARE : TDFU_STAGE_BOOTROM);
         info->variant = TDFU_VARIANT_T31X;
 
         DEBUG_PRINT("Fast enumeration: found Ingenic device %d (VID:0x%04X, PID:0x%04X)\n", ingenic_count,

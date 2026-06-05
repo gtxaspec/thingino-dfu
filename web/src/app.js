@@ -1010,7 +1010,7 @@ async function doRemoteConnect() {
     var d = devs[0];
     detectedVariantName = d.variantName;
     detectedVariant = d.variant;
-    showDeviceInfo(d.variantName.toUpperCase(), d.stage === 0 ? 'Bootrom' : 'Firmware', d.vendor, d.product);
+    showDeviceInfo(d.variantName.toUpperCase(), d.stage === 0 ? 'Bootrom' : (d.stage === 2 ? 'DFU' : 'Firmware'), d.vendor, d.product);
     log('Found ' + devs.length + ' device(s); using ' + d.variantName.toUpperCase() + ' (' + d.stageName + ').');
     setState('done');
 }
@@ -1034,7 +1034,7 @@ async function doRemoteBootstrap() {
         try {
             remoteDevices = await remoteClient.discover();
             var d = remoteDevices[selectedRemoteIndex];
-            if (d) showDeviceInfo(d.variantName.toUpperCase(), d.stage === 0 ? 'Bootrom' : 'Firmware', d.vendor, d.product);
+            if (d) showDeviceInfo(d.variantName.toUpperCase(), d.stage === 0 ? 'Bootrom' : (d.stage === 2 ? 'DFU' : 'Firmware'), d.vendor, d.product);
         } catch (e) { /* ignore */ }
         setTimeout(hideProgress, 1500);
         setState('done');
