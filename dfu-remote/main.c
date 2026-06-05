@@ -15,6 +15,7 @@
 #include "tdfu/protocol.h"
 #include "tdfu/dfu.h"
 #include "platform.h"
+#include "ws.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,6 +64,11 @@ static const char *g_auth_token = NULL; /* NULL = no auth required */
 static int g_server_fd = -1;
 static int g_log_client_fd = -1; /* client fd for log forwarding */
 
+/* When non-NULL, the current client speaks WebSocket; net_send_all/net_recv_all
+ * route through the frame codec instead of the raw socket. Single client at a
+ * time, so a global is sufficient. */
+static ws_conn_t *g_ws = NULL;
+
 static void signal_handler(int sig) {
     (void)sig;
     g_running = 0;
@@ -79,6 +85,8 @@ static void signal_handler(int sig) {
 /* ------------------------------------------------------------------ */
 
 static int net_send_all(int fd, const void *buf, size_t len) {
+    if (g_ws)
+        return ws_send(g_ws, buf, len);
     const uint8_t *p = buf;
     while (len > 0) {
         ssize_t n = send(fd, (const char *)p, (int)len, MSG_NOSIGNAL);
@@ -91,6 +99,8 @@ static int net_send_all(int fd, const void *buf, size_t len) {
 }
 
 static int net_recv_all(int fd, void *buf, size_t len) {
+    if (g_ws)
+        return ws_recv(g_ws, buf, len);
     uint8_t *p = buf;
     while (len > 0) {
         ssize_t n = recv(fd, (char *)p, (int)len, 0);
@@ -732,7 +742,26 @@ int main(int argc, char **argv) {
 
         printf("Connection from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
-        handle_client(client_fd, firmware_dir);
+        /* Peek the first byte to tell a browser WebSocket client (HTTP "GET" /
+         * "OPTIONS" preflight) from a raw-TCP CLI/Android client (CLNR magic,
+         * starts with 'C'). */
+        char peek[8] = {0};
+        int pn = (int)recv(client_fd, peek, sizeof(peek) - 1, MSG_PEEK);
+        if (pn >= 1 && peek[0] == 'G') {
+            ws_conn_t ws = {.fd = client_fd, .frame_remaining = 0, .mask_pos = 0};
+            if (ws_handshake(client_fd) == 0) {
+                printf("WebSocket client\n");
+                g_ws = &ws;
+                handle_client(client_fd, firmware_dir);
+                g_ws = NULL;
+            } else {
+                printf("WebSocket handshake failed\n");
+            }
+        } else if (pn >= 1 && peek[0] == 'O') {
+            ws_preflight(client_fd); /* Local Network Access / CORS preflight */
+        } else {
+            handle_client(client_fd, firmware_dir);
+        }
         CLOSE_SOCKET(client_fd);
     }
 

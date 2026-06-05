@@ -1,6 +1,6 @@
 # dfu-remote - daemon for remote USB device access over TCP
 
-add_executable(dfu-remote main.c)
+add_executable(dfu-remote main.c ws.c)
 target_include_directories(dfu-remote PRIVATE
     ${CMAKE_SOURCE_DIR}/libtdfu/src
     ${CMAKE_SOURCE_DIR}/libtdfu/src/ddr
