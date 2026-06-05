@@ -31,7 +31,22 @@
         .device-info { font-size: 0.9rem; }
         .device-info .label { color: #8b949e; }
         .device-info .value { color: darkorange !important; font-family: monospace; }
-        .progress { height: 6px; }
+        .progress { height: 14px; background-color: #21262d; border-radius: 6px; }
+        /* Theme-orange fill instead of the bright amber bg-warning. */
+        #progress-fill { background-color: #ff8c00 !important; }
+        /* High-contrast dark diagonal stripes - Bootstrap's default faint white
+           stripes are invisible on the bright bar. */
+        #progress-fill.progress-bar-striped {
+            background-image: linear-gradient(45deg,
+                rgba(13, 17, 23, 0.5) 25%, transparent 25%,
+                transparent 50%, rgba(13, 17, 23, 0.5) 50%,
+                rgba(13, 17, 23, 0.5) 75%, transparent 75%, transparent);
+            background-size: 1rem 1rem;
+        }
+        #progress-label { color: #c9d1d9; font-size: 0.8rem; }
+        /* Busy-state status badge (Reading/Writing/Bootstrapping) is bg-warning
+           (yellow); Bootstrap defaults to white text on it - use dark instead. */
+        .badge.bg-warning { color: #0d1117 !important; }
         .file-info { font-size: 0.85rem; color: #8b949e; }
         input[type="file"] { display: none; }
         @keyframes pulse-warn {
