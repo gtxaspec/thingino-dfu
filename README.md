@@ -80,6 +80,7 @@ Cloner-only options: `--flash-chip <name>` (override JEDEC auto-detect), `--chun
 | T40 | xburst2 | DDR2 | Tested | Tested | Tested | Yes |
 | T41 | xburst2 | DDR3 | Tested | Tested | Tested | Yes |
 | A1 | xburst2 | DDR3 | Tested | Tested | Tested | Yes |
+| C100 | xburst1 | DDR3 | Tested | Tested | Tested | Yes |
 
 ## SoC Auto-Detection
 
