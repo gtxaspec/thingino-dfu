@@ -191,8 +191,12 @@ function setState(state) {
     var hasDevice = state === 'done';
     var dfu = backendMode === 'dfu';
     var remote = backendMode === 'remote';
-    var canBoot = hasDevice && !busy && (remote ? true : !inDfuMode);
-    var canRW = hasDevice && !busy && (remote ? true : (dfu ? inDfuMode : true));
+    // Bootstrap only acts on a bootrom (a108:c309); Read/Write only once the
+    // device is the DFU gadget. DFU and remote both gate on inDfuMode; the cloner
+    // backend drives all three on the connected device.
+    var cloner = backendMode === 'cloner';
+    var canBoot = hasDevice && !busy && (cloner ? true : !inDfuMode);
+    var canRW = hasDevice && !busy && (cloner ? true : inDfuMode);
 
     document.getElementById('btn-connect').disabled = busy;
     document.getElementById('btn-bootstrap').disabled = !canBoot;
@@ -1025,6 +1029,7 @@ async function doRemoteConnect() {
     var d = devs[0];
     detectedVariantName = d.variantName;
     detectedVariant = d.variant;
+    inDfuMode = d.stage !== 0; // bootrom -> Bootstrap enabled; already-DFU -> Read/Write
     showDeviceInfo(d.variantName.toUpperCase(), d.stage === 0 ? 'Bootrom' : (d.stage === 2 ? 'DFU' : 'Firmware'), d.vendor, d.product);
     log('Found ' + devs.length + ' device(s); using ' + d.variantName.toUpperCase() + ' (' + d.stageName + ').');
     setState('done');
@@ -1067,6 +1072,7 @@ async function doRemoteBootstrap() {
             // re-detected and its reported variant is just the default placeholder
             // (T31X) - don't overwrite the real one with it.
             selectedRemoteIndex = remoteDevices.indexOf(d);
+            inDfuMode = true; // now a DFU gadget: Bootstrap off, Read/Write on
             var soc = (detectedVariantName || d.variantName || 'dfu').toUpperCase();
             showDeviceInfo(soc, 'DFU', d.vendor, d.product);
             log('Device re-enumerated in DFU mode (' + soc + ') - ready to Read/Write.');
