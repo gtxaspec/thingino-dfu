@@ -85,7 +85,7 @@ Cloner-only options: `--flash-chip <name>` (override JEDEC auto-detect), `--chun
 
 Both backends auto-detect the SoC during bootstrap: the tool uploads a tiny MIPS program to the device's bootrom that reads hardware ID registers (SoC ID, EFUSE sub-type) and returns the exact chip variant. For DFU this selects the right DFU-capable U-Boot; for cloner it also drives DDR type selection (DDR2 vs DDR3).
 
-Detected sub-variants include: T31X, T31N, T31A, T31AL, T31ZX, T32LQ, T40N, T40NN, T40XP, T41NQ, A1, and more.
+Every sub-variant is resolved automatically - steppings, DDR2/DDR3 parts, and EFUSE sub-types are all detected, so there's no need to enumerate them and you never pick one by hand. `--cpu <variant>` is only an override; run `thingino-dfu --list-cpus` for the full set of recognized targets.
 
 ## Build
 
