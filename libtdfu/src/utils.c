@@ -95,6 +95,8 @@ const char *tdfu_variant_to_string(tdfu_variant_t variant) {
         return "t31al";
     case TDFU_VARIANT_T40XP:
         return "t40xp";
+    case TDFU_VARIANT_T41_DDR3:
+        return "t41_ddr3";
     default:
         return "unknown";
     }
@@ -142,6 +144,16 @@ tdfu_variant_t tdfu_variant_from_string(const char *str) {
         return TDFU_VARIANT_T40XP;
     if (strcmp(lower, "t41") == 0)
         return TDFU_VARIANT_T41;
+    if (strcmp(lower, "t41_ddr3") == 0)
+        return TDFU_VARIANT_T41_DDR3;
+    /* T41 chip-name overrides: L/LQ are DDR2 (-> t41 build); the rest are DDR3. */
+    if (strcmp(lower, "t41l") == 0 || strcmp(lower, "t41lq") == 0)
+        return TDFU_VARIANT_T41;
+    if (strcmp(lower, "t41n") == 0 || strcmp(lower, "t41nq") == 0 || strcmp(lower, "t41a") == 0 ||
+        strcmp(lower, "t41zl") == 0 || strcmp(lower, "t41zn") == 0 || strcmp(lower, "t41zx") == 0)
+        return TDFU_VARIANT_T41_DDR3;
+    if (strcmp(lower, "t40n") == 0 || strcmp(lower, "t40nn") == 0)
+        return TDFU_VARIANT_T40;
     if (strcmp(lower, "t32") == 0)
         return TDFU_VARIANT_T32;
     if (strcmp(lower, "x1000") == 0)

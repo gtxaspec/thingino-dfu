@@ -510,6 +510,11 @@ const processor_config_t *processor_config_get(const char *name) {
     if (!name)
         return NULL;
 
+    /* t41_ddr3 is the DDR3 detection variant; the cloner DDR bring-up is identical
+     * to "t41" (which is already the DDR3_W631GU6NG profile), so reuse it. */
+    if (strcasecmp(name, "t41_ddr3") == 0)
+        name = "t41";
+
     for (size_t i = 0; i < processor_configs_count; i++) {
         if (strcasecmp(processor_configs[i].name, name) == 0) {
             return &processor_configs[i];
@@ -2085,6 +2090,7 @@ static const struct {
     {"t40xp", "DDR3_W631GU6NG"},                                      /* vendor: DDR3, dw32=1, bank8=1 */
     {"t41", "DDR3_W631GU6NG"},                                        /* vendor: DDR3_W631GU6NG */
     {"t41n", "DDR3_W631GU6NG"},
+    {"t41_ddr3", "DDR3_W631GU6NG"},                                   /* DDR3 detection variant */
 };
 
 static const size_t default_ddr_mappings_count = sizeof(default_ddr_mappings) / sizeof(default_ddr_mappings[0]);

@@ -26,7 +26,7 @@ const RESP_LOG = 0x03;
 
 const VARIANT_NAMES = ['t10', 't20', 't21', 't23', 't30', 't31', 't31x', 't31zx',
     't31a', 'a1', 't40', 't41', 't32', 'x1000', 'x1600', 'x1700', 'x2000',
-    'x2100', 'x2600', 't31al', 't40xp', 't23dl'];
+    'x2100', 'x2600', 't31al', 't40xp', 't23dl', 't41_ddr3'];
 
 /* CRC-32 (IEEE, reflected) - matches the daemon's remote_crc32 / zlib crc32. */
 function crc32(bytes) {

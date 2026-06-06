@@ -745,17 +745,23 @@ tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant) 
             *variant = TDFU_VARIANT_T31X; /* DDR2 (covers T31X/N/L/ZL/ZC/LC) */
         break;
     case 0x0040:
-        /* T40/T41 family — DDR type varies:
-         *   T40N  (sub2=0x1111): DDR2
-         *   T40NN (sub2=0x8888): DDR2
-         *   T40XP (sub2=0x7777): DDR3
-         *   T41*  (sub2=other):  DDR3 */
-        if (subtype2 == 0x1111 || subtype2 == 0x8888)
-            *variant = TDFU_VARIANT_T40; /* DDR2 */
+        /* T40/T41 family. subsoctype2 (EFUSE) is the ONLY reliable discriminator:
+         * soc_id/sub1/subremark are identical across the family and cppsr is a live
+         * clock register (verified on T40NN/T40XP/T41LQ/T41NQ hardware - cppsr read
+         * FB/94/04..0E/FF, never the vendor table's values). DDR type per part:
+         *   DDR2: T40NN(0x8888), T41L(0x3333), T41LQ(0x9999) -> "t41" build
+         *   DDR3: T40XP(0x7777), T41N(0x1111), T41NQ(0xAAAA), T41A(0x4444),
+         *         T41ZL(0x5555), T41ZX(0x6666)               -> "t41_ddr3" build
+         * 0x7777 is shared by T40XP and T41ZN (both DDR3); no stable register tells
+         * them apart, so it defaults to T40XP - use --cpu t41_ddr3 for a T41ZN. */
+        if (subtype2 == 0x8888)
+            *variant = TDFU_VARIANT_T40; /* T40NN, DDR2 */
         else if (subtype2 == 0x7777)
-            *variant = TDFU_VARIANT_T40XP; /* DDR3, dw32=1, different bootrom */
+            *variant = TDFU_VARIANT_T40XP; /* T40XP (or T41ZN), DDR3 */
+        else if (subtype2 == 0x3333 || subtype2 == 0x9999)
+            *variant = TDFU_VARIANT_T41; /* T41L / T41LQ, DDR2 -> "t41" */
         else
-            *variant = TDFU_VARIANT_T41; /* DDR3 (T41N, T41NQ, etc.) */
+            *variant = TDFU_VARIANT_T41_DDR3; /* T41N/NQ/A/ZL/ZX, DDR3 -> "t41_ddr3" */
         break;
     case 0x0001:
         *variant = TDFU_VARIANT_A1;
@@ -803,10 +809,15 @@ tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant) 
                                            : "T31";
         break;
     case 0x0040:
-        chip_name = (subtype2 == 0x1111)   ? "T40N"
-                    : (subtype2 == 0x8888) ? "T40NN"
-                    : (subtype2 == 0x7777) ? "T40XP"
+        chip_name = (subtype2 == 0x8888)   ? "T40NN"
+                    : (subtype2 == 0x7777) ? "T40XP" /* or T41ZN */
+                    : (subtype2 == 0x1111) ? "T41N"
                     : (subtype2 == 0xAAAA) ? "T41NQ"
+                    : (subtype2 == 0x3333) ? "T41L"
+                    : (subtype2 == 0x9999) ? "T41LQ"
+                    : (subtype2 == 0x4444) ? "T41A"
+                    : (subtype2 == 0x5555) ? "T41ZL"
+                    : (subtype2 == 0x6666) ? "T41ZX"
                                            : "T41";
         break;
     case 0x0001:

@@ -143,6 +143,7 @@ typedef enum tdfu_variant {
     TDFU_VARIANT_T31AL, // T31AL (DDR2, distinct from T31A which is DDR3)
     TDFU_VARIANT_T40XP, // T40XP (DDR3, dw32=1, different bootrom from T40NN)
     TDFU_VARIANT_T23DL, // T23DL (DDR2, 32MB, M14D2561616A)
+    TDFU_VARIANT_T41_DDR3, // T41 DDR3 parts (T41N/NQ/A/ZL/ZX); the DDR2 T41L/LQ use TDFU_VARIANT_T41
 } tdfu_variant_t;
 #define TDFU_VARIANT_DEFINED
 
