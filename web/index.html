@@ -43,6 +43,8 @@
                 rgba(13, 17, 23, 0.5) 75%, transparent 75%, transparent);
             background-size: 1rem 1rem;
         }
+        /* Drift the stripes rightward (Bootstrap's keyframe moves them left). */
+        #progress-fill.progress-bar-animated { animation-direction: reverse; }
         #progress-label { color: #c9d1d9; font-size: 0.8rem; }
         /* Busy-state status badge (Reading/Writing/Bootstrapping) is bg-warning
            (yellow); Bootstrap defaults to white text on it - use dark instead. */
