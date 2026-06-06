@@ -2,6 +2,10 @@
 
 Guide for adding new flash chips, DDR chips, and platform profiles to thingino-dfu.
 
+> **Mostly a cloner-backend guide.** The flash- and DDR-chip databases (the first three sections) are used **only by the cloner backend** - the DFU backend never touches them, because the device's own U-Boot owns DDR init and the flash medium. See [CLONER_ENGINEERING.md](CLONER_ENGINEERING.md) for how they're consumed.
+>
+> The exception is **adding a new SoC**: its *detection* (variant enum, ID-register decode, auto-detect, variant-name mapping, and the DFU U-Boot binary) is shared - both backends rely on detection to identify the chip, and DFU then selects the matching U-Boot. The DDR profile, processor config, and DDR-builder steps in that section are cloner-only.
+
 ## Adding a SPI NOR Flash Chip
 
 **File:** `libtdfu/src/flash/spi_nor_db.c`
