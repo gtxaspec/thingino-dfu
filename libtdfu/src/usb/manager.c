@@ -92,6 +92,10 @@ tdfu_error_t usb_manager_find_devices(usb_manager_t *manager, tdfu_device_info_t
         tdfu_device_info_t *info = &(*devices)[ingenic_count];
         info->bus = libusb_get_bus_number(device_list[i]);
         info->address = libusb_get_device_address(device_list[i]);
+        {
+            int pn = libusb_get_port_numbers(device_list[i], info->port_numbers, sizeof(info->port_numbers));
+            info->port_depth = pn > 0 ? (uint8_t)pn : 0;
+        }
         info->vendor = desc.idVendor;
         info->product = desc.idProduct;
         info->stage = is_dfu ? TDFU_STAGE_DFU : (is_firmware ? TDFU_STAGE_FIRMWARE : TDFU_STAGE_BOOTROM);
@@ -177,6 +181,10 @@ tdfu_error_t usb_manager_find_devices_fast(usb_manager_t *manager, tdfu_device_i
         tdfu_device_info_t *info = &(*devices)[ingenic_count];
         info->bus = libusb_get_bus_number(device_list[i]);
         info->address = libusb_get_device_address(device_list[i]);
+        {
+            int pn = libusb_get_port_numbers(device_list[i], info->port_numbers, sizeof(info->port_numbers));
+            info->port_depth = pn > 0 ? (uint8_t)pn : 0;
+        }
         info->vendor = desc.idVendor;
         info->product = desc.idProduct;
         info->stage = is_dfu ? TDFU_STAGE_DFU : (is_firmware ? TDFU_STAGE_FIRMWARE : TDFU_STAGE_BOOTROM);

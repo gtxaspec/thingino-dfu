@@ -194,6 +194,44 @@ static void daemon_log_hook(const char *msg, size_t len) {
 /* Command handlers                                                    */
 /* ------------------------------------------------------------------ */
 
+/* Cache of the SoC detected at the bootrom stage, keyed by USB port path. A DFU
+ * gadget (a108:4d44) is past the bootrom and can't be re-probed, so we report the
+ * remembered SoC for it - and because the key is the physical port path (stable
+ * across the bootrom->DFU re-enumeration), it stays correct with several devices
+ * connected. A client that connects after a device was already bootstrapped still
+ * sees the real SoC. Cleared only by a daemon restart. */
+#define VCACHE_N 16
+static struct {
+    bool valid;
+    uint8_t bus, depth, port[7];
+    tdfu_variant_t variant;
+} g_vcache[VCACHE_N];
+
+static bool vcache_same_port(int i, const tdfu_device_info_t *d) {
+    return g_vcache[i].valid && d->port_depth > 0 && g_vcache[i].bus == d->bus &&
+           g_vcache[i].depth == d->port_depth && memcmp(g_vcache[i].port, d->port_numbers, d->port_depth) == 0;
+}
+static void vcache_put(const tdfu_device_info_t *d, tdfu_variant_t v) {
+    if (d->port_depth == 0)
+        return; /* no port path -> can't correlate to the DFU re-enumeration */
+    int slot = -1;
+    for (int i = 0; i < VCACHE_N; i++) {
+        if (vcache_same_port(i, d)) { slot = i; break; }
+        if (slot < 0 && !g_vcache[i].valid) slot = i;
+    }
+    if (slot < 0) slot = 0;
+    g_vcache[slot].valid = true;
+    g_vcache[slot].bus = d->bus;
+    g_vcache[slot].depth = d->port_depth;
+    memcpy(g_vcache[slot].port, d->port_numbers, sizeof(g_vcache[slot].port));
+    g_vcache[slot].variant = v;
+}
+static bool vcache_get(const tdfu_device_info_t *d, tdfu_variant_t *out) {
+    for (int i = 0; i < VCACHE_N; i++)
+        if (vcache_same_port(i, d)) { *out = g_vcache[i].variant; return true; }
+    return false;
+}
+
 static int handle_discover(int client_fd) {
     usb_manager_t manager = {0};
     if (usb_manager_init(&manager) != TDFU_SUCCESS) {
@@ -228,9 +266,19 @@ static int handle_discover(int client_fd) {
                 tdfu_variant_t detected = TDFU_VARIANT_T31X;
                 if (protocol_detect_soc(dev, &detected) == TDFU_SUCCESS) {
                     entries[i].variant = (uint8_t)detected;
+                    vcache_put(&devices[i], detected); /* remember by port path for the DFU stage */
                     DEBUG_PRINT("Discover: device %d auto-detected as %s\n", i, tdfu_variant_to_string(detected));
                 }
                 usb_device_close(dev);
+            }
+        } else if (devices[i].stage == TDFU_STAGE_DFU) {
+            /* DFU gadget: past the bootrom, can't re-probe. Report the SoC detected
+             * on this same physical port before it was bootstrapped into DFU. */
+            tdfu_variant_t cached;
+            if (vcache_get(&devices[i], &cached)) {
+                entries[i].variant = (uint8_t)cached;
+                DEBUG_PRINT("Discover: device %d DFU gadget -> remembered SoC %s\n", i,
+                            tdfu_variant_to_string(cached));
             }
         }
     }

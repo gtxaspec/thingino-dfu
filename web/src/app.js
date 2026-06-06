@@ -974,6 +974,42 @@ async function doDfuWrite() {
 /*  Remote daemon backend (dfu-remote over WebSocket)                  */
 /* ------------------------------------------------------------------ */
 
+/* Populate the remote device <select>, showing it only when more than one device
+ * is connected to the daemon. */
+function renderRemoteDevicePicker() {
+    var row = document.getElementById('device-picker-row');
+    var sel = document.getElementById('device-picker');
+    if (!row || !sel) return;
+    if (!remoteDevices || remoteDevices.length <= 1) { row.classList.add('d-none'); return; }
+    sel.innerHTML = '';
+    remoteDevices.forEach(function (x, i) {
+        var stage = x.stage === 0 ? 'bootrom' : (x.stage === 2 ? 'DFU' : 'firmware');
+        var opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = x.variantName.toUpperCase() + ' (' + stage + ') — bus ' + x.bus + ' addr ' + x.address;
+        sel.appendChild(opt);
+    });
+    sel.value = String(selectedRemoteIndex);
+    row.classList.remove('d-none');
+}
+
+/* Select the i-th discovered remote device and refresh the SoC/stage display and
+ * which actions are live. */
+function selectRemoteDevice(idx) {
+    if (!remoteDevices || idx < 0 || idx >= remoteDevices.length) return;
+    selectedRemoteIndex = idx;
+    var d = remoteDevices[idx];
+    detectedVariantName = d.variantName;
+    detectedVariant = d.variant;
+    inDfuMode = d.stage !== 0;
+    showDeviceInfo(d.variantName.toUpperCase(),
+        d.stage === 0 ? 'Bootrom' : (d.stage === 2 ? 'DFU' : 'Firmware'), d.vendor, d.product);
+    var picker = document.getElementById('device-picker');
+    if (picker) picker.value = String(idx);
+    setState('done');
+    setAttention(d.stage === 0 ? 'btn-bootstrap' : 'btn-read', true);
+}
+
 async function doRemoteConnect() {
     if (remoteClient && remoteClient.isConnected()) {
         remoteClient.disconnect();
@@ -1026,16 +1062,10 @@ async function doRemoteConnect() {
         return;
     }
     selectedRemoteIndex = 0;
-    var d = devs[0];
-    detectedVariantName = d.variantName;
-    detectedVariant = d.variant;
-    inDfuMode = d.stage !== 0; // bootrom -> Bootstrap enabled; already-DFU -> Read/Write
-    showDeviceInfo(d.variantName.toUpperCase(), d.stage === 0 ? 'Bootrom' : (d.stage === 2 ? 'DFU' : 'Firmware'), d.vendor, d.product);
-    log('Found ' + devs.length + ' device(s); using ' + d.variantName.toUpperCase() + ' (' + d.stageName + ').');
-    setState('done');
-    // Guide the next action: a bootrom needs Bootstrap; a device already in
-    // DFU/firmware is ready to Read/Write.
-    setAttention(d.stage === 0 ? 'btn-bootstrap' : 'btn-read', true);
+    renderRemoteDevicePicker();
+    selectRemoteDevice(0); // sets state, the SoC/stage display, and the next-action glow
+    log('Found ' + devs.length + ' device(s)' + (devs.length > 1 ? ' (pick one above)' : '') +
+        '; using ' + devs[0].variantName.toUpperCase() + ' (' + devs[0].stageName + ').');
 }
 
 function remoteReady() {
@@ -1046,6 +1076,10 @@ function remoteReady() {
 
 async function doRemoteBootstrap() {
     if (!remoteReady()) return;
+    // Snapshot devices already in DFU so we can pick out our re-enumerated gadget
+    // among them afterward (correct even with several devices connected).
+    var beforeDfu = remoteDevices.filter(function (x) { return x.stage !== 0; })
+        .map(function (x) { return x.bus + ':' + x.address; });
     setState('bootstrapping');
     showProgressBusy('Bootstrapping via daemon...');
     log('Remote bootstrap for ' + (detectedVariantName || '').toUpperCase() + '...');
@@ -1064,7 +1098,9 @@ async function doRemoteBootstrap() {
             try {
                 remoteDevices = await remoteClient.discover();
             } catch (e) { remoteDevices = []; }
-            d = remoteDevices.find(function (x) { return x.stage !== 0; }) || null;
+            d = remoteDevices.find(function (x) {
+                return x.stage !== 0 && beforeDfu.indexOf(x.bus + ':' + x.address) === -1;
+            }) || null;
         }
         if (d) {
             // Re-point to the DFU gadget for Read/Write, but KEEP the SoC detected at
@@ -1072,6 +1108,7 @@ async function doRemoteBootstrap() {
             // re-detected and its reported variant is just the default placeholder
             // (T31X) - don't overwrite the real one with it.
             selectedRemoteIndex = remoteDevices.indexOf(d);
+            renderRemoteDevicePicker(); // the list changed (this device went bootrom -> DFU)
             inDfuMode = true; // now a DFU gadget: Bootstrap off, Read/Write on
             var soc = (detectedVariantName || d.variantName || 'dfu').toUpperCase();
             showDeviceInfo(soc, 'DFU', d.vendor, d.product);
@@ -1201,7 +1238,8 @@ function saveSettings() {
 // Expose handlers referenced by HTML onclick/onchange attributes
 Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSelected, doRead,
                         openSettings, closeSettings, saveSettings, toggleRemoteFields,
-                        toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader });
+                        toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader,
+                        selectRemoteDevice });
 
 (function() {
     if (!navigator.usb) {

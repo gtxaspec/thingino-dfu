@@ -182,6 +182,8 @@ typedef struct {
     uint16_t product;
     tdfu_stage_t stage;
     tdfu_variant_t variant;
+    uint8_t port_numbers[7]; // USB port path (physical), stable across the bootrom->DFU re-enum
+    uint8_t port_depth;      // valid entries in port_numbers; 0 if unavailable
 } tdfu_device_info_t;
 
 // CPU information structure

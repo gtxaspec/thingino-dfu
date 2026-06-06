@@ -125,6 +125,11 @@
                 </button>
             </div>
             <div id="device-info" class="device-info d-none">
+                <div id="device-picker-row" class="mb-2 d-none">
+                    <span class="label me-1">Device:</span>
+                    <select id="device-picker" class="form-select form-select-sm d-inline-block" style="width:auto;max-width:100%;vertical-align:middle"
+                        onchange="selectRemoteDevice(parseInt(this.value, 10))"></select>
+                </div>
                 <div class="row g-2">
                     <div class="col-auto"><span class="label">SoC:</span> <span class="value" id="info-soc">—</span></div>
                     <div class="col-auto"><span class="label">Stage:</span> <span class="value" id="info-stage">—</span></div>
