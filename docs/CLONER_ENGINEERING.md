@@ -66,7 +66,7 @@ The DFU backend needs none of this - the device's own U-Boot owns DDR init and t
 
 ## USB Protocol
 
-All communication uses the Ingenic USB boot protocol. The device appears as `a108:c309` (or `601a:4770` for T20/T21) in bootrom mode, and `a108:8887` in firmware stage.
+All communication uses the Ingenic USB boot protocol. The device appears as `a108:c309` (T/A/C series) - or `601a:4770` for the X series - in bootrom mode, and keeps that VID:PID throughout. The bootrom-vs-firmware stage is read over the protocol (`VR_GET_CPU_INFO`), not from a separate USB ID.
 
 ### Vendor Request Codes
 

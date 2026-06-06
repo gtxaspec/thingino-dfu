@@ -60,13 +60,13 @@ typedef struct {
 // ============================================================================
 
 // USB Vendor IDs and Product IDs for Ingenic devices
-#define VENDOR_ID_INGENIC     0x601A // Primary vendor ID for most Ingenic devices
-#define VENDOR_ID_INGENIC_ALT 0xA108 // Alternative vendor ID for some models
-#define PRODUCT_ID_BOOTROM    0x4770 // T20/T21
-#define PRODUCT_ID_BOOTROM2   0xC309 // T30/T31/T40 series bootrom
+#define VENDOR_ID_INGENIC     0x601A // X series VID (X1000/X1600/X2000...) - future DFU
+#define VENDOR_ID_INGENIC_ALT 0xA108 // T/A/C series VID (T10-T41, A1) - current bootrom
+#define PRODUCT_ID_BOOTROM    0x4770 // X series bootrom (601a:4770) - future
+#define PRODUCT_ID_BOOTROM2   0xC309 // T/A/C series bootrom (a108:c309)
 #define PRODUCT_ID_BOOTROM3   0x601A // Alternative bootrom ID
-#define PRODUCT_ID_FIRMWARE   0x8887 // Common firmware ID
-#define PRODUCT_ID_FIRMWARE2  0x601E // Alternative firmware ID
+#define PRODUCT_ID_FIRMWARE   0x8887 // firmware-stage PID (vestigial - not seen in production; the stage is read via VR_GET_CPU_INFO while the device keeps its bootrom VID:PID)
+#define PRODUCT_ID_FIRMWARE2  0x601E // firmware-stage PID (vestigial)
 #define PRODUCT_ID_DFU        0x4D44 // U-Boot DFU gadget (device already in DFU mode)
 
 // Command codes - Bootrom stage (0x00-0x05)
