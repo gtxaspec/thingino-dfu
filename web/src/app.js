@@ -1062,12 +1062,14 @@ async function doRemoteBootstrap() {
             d = remoteDevices.find(function (x) { return x.stage !== 0; }) || null;
         }
         if (d) {
+            // Re-point to the DFU gadget for Read/Write, but KEEP the SoC detected at
+            // the bootrom stage. A DFU gadget is past the bootrom, so its SoC can't be
+            // re-detected and its reported variant is just the default placeholder
+            // (T31X) - don't overwrite the real one with it.
             selectedRemoteIndex = remoteDevices.indexOf(d);
-            detectedVariantName = d.variantName;
-            detectedVariant = d.variant;
-            showDeviceInfo(d.variantName.toUpperCase(),
-                d.stage === 2 ? 'DFU' : (d.stage === 0 ? 'Bootrom' : 'Firmware'), d.vendor, d.product);
-            log('Device re-enumerated in ' + (d.stageName || 'dfu').toUpperCase() + ' mode - ready to Read/Write.');
+            var soc = (detectedVariantName || d.variantName || 'dfu').toUpperCase();
+            showDeviceInfo(soc, 'DFU', d.vendor, d.product);
+            log('Device re-enumerated in DFU mode (' + soc + ') - ready to Read/Write.');
             showProgress(100, 'Ready');
             setTimeout(hideProgress, 1200);
             setState('done');
