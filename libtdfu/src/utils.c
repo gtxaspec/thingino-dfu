@@ -97,6 +97,20 @@ const char *tdfu_variant_to_string(tdfu_variant_t variant) {
         return "t40xp";
     case TDFU_VARIANT_T41_DDR3:
         return "t41_ddr3";
+    case TDFU_VARIANT_T41N:
+        return "t41n";
+    case TDFU_VARIANT_T41NQ:
+        return "t41nq";
+    case TDFU_VARIANT_T41L:
+        return "t41l";
+    case TDFU_VARIANT_T41LQ:
+        return "t41lq";
+    case TDFU_VARIANT_T41A:
+        return "t41a";
+    case TDFU_VARIANT_T41ZL:
+        return "t41zl";
+    case TDFU_VARIANT_T41ZX:
+        return "t41zx";
     default:
         return "unknown";
     }
@@ -146,11 +160,22 @@ tdfu_variant_t tdfu_variant_from_string(const char *str) {
         return TDFU_VARIANT_T41;
     if (strcmp(lower, "t41_ddr3") == 0)
         return TDFU_VARIANT_T41_DDR3;
-    /* T41 chip-name overrides: L/LQ are DDR2 (-> t41 build); the rest are DDR3. */
-    if (strcmp(lower, "t41l") == 0 || strcmp(lower, "t41lq") == 0)
-        return TDFU_VARIANT_T41;
-    if (strcmp(lower, "t41n") == 0 || strcmp(lower, "t41nq") == 0 || strcmp(lower, "t41a") == 0 ||
-        strcmp(lower, "t41zl") == 0 || strcmp(lower, "t41zn") == 0 || strcmp(lower, "t41zx") == 0)
+    /* T41 per-chip overrides (display the exact model; firmware via dfu_variant_dir). */
+    if (strcmp(lower, "t41l") == 0)
+        return TDFU_VARIANT_T41L;
+    if (strcmp(lower, "t41lq") == 0)
+        return TDFU_VARIANT_T41LQ;
+    if (strcmp(lower, "t41n") == 0)
+        return TDFU_VARIANT_T41N;
+    if (strcmp(lower, "t41nq") == 0)
+        return TDFU_VARIANT_T41NQ;
+    if (strcmp(lower, "t41a") == 0)
+        return TDFU_VARIANT_T41A;
+    if (strcmp(lower, "t41zl") == 0)
+        return TDFU_VARIANT_T41ZL;
+    if (strcmp(lower, "t41zx") == 0)
+        return TDFU_VARIANT_T41ZX;
+    if (strcmp(lower, "t41zn") == 0)
         return TDFU_VARIANT_T41_DDR3;
     if (strcmp(lower, "t40n") == 0 || strcmp(lower, "t40nn") == 0)
         return TDFU_VARIANT_T40;

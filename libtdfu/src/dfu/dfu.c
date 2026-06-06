@@ -702,8 +702,17 @@ static const char *dfu_variant_dir(tdfu_variant_t v) {
         return "t40";
     case TDFU_VARIANT_T40XP: /* T40XP is DDR3 */
         return "t40_ddr3";
-    case TDFU_VARIANT_T41:
-        return "t41";
+    case TDFU_VARIANT_T41: /* generic + DDR2 grades */
+    case TDFU_VARIANT_T41L:
+    case TDFU_VARIANT_T41LQ:
+        return "t41"; /* DDR2 */
+    case TDFU_VARIANT_T41_DDR3: /* DDR3 grades */
+    case TDFU_VARIANT_T41N:
+    case TDFU_VARIANT_T41NQ:
+    case TDFU_VARIANT_T41A:
+    case TDFU_VARIANT_T41ZL:
+    case TDFU_VARIANT_T41ZX:
+        return "t41_ddr3"; /* DDR3 */
     case TDFU_VARIANT_A1:
         return "a1";
     default:

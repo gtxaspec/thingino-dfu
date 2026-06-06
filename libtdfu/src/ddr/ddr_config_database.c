@@ -510,14 +510,20 @@ const processor_config_t *processor_config_get(const char *name) {
     if (!name)
         return NULL;
 
-    /* t41_ddr3 is the DDR3 detection variant; the cloner DDR bring-up is identical
-     * to "t41" (which is already the DDR3_W631GU6NG profile), so reuse it. */
-    if (strcasecmp(name, "t41_ddr3") == 0)
-        name = "t41";
-
     for (size_t i = 0; i < processor_configs_count; i++) {
         if (strcasecmp(processor_configs[i].name, name) == 0) {
             return &processor_configs[i];
+        }
+    }
+
+    /* Per-chip T41 grades (t41_ddr3 / t41nq / t41lq / ...) have no dedicated cloner
+     * profile; they share "t41" (the DDR3_W631GU6NG bring-up) when there's no exact
+     * match. DFU doesn't use this path (the device's U-Boot owns DDR). */
+    if (strncasecmp(name, "t41", 3) == 0) {
+        for (size_t i = 0; i < processor_configs_count; i++) {
+            if (strcasecmp(processor_configs[i].name, "t41") == 0) {
+                return &processor_configs[i];
+            }
         }
     }
 
@@ -2122,6 +2128,11 @@ const ddr_chip_config_t *ddr_chip_config_get_default(const char *processor_name)
             return ddr_chip_config_get(default_ddr_mappings[i].default_ddr);
         }
     }
+
+    // Per-chip T41 grades (t41nq/t41lq/...) with no exact mapping share the t41
+    // DDR3 chip, not the DDR2 default below.
+    if (strncasecmp(processor_name, "t41", 3) == 0)
+        return ddr_chip_config_get("DDR3_W631GU6NG");
 
     // Fallback to M14D1G1664A_DDR2 if no specific mapping
     return ddr_chip_config_get("M14D1G1664A_DDR2");

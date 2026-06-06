@@ -758,10 +758,22 @@ tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant) 
             *variant = TDFU_VARIANT_T40; /* T40NN, DDR2 */
         else if (subtype2 == 0x7777)
             *variant = TDFU_VARIANT_T40XP; /* T40XP (or T41ZN), DDR3 */
-        else if (subtype2 == 0x3333 || subtype2 == 0x9999)
-            *variant = TDFU_VARIANT_T41; /* T41L / T41LQ, DDR2 -> "t41" */
+        else if (subtype2 == 0x3333)
+            *variant = TDFU_VARIANT_T41L; /* DDR2 -> "t41" */
+        else if (subtype2 == 0x9999)
+            *variant = TDFU_VARIANT_T41LQ; /* DDR2 -> "t41" */
+        else if (subtype2 == 0x1111)
+            *variant = TDFU_VARIANT_T41N; /* DDR3 -> "t41_ddr3" */
+        else if (subtype2 == 0xAAAA)
+            *variant = TDFU_VARIANT_T41NQ; /* DDR3 */
+        else if (subtype2 == 0x4444)
+            *variant = TDFU_VARIANT_T41A; /* DDR3 */
+        else if (subtype2 == 0x5555)
+            *variant = TDFU_VARIANT_T41ZL; /* DDR3 */
+        else if (subtype2 == 0x6666)
+            *variant = TDFU_VARIANT_T41ZX; /* DDR3 */
         else
-            *variant = TDFU_VARIANT_T41_DDR3; /* T41N/NQ/A/ZL/ZX, DDR3 -> "t41_ddr3" */
+            *variant = TDFU_VARIANT_T41_DDR3; /* unknown T41 grade, default DDR3 */
         break;
     case 0x0001:
         *variant = TDFU_VARIANT_A1;
