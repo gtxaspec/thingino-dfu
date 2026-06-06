@@ -178,17 +178,6 @@ SPL + U-Boot binaries used for bootstrap live under `firmware/`:
 
 The DFU images are built from [gtxaspec/u-boot](https://github.com/gtxaspec/u-boot) (the `isvp_<soc>_usbboot` defconfigs).
 
-## Hardware Databases (cloner backend)
-
-All chip data is compiled in, no config files at runtime - the cloner backend uses these for DDR bring-up and flash detection:
-
-- **DDR chips:** 36 entries (DDR2, DDR3, LPDDR2)
-- **SPI NOR flash:** 49 entries (JEDEC-ID matched)
-- **NAND flash:** 12 entries
-- **Platform configs:** 19 processors
-
-(DFU doesn't need these - the device's own U-Boot owns DDR and the flash medium.)
-
 ## Technical Details
 
-See [docs/ENGINEERING.md](docs/ENGINEERING.md) for USB protocol documentation, flash descriptor formats, DDR binary layout, and platform-specific behavior notes.
+See [docs/CLONER_ENGINEERING.md](docs/CLONER_ENGINEERING.md) for the cloner backend internals - USB protocol, flash descriptor formats, DDR binary layout, the compiled-in hardware databases (DDR / SPI-NOR / NAND / platform configs), and platform-specific behavior.

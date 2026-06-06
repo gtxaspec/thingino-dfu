@@ -1,6 +1,6 @@
-# Engineering Reference
+# Cloner Backend Engineering Reference
 
-Technical documentation for thingino-dfu internals. Covers the USB protocol, flash descriptor formats, DDR binary layout, and platform-specific behavior.
+Internals of thingino-dfu's **cloner** backend - the reverse-engineered Ingenic USB vendor protocol. Covers the USB protocol, flash descriptor formats, DDR binary layout, the compiled-in hardware databases, and platform-specific behavior. The default DFU backend needs none of this; the device's own U-Boot owns DDR init and the flash medium.
 
 ## Architecture
 
@@ -48,6 +48,19 @@ cli/
   main.c                # CLI argument parsing and dispatch
 dfu-remote/          # Network daemon
 ```
+
+---
+
+## Hardware Databases
+
+All chip data is compiled in - no config files at runtime. The cloner backend uses these for DDR bring-up and flash detection:
+
+- **DDR chips:** 36 entries (DDR2, DDR3, LPDDR2)
+- **SPI NOR flash:** 49 entries (JEDEC-ID matched)
+- **NAND flash:** 12 entries
+- **Platform configs:** 19 processors
+
+The DFU backend needs none of this - the device's own U-Boot owns DDR init and the flash medium. See [ADDING_HARDWARE.md](ADDING_HARDWARE.md) to extend these databases.
 
 ---
 
