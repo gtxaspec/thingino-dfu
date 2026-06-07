@@ -62,6 +62,7 @@ void    libusb_free_device_list(libusb_device **list, int unref_devices);
 int libusb_get_device_descriptor(libusb_device *dev, struct libusb_device_descriptor *desc);
 uint8_t libusb_get_bus_number(libusb_device *dev);
 uint8_t libusb_get_device_address(libusb_device *dev);
+int libusb_get_port_numbers(libusb_device *dev, uint8_t *port_numbers, int port_numbers_len);
 
 int  libusb_open(libusb_device *dev, libusb_device_handle **handle);
 void libusb_close(libusb_device_handle *handle);

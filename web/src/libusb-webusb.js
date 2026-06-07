@@ -159,6 +159,11 @@ mergeInto(LibraryManager.library, {
     libusb_get_device_address__deps: [],
     libusb_get_device_address: function(dev_ptr) { return dev_ptr; },
 
+    // WebUSB exposes no physical port path; report none (depth 0). The remote
+    // daemon does the port-path correlation - the local WebUSB path is single-device.
+    libusb_get_port_numbers__deps: [],
+    libusb_get_port_numbers: function(dev_ptr, port_ptr, len) { return 0; },
+
     /* ------------------------------------------------------------------ */
     /*  Open / Close / Ref                                                 */
     /* ------------------------------------------------------------------ */
