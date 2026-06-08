@@ -322,7 +322,8 @@ int remote_list_devices(void) {
     printf("------|-----|------|---------|---------|----------|--------\n");
 
     for (int i = 0; i < count; i++) {
-        const char *stage = entries[i].stage == 1 ? "firmware" : "bootrom";
+        /* wire stage: 0=bootrom, 1=firmware, 2=DFU gadget */
+        const char *stage = entries[i].stage == 1 ? "firmware" : entries[i].stage == 2 ? "dfu" : "bootrom";
         printf("  %3d | %3d | %4d | 0x%04X  | 0x%04X  | %-8s | %d\n", i, entries[i].bus, entries[i].address,
                tdfu_ntohs(entries[i].vendor), tdfu_ntohs(entries[i].product), stage, entries[i].variant);
     }
@@ -357,6 +358,36 @@ const char *remote_detect_variant(int device_index) {
     const char *name = tdfu_variant_to_string((tdfu_variant_t)entries[device_index].variant);
     free(payload);
     return name;
+}
+
+/* Return the USB stage of a remote device by index: 0 = bootrom,
+ * 1 = firmware/DFU gadget, or -1 on error / out of range. Lets a bare
+ * -w decide whether it must bootstrap first (mirrors local cloner mode). */
+int remote_device_stage(int device_index) {
+    if (send_command(CMD_DISCOVER, NULL, 0) < 0)
+        return -1;
+
+    uint8_t status;
+    uint8_t *payload = NULL;
+    uint32_t payload_len = 0;
+    if (recv_response(&status, &payload, &payload_len) < 0)
+        return -1;
+
+    if (status != RESP_OK) {
+        free(payload);
+        return -1;
+    }
+
+    int count = (int)(payload_len / sizeof(tdfu_device_entry_t));
+    if (device_index < 0 || device_index >= count) {
+        free(payload);
+        return -1;
+    }
+
+    tdfu_device_entry_t *entries = (tdfu_device_entry_t *)payload;
+    int stage = entries[device_index].stage;
+    free(payload);
+    return stage;
 }
 
 /**

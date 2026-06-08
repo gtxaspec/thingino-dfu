@@ -61,9 +61,9 @@ void print_usage(const char *program_name) {
     printf("  -i, --index <num>         Device index to operate on (default: 0)\n");
     printf("  -b, --bootstrap           Bootstrap device to firmware stage\n");
     printf("  -r, --read <file>         Read firmware from device to file\n");
-    printf("  -w, --write <file>        Write firmware from file to device\n");
+    printf("  -w, --write <file>        Bootstrap (if needed) and write firmware to device\n");
     printf("      --no-erase            Skip flash erase before writing\n");
-    printf("      --reboot              Reboot device after flash write completes\n");
+    printf("      --reboot              Reboot after write (cloner backend only)\n");
     printf("      --chunk-size <size>   Write chunk size: 64K, 128K, 256K, 512K, 1M\n");
     printf("      --cpu <variant>       CPU variant (a1, t31, t40, t41, etc.)\n");
     printf("      --config <file>       Custom DDR configuration file\n");
@@ -83,7 +83,8 @@ void print_usage(const char *program_name) {
     printf("  thingino-dfu -b                                 # Bootrom -> U-Boot DFU (auto-detect SoC)\n");
     printf("  thingino-dfu -l                                 # List DFU alt-settings\n");
     printf("  thingino-dfu --alt rootfs -w rootfs.bin         # Flash an alt-setting via DFU\n");
-    printf("  thingino-dfu --cloner -i 0 -b -w fw.bin         # Legacy cloner bootstrap + write\n");
+    printf("  thingino-dfu --host 192.168.1.50 -w fw.bin      # Remote: bootstrap (if needed) + write\n");
+    printf("  thingino-dfu --cloner -w fw.bin                 # Legacy cloner: bootstrap + write\n");
     printf("  thingino-dfu --list-cpus                        # Show all supported CPUs\n");
 }
 
@@ -393,18 +394,31 @@ int main(int argc, char *argv[]) {
 
         if (options.list_devices) {
             rc = remote_list_devices() < 0 ? EXIT_DEVICE_ERROR : 0;
-        } else if (options.write_firmware && options.input_file && options.bootstrap) {
-            /* Combined bootstrap + write (remote) */
-            rc = remote_bootstrap(options.device_index, cpu, options.firmware_dir);
-            if (rc == 0) {
-                printf("Bootstrap complete, proceeding to write\n\n");
-                rc = remote_write_firmware(options.device_index, cpu, options.input_file);
+        } else if (options.write_firmware && options.input_file) {
+            /* -w bootstraps then writes, mirroring local cloner mode: bootstrap
+             * if the user passed -b or the target is still in bootrom; if it has
+             * already re-enumerated as a DFU/firmware gadget, write straight away
+             * (re-bootstrapping a gadget would fail). */
+            int stage = remote_device_stage(options.device_index); /* 0=bootrom 1=fw <0=unknown */
+            bool do_bootstrap = options.bootstrap || stage == 0;
+            rc = 0;
+            if (do_bootstrap) {
+                if (!cpu)
+                    cpu = remote_detect_variant(options.device_index);
+                if (!cpu) {
+                    fprintf(stderr, "Failed to detect remote device variant for bootstrap\n");
+                    rc = -1;
+                } else {
+                    rc = remote_bootstrap(options.device_index, cpu, options.firmware_dir);
+                    if (rc == 0)
+                        printf("Bootstrap complete, proceeding to write\n\n");
+                }
             }
+            if (rc == 0)
+                rc = remote_write_firmware(options.device_index, cpu, options.input_file);
             rc = rc < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else if (options.bootstrap) {
             rc = remote_bootstrap(options.device_index, cpu, options.firmware_dir) < 0 ? EXIT_DEVICE_ERROR : 0;
-        } else if (options.write_firmware && options.input_file) {
-            rc = remote_write_firmware(options.device_index, cpu, options.input_file) < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else if (options.read_firmware && options.output_file) {
             rc = remote_read_firmware(options.device_index, options.output_file) < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else {

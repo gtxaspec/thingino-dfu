@@ -303,12 +303,21 @@ static uint32_t read_be32(const uint8_t *p) {
  */
 /* Resolve which DFU alt to target for a remote read/write. Single-alt gadgets
  * (the common Ingenic "flash" case) resolve automatically; otherwise the first
- * alt is used. Returns the alt number, or -1 if the gadget isn't present. */
+ * alt is used. Returns the alt number, or -1 if the gadget isn't present.
+ *
+ * Right after a bootstrap the gadget may still be re-enumerating (the bootrom ->
+ * U-Boot DFU transition, sometimes with a USB reset to recover an unresponsive
+ * gadget). Re-probe for a few seconds - libusb re-scans on each call - so a
+ * one-shot `-w` (bootstrap + write) and `-b -w` don't race the re-enumeration
+ * window and fail with a spurious "Device not found". */
 static int dfu_pick_alt(usb_manager_t *manager, int device_index) {
     tdfu_dfu_info_t info;
-    if (tdfu_dfu_probe(manager, device_index, &info) != TDFU_SUCCESS)
-        return -1;
-    return info.alt_count > 0 ? info.alts[0].alt : -1;
+    for (int attempt = 0; attempt < 20; attempt++) {
+        if (tdfu_dfu_probe(manager, device_index, &info) == TDFU_SUCCESS)
+            return info.alt_count > 0 ? info.alts[0].alt : -1;
+        usleep(250000); /* 250 ms; ~5 s total */
+    }
+    return -1;
 }
 
 static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len, const char *firmware_dir,
