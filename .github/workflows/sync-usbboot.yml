@@ -1,0 +1,90 @@
+# Keep firmware/dfu/<soc>/{spl,uboot}.bin in sync with the rolling "usbboot"
+# pre-release at gtxaspec/u-boot (the mainline DFU USB-boot loaders the daemon
+# USB-boots during bootstrap). Runs daily and on demand; when the release's
+# binaries differ from what is committed, it commits the refreshed loaders
+# straight to the default branch.
+#
+# Security: no marketplace actions (matching .github/workflows in gtxaspec/u-boot).
+# The source repo is public and pulled with the pre-installed `gh` CLI
+# (`gh release download`); this repo is a plain token-authed `git clone` + push.
+# Only this job is granted contents:write.
+#
+# Mapping: the release packs one <defconfig>-u-boot-spl.bin + <defconfig>-u-boot.bin
+# pair per SoC, where defconfig = isvp_<soc>_usbboot[_ddr3]. Each pair maps to
+# firmware/dfu/<soc>[_ddr3]/{spl,uboot}.bin. xburst1 SPLs build deterministically,
+# so only genuinely-changed loaders produce a diff.
+#
+# To review instead of auto-committing, replace the final step's commit+push with
+# a branch push + `gh pr create` (and add pull-requests:write).
+
+name: sync-usbboot
+
+on:
+  schedule:
+    - cron: '23 7 * * *'   # daily check (UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # commit + push the refreshed loaders to the default branch
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SRC_REPO: gtxaspec/u-boot
+      SRC_TAG: usbboot
+    steps:
+      - name: Download usbboot loader assets
+        run: |
+          mkdir -p assets
+          gh release download "$SRC_TAG" -R "$SRC_REPO" -D assets --clobber
+          src_sha="$(gh release view "$SRC_TAG" -R "$SRC_REPO" --json targetCommitish --jq .targetCommitish)"
+          echo "SRC_SHA=$src_sha" >> "$GITHUB_ENV"
+          echo "==== downloaded ($SRC_TAG @ $src_sha) ===="
+          ls -l assets
+          # Sanity: at least one pair, and no empty/truncated asset.
+          [ "$(ls -1 assets | wc -l)" -ge 2 ] || { echo "::error::no usbboot assets downloaded"; exit 1; }
+          for f in assets/*; do
+            [ -s "$f" ] || { echo "::error::empty asset $f"; exit 1; }
+          done
+
+      - name: Checkout this repo (plain clone, token-authed)
+        run: |
+          git clone --depth 1 --single-branch --no-tags \
+            --branch "$GITHUB_REF_NAME" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}" repo
+
+      - name: Map loaders into firmware/dfu/<soc>/
+        run: |
+          for f in assets/*; do
+            base="$(basename "$f")"
+            case "$base" in
+              *-u-boot-spl.bin) defconfig="${base%-u-boot-spl.bin}"; out="spl.bin" ;;
+              *-u-boot.bin)     defconfig="${base%-u-boot.bin}";     out="uboot.bin" ;;
+              *) echo "skip unrecognized asset: $base"; continue ;;
+            esac
+            family="${defconfig#isvp_}"   # t31_usbboot, t40_usbboot_ddr3
+            family="${family/_usbboot/}"  # t31, t40_ddr3
+            mkdir -p "repo/firmware/dfu/$family"
+            cp "$f" "repo/firmware/dfu/$family/$out"
+          done
+          echo "==== firmware/dfu families ===="
+          ls -1 repo/firmware/dfu
+
+      - name: Commit refreshed loaders to the default branch
+        run: |
+          cd repo
+          git add -f firmware/dfu
+          if git diff --cached --quiet; then
+            echo "firmware/dfu already matches the usbboot release - nothing to do."
+            exit 0
+          fi
+          changed="$(git diff --cached --name-only | sed 's#firmware/dfu/##; s#/[^/]*$##' | sort -u | tr '\n' ' ')"
+          echo "Changed families: $changed"
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "firmware: sync DFU loaders from gtxaspec/u-boot usbboot ($SRC_SHA)"
+          git push origin "HEAD:$GITHUB_REF_NAME"
