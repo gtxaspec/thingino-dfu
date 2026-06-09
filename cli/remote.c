@@ -400,19 +400,63 @@ int remote_device_stage(int device_index) {
  *   [4:spl_len][spl_data][4:spl_crc32]
  *   [4:uboot_len][uboot_data][4:uboot_crc32]
  */
-int remote_bootstrap(int device_index, const char *cpu_variant, const char *firmware_dir) {
+int remote_bootstrap(int device_index, const char *cpu_variant, const char *firmware_dir, const char *spl_file,
+                     const char *uboot_file) {
     if (!g_remote_cloner) {
-        /* DFU backend: the daemon USB-boots firmware/dfu/<soc>/ itself, so the
-         * client sends only device index + variant (no DDR/SPL/U-Boot upload). */
+        /* DFU backend: by default the daemon USB-boots firmware/dfu/<soc>/ itself,
+         * so the client sends only device index + variant. If the user passed both
+         * --spl and --uboot, stream those blobs and the daemon uses them instead
+         * (skipping SoC detection), matching local --spl/--uboot. */
         size_t vlen = cpu_variant ? strlen(cpu_variant) : 0;
         if (vlen > 63)
             vlen = 63;
-        uint8_t payload[2 + 64];
-        payload[0] = (uint8_t)device_index;
-        payload[1] = (uint8_t)vlen;
-        if (vlen)
-            memcpy(payload + 2, cpu_variant, vlen);
-        if (send_command(CMD_BOOTSTRAP, payload, 2 + vlen) < 0)
+
+        uint8_t *spl = NULL, *uboot = NULL;
+        size_t spl_len = 0, uboot_len = 0;
+        bool override = spl_file && spl_file[0] && uboot_file && uboot_file[0];
+        if (override) {
+            if (read_file(spl_file, &spl, &spl_len) < 0) {
+                fprintf(stderr, "Failed to read --spl file: %s\n", spl_file);
+                return -1;
+            }
+            if (read_file(uboot_file, &uboot, &uboot_len) < 0) {
+                fprintf(stderr, "Failed to read --uboot file: %s\n", uboot_file);
+                free(spl);
+                return -1;
+            }
+        }
+
+        size_t plen = 2 + vlen + (override ? 4 + spl_len + 4 + uboot_len : 0);
+        uint8_t *payload = malloc(plen);
+        if (!payload) {
+            free(spl);
+            free(uboot);
+            return -1;
+        }
+        uint8_t *q = payload;
+        *q++ = (uint8_t)device_index;
+        *q++ = (uint8_t)vlen;
+        if (vlen) {
+            memcpy(q, cpu_variant, vlen);
+            q += vlen;
+        }
+        if (override) {
+            write_be32(q, (uint32_t)spl_len);
+            q += 4;
+            memcpy(q, spl, spl_len);
+            q += spl_len;
+            write_be32(q, (uint32_t)uboot_len);
+            q += 4;
+            memcpy(q, uboot, uboot_len);
+            q += uboot_len;
+            printf("Sending custom SPL (%zu B) + U-Boot (%zu B) to daemon\n", spl_len, uboot_len);
+        }
+        free(spl);
+        free(uboot);
+
+        int sc = send_command(CMD_BOOTSTRAP, payload, (uint32_t)plen);
+        free(payload);
+        if (sc < 0)
             return -1;
         uint8_t st = 0;
         uint8_t *resp = NULL;

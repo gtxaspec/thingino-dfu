@@ -296,10 +296,38 @@ static uint32_t read_be32(const uint8_t *p) {
     return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | p[3];
 }
 
+/* Stage a received blob to a fresh temp file (name written to path_out). Returns
+ * 0 on success, -1 on failure; the caller removes the file. Used to hand a
+ * client-streamed --spl/--uboot to tdfu_dfu_bootstrap, which takes file paths. */
+static int stage_temp_blob(char *path_out, size_t path_sz, const uint8_t *data, uint32_t len) {
+#ifdef _WIN32
+    snprintf(path_out, path_sz, "%s\\tdfu-blob-tmp.bin", getenv("TEMP") ? getenv("TEMP") : ".");
+#else
+    snprintf(path_out, path_sz, "/tmp/tdfu-blob-XXXXXX");
+    int fd = mkstemp(path_out);
+    if (fd < 0)
+        return -1;
+    close(fd);
+#endif
+    FILE *f = fopen(path_out, "wb");
+    if (!f)
+        return -1;
+    if (fwrite(data, 1, len, f) != len) {
+        fclose(f);
+        remove(path_out);
+        return -1;
+    }
+    fclose(f);
+    return 0;
+}
+
 /**
- * Handle CMD_BOOTSTRAP - uses local firmware_dir for DDR/SPL/U-Boot.
+ * Handle CMD_BOOTSTRAP - DFU: bootrom -> U-Boot DFU gadget (or cloner staging).
  *
  * Payload: [1:device_idx][1:variant_len][N:variant]
+ *          optional (DFU only): [4:spl_len][spl][4:uboot_len][uboot]
+ *          both blobs together => use them and skip SoC detect; absent =>
+ *          USB-boot firmware/dfu/<soc>/{spl,uboot}.bin from firmware_dir.
  */
 /* Resolve which DFU alt to target for a remote read/write. Single-alt gadgets
  * (the common Ingenic "flash" case) resolve automatically; otherwise the first
@@ -334,17 +362,56 @@ static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len,
         return send_error(client_fd, "bad variant length");
 
     char variant_str[64] = {0};
-    if (variant_len >= sizeof(variant_str))
-        variant_len = sizeof(variant_str) - 1;
-    memcpy(variant_str, p, variant_len);
+    size_t variant_copy = variant_len < sizeof(variant_str) ? variant_len : sizeof(variant_str) - 1;
+    memcpy(variant_str, p, variant_copy);
+    p += variant_len;
+
+    /* Optional client-supplied SPL + U-Boot (DFU --spl/--uboot streamed over the
+     * wire): [4:spl_len][spl][4:uboot_len][uboot]. Both-or-neither, mirroring the
+     * local explicit_files path; absent => use firmware/dfu/<soc>/. */
+    char spl_tmp[64] = {0}, uboot_tmp[64] = {0};
+    const char *spl_override = NULL, *uboot_override = NULL;
+    if (!use_cloner && p < end) {
+        if (p + 4 > end)
+            return send_error(client_fd, "bad SPL override length");
+        uint32_t spl_len = read_be32(p);
+        p += 4;
+        if (spl_len == 0 || p + spl_len > end)
+            return send_error(client_fd, "bad SPL override");
+        const uint8_t *spl_data = p;
+        p += spl_len;
+        if (p + 4 > end)
+            return send_error(client_fd, "bad U-Boot override length");
+        uint32_t uboot_len = read_be32(p);
+        p += 4;
+        if (uboot_len == 0 || p + uboot_len > end)
+            return send_error(client_fd, "bad U-Boot override");
+        const uint8_t *uboot_data = p;
+        p += uboot_len;
+        if (stage_temp_blob(spl_tmp, sizeof(spl_tmp), spl_data, spl_len) != 0)
+            return send_error(client_fd, "failed to stage SPL override");
+        if (stage_temp_blob(uboot_tmp, sizeof(uboot_tmp), uboot_data, uboot_len) != 0) {
+            remove(spl_tmp);
+            return send_error(client_fd, "failed to stage U-Boot override");
+        }
+        spl_override = spl_tmp;
+        uboot_override = uboot_tmp;
+        printf("Bootstrap: custom SPL %u B + U-Boot %u B from client\n", spl_len, uboot_len);
+    }
 
     g_state = "bootstrapping";
     g_cancel = 0;
-    printf("Bootstrap request: device=%d, cpu=%s, firmware_dir=%s\n", device_index, variant_str, firmware_dir);
+    printf("Bootstrap request: device=%d, cpu=%s, firmware_dir=%s%s\n", device_index, variant_str, firmware_dir,
+           spl_override ? " (custom SPL/U-Boot)" : "");
 
     usb_manager_t manager = {0};
-    if (usb_manager_init(&manager) != TDFU_SUCCESS)
+    if (usb_manager_init(&manager) != TDFU_SUCCESS) {
+        if (spl_tmp[0])
+            remove(spl_tmp);
+        if (uboot_tmp[0])
+            remove(uboot_tmp);
         return send_error(client_fd, "USB init failed");
+    }
 
     g_log_client_fd = client_fd;
     tdfu_error_t result;
@@ -352,15 +419,20 @@ static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len,
         result = tdfu_op_bootstrap(&manager, device_index, variant_str, g_debug_enabled, false, NULL, NULL, NULL,
                                    firmware_dir);
     } else {
-        /* DFU: bootrom -> U-Boot DFU gadget, images from firmware/dfu/<soc>/ */
-        result = tdfu_dfu_bootstrap(&manager, device_index, firmware_dir, variant_str[0] ? variant_str : NULL, NULL,
-                                    NULL);
+        /* DFU: bootrom -> U-Boot DFU gadget. Custom SPL/U-Boot (if supplied)
+         * override firmware/dfu/<soc>/ and skip SoC detection. */
+        result = tdfu_dfu_bootstrap(&manager, device_index, firmware_dir, variant_str[0] ? variant_str : NULL,
+                                    spl_override, uboot_override);
     }
     g_log_client_fd = -1;
 
     usb_manager_cleanup(&manager);
 
     g_state = "idle";
+    if (spl_tmp[0])
+        remove(spl_tmp);
+    if (uboot_tmp[0])
+        remove(uboot_tmp);
     if (result != TDFU_SUCCESS) {
         char msg[128];
         snprintf(msg, sizeof(msg), "bootstrap failed: %s", tdfu_error_to_string(result));

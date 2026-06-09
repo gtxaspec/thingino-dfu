@@ -380,7 +380,11 @@ int main(int argc, char *argv[]) {
          * and for DFU bootstrap, but NOT for a DFU read/write (those target an
          * already-running U-Boot DFU gadget, which has no SoC variant). */
         const char *cpu = options.force_cpu;
-        bool need_variant = options.cloner || options.bootstrap;
+        /* Custom DFU SPL+U-Boot (both --spl and --uboot) override the daemon's
+         * firmware/dfu/<soc>/ and skip SoC detection, so no variant is needed. */
+        bool dfu_custom_blobs = !options.cloner && options.spl_file && options.spl_file[0] &&
+                                options.uboot_file && options.uboot_file[0];
+        bool need_variant = (options.cloner || options.bootstrap) && !dfu_custom_blobs;
         if (need_variant && !cpu) {
             cpu = remote_detect_variant(options.device_index);
             if (cpu) {
@@ -403,13 +407,14 @@ int main(int argc, char *argv[]) {
             bool do_bootstrap = options.bootstrap || stage == 0;
             rc = 0;
             if (do_bootstrap) {
-                if (!cpu)
+                if (!cpu && !dfu_custom_blobs)
                     cpu = remote_detect_variant(options.device_index);
-                if (!cpu) {
+                if (!cpu && !dfu_custom_blobs) {
                     fprintf(stderr, "Failed to detect remote device variant for bootstrap\n");
                     rc = -1;
                 } else {
-                    rc = remote_bootstrap(options.device_index, cpu, options.firmware_dir);
+                    rc = remote_bootstrap(options.device_index, cpu, options.firmware_dir, options.spl_file,
+                                          options.uboot_file);
                     if (rc == 0)
                         printf("Bootstrap complete, proceeding to write\n\n");
                 }
@@ -418,7 +423,10 @@ int main(int argc, char *argv[]) {
                 rc = remote_write_firmware(options.device_index, cpu, options.input_file);
             rc = rc < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else if (options.bootstrap) {
-            rc = remote_bootstrap(options.device_index, cpu, options.firmware_dir) < 0 ? EXIT_DEVICE_ERROR : 0;
+            rc = remote_bootstrap(options.device_index, cpu, options.firmware_dir, options.spl_file,
+                                  options.uboot_file) < 0
+                     ? EXIT_DEVICE_ERROR
+                     : 0;
         } else if (options.read_firmware && options.output_file) {
             rc = remote_read_firmware(options.device_index, options.output_file) < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else {
