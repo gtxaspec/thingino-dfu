@@ -81,6 +81,7 @@ void print_usage(const char *program_name) {
     printf("      --wait                Wait for the required device to appear, then proceed\n");
     printf("\nExamples (DFU is the default backend):\n");
     printf("  thingino-dfu -b                                 # Bootrom -> U-Boot DFU (auto-detect SoC)\n");
+    printf("  thingino-dfu --spl spl.bin --uboot u-boot.bin   # USB-boot custom blobs (bootstrap implied)\n");
     printf("  thingino-dfu -l                                 # List DFU alt-settings\n");
     printf("  thingino-dfu --alt rootfs -w rootfs.bin         # Flash an alt-setting via DFU\n");
     printf("  thingino-dfu --host 192.168.1.50 -w fw.bin      # Remote: bootstrap (if needed) + write\n");
@@ -365,6 +366,14 @@ int main(int argc, char *argv[]) {
     if (!options.firmware_dir)
         options.firmware_dir = default_fw_dir;
 
+    /* A custom --spl + --uboot pair with no action implies bootstrap
+     * (t31-usbboot.py ergonomics): USB-booting them is the only thing a
+     * pair of boot blobs on its own can mean. Applies to local and remote. */
+    if (!options.list_devices && !options.bootstrap && !options.read_firmware && !options.write_firmware &&
+        options.spl_file && options.uboot_file) {
+        options.bootstrap = true;
+    }
+
     // Set global debug flag based on CLI options
     g_debug_enabled = options.debug;
 
@@ -435,7 +444,7 @@ int main(int argc, char *argv[]) {
         }
 
         remote_disconnect();
-        return rc < 0 ? 1 : 0;
+        return rc; /* 0 or EXIT_* - every branch above normalizes negatives */
     }
 
     // Local mode
