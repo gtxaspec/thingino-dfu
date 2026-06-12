@@ -11,8 +11,12 @@
 #
 # Mapping: the release packs one <defconfig>-u-boot-spl.bin + <defconfig>-u-boot.bin
 # pair per SoC, where defconfig = isvp_<soc>_usbboot[_ddr3]. Each pair maps to
-# firmware/dfu/<soc>[_ddr3]/{spl,uboot}.bin. xburst1 SPLs build deterministically,
-# so only genuinely-changed loaders produce a diff.
+# firmware/dfu/<soc>[_ddr3]/{spl,uboot}.bin.
+#
+# Change detection is by SOURCE COMMIT (firmware/dfu/.usbboot-source), not bytes:
+# the binaries embed their build timestamp, so a release recreated from the same
+# u-boot commit differs in bytes without differing in substance. The byte-level
+# `git diff --cached --quiet` remains as a second layer.
 #
 # To review instead of auto-committing, replace the final step's commit+push with
 # a branch push + `gh pr create` (and add pull-requests:write).
@@ -37,13 +41,36 @@ jobs:
       SRC_REPO: gtxaspec/u-boot
       SRC_TAG: usbboot
     steps:
+      - name: Check release source SHA against last sync
+        run: |
+          # The rolling release is RECREATED on every manual u-boot workflow run,
+          # and the binaries embed their build timestamp - so a rebuild from the
+          # SAME source commit yields different bytes. Byte-diffing alone would
+          # commit that churn (it did: two syncs from one SHA). Gate on the
+          # source commit recorded by the previous sync instead; the byte-diff
+          # below stays as a second layer. To force a re-sync from an unchanged
+          # SHA (e.g. toolchain change in the loaders), delete
+          # firmware/dfu/.usbboot-source and dispatch the workflow.
+          src_sha="$(gh release view "$SRC_TAG" -R "$SRC_REPO" --json targetCommitish --jq .targetCommitish)"
+          echo "SRC_SHA=$src_sha" >> "$GITHUB_ENV"
+          git clone --depth 1 --single-branch --no-tags \
+            --branch "$GITHUB_REF_NAME" \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}" repo
+          last="$(cat repo/firmware/dfu/.usbboot-source 2>/dev/null || true)"
+          if [ "$last" = "$src_sha" ]; then
+            echo "Already synced from $src_sha - nothing to do."
+            echo "SKIP_SYNC=true" >> "$GITHUB_ENV"
+          else
+            echo "Last synced: ${last:-<none>} -> new: $src_sha"
+            echo "SKIP_SYNC=false" >> "$GITHUB_ENV"
+          fi
+
       - name: Download usbboot loader assets
+        if: env.SKIP_SYNC != 'true'
         run: |
           mkdir -p assets
           gh release download "$SRC_TAG" -R "$SRC_REPO" -D assets --clobber
-          src_sha="$(gh release view "$SRC_TAG" -R "$SRC_REPO" --json targetCommitish --jq .targetCommitish)"
-          echo "SRC_SHA=$src_sha" >> "$GITHUB_ENV"
-          echo "==== downloaded ($SRC_TAG @ $src_sha) ===="
+          echo "==== downloaded ($SRC_TAG @ $SRC_SHA) ===="
           ls -l assets
           # Sanity: at least one pair, and no empty/truncated asset.
           [ "$(ls -1 assets | wc -l)" -ge 2 ] || { echo "::error::no usbboot assets downloaded"; exit 1; }
@@ -51,13 +78,8 @@ jobs:
             [ -s "$f" ] || { echo "::error::empty asset $f"; exit 1; }
           done
 
-      - name: Checkout this repo (plain clone, token-authed)
-        run: |
-          git clone --depth 1 --single-branch --no-tags \
-            --branch "$GITHUB_REF_NAME" \
-            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}" repo
-
       - name: Map loaders into firmware/dfu/<soc>/
+        if: env.SKIP_SYNC != 'true'
         run: |
           for f in assets/*; do
             base="$(basename "$f")"
@@ -75,8 +97,10 @@ jobs:
           ls -1 repo/firmware/dfu
 
       - name: Commit refreshed loaders to the default branch
+        if: env.SKIP_SYNC != 'true'
         run: |
           cd repo
+          echo "$SRC_SHA" > firmware/dfu/.usbboot-source
           git add -f firmware/dfu
           if git diff --cached --quiet; then
             echo "firmware/dfu already matches the usbboot release - nothing to do."
