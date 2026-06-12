@@ -24,8 +24,6 @@
 name: sync-usbboot
 
 on:
-  schedule:
-    - cron: '23 7 * * *'   # daily check (UTC)
   workflow_dispatch:
 
 permissions:
