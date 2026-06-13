@@ -315,7 +315,7 @@ tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant) 
      *   T20 (0x2000): 0xBFC02D20
      *   T21 (0x0021): 0xBFC02BEC  — clears ErrCtl bit 29, ra at sp+0x24
      *   T23 (0x0023): 0xBFC03024  — clears ErrCtl bit 29
-     *   T30 (0x0030): 0xBFC02D0C
+     *   T30 (0x0030): 0xBFC02D0C (T30L) / 0xBFC02D5C (T30X, +0x50 shift) — picked by subtype1
      *   T31 (0x0031): 0xBFC02DD4  — also clears ErrCtl bit 29
      *   T32 (0x0032): 0xBFC03ADC  — clears ErrCtl bit 29, unwinds frame
      *   T40NN (0x0040, sub2=0x1111/0x8888): 0xBFC036F0
@@ -576,18 +576,46 @@ tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant) 
         0x08, 0x00, 0xE0, 0x03,
         /* nop */
         0x00, 0x00, 0x00, 0x00,
-        /* === bypass_t30 === */
-        /* lui  t0, 0xBFC0 */
+        /* === bypass_t30: T30L and T30X ship DIFFERENT mask ROMs. T30X inserts
+         *     SFC-clock-override code in the USB-boot path that shifts the whole
+         *     event loop by +0x50, so the continuation differs:
+         *       T30L = 0xBFC02D0C   T30X = 0xBFC02D5C
+         *     subtype1 was clobbered by the DEADBEEF marker store, so re-read it
+         *     from 0xB3540238 and branch: T30X (0x2222) -> 0x2D5C, else 0x2D0C.
+         *     (Keep this LAST in the array - growing it shifts nothing.) === */
+        /* lui  t0, 0xB354 */
+        0x54, 0xB3, 0x08, 0x3C,
+        /* lw   t1, 0x0238(t0) = sub1 */
+        0x38, 0x02, 0x09, 0x8D,
+        /* srl  t1, t1, 16  -> subtype1 */
+        0x02, 0x4C, 0x09, 0x00,
+        /* ori  t0, zero, 0x2222 ; T30X subtype1 */
+        0x22, 0x22, 0x08, 0x34,
+        /* bne  t1, t0, +5 (t30l_cont) */
+        0x05, 0x00, 0x28, 0x15,
+        /* nop */
+        0x00, 0x00, 0x00, 0x00,
+        /* lui  t0, 0xBFC0 ; T30X path */
         0xC0, 0xBF, 0x08, 0x3C,
-        /* ori  t0, t0, 0x2D0C ; T30 cont */
+        /* ori  t0, t0, 0x2D5C */
+        0x5C, 0x2D, 0x08, 0x35,
+        /* b    +3 (t30_set_ra) */
+        0x03, 0x00, 0x00, 0x10,
+        /* nop */
+        0x00, 0x00, 0x00, 0x00,
+        /* t30l_cont: lui t0, 0xBFC0 */
+        0xC0, 0xBF, 0x08, 0x3C,
+        /* ori  t0, t0, 0x2D0C */
         0x0C, 0x2D, 0x08, 0x35,
-        /* sw   t0, 0x1C(sp) */
+        /* t30_set_ra: sw t0, 0x1C(sp) */
         0x1C, 0x00, 0xA8, 0xAF,
         /* jr   ra */
         0x08, 0x00, 0xE0, 0x03,
         /* nop */
         0x00, 0x00, 0x00, 0x00,
     };
+    /* The stub is uploaded into `padded` below; keep it within that buffer. */
+    _Static_assert(sizeof(mips_prog) <= 1024, "detect stub exceeds upload buffer (bump padded[])");
 
     const uint32_t prog_addr = 0x80001000;
     const uint32_t result_addr = 0x80001100;
@@ -599,8 +627,9 @@ tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant) 
     if (result != TDFU_SUCCESS)
         goto fail;
 
-    /* Pad to 512 bytes — bootrom bulk transfer minimum */
-    uint8_t padded[512];
+    /* Pad to a 512-byte multiple (bootrom bulk transfer min). 1024 leaves
+     * headroom — the stub grew past 512 with the per-variant T30 bypass. */
+    uint8_t padded[1024];
     memset(padded, 0, sizeof(padded));
     memcpy(padded, mips_prog, sizeof(mips_prog));
 
