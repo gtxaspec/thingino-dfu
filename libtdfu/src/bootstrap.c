@@ -3,6 +3,21 @@
 #include "platform.h"
 #include "tdfu/constants.h"
 #include "tdfu/platform_profile.h"
+#include <stdlib.h>
+#include <string.h>
+
+/*
+ * XBurst1 gen-1 mask ROMs (T10/T20/T21/T30) stage the first-stage image into
+ * cache-as-RAM and prime the I-cache with a fill whose extent is the data
+ * length we hand them. A length that is not a multiple of the 32-byte cache
+ * line leaves that fill mis-bounded and silently corrupts the cached image,
+ * so the loaded SPL hangs before its first instruction (deterministic; it
+ * looks like a bad SPL but is purely a size quirk). Round every cache-as-RAM
+ * load up to a cache line and zero-pad: the padding lands after the image in
+ * unused cache-as-RAM and is never executed, and it is inert on every other
+ * SoC, so it is applied unconditionally.
+ */
+#define TDFU_STAGE1_ALIGN 32u
 
 // ============================================================================
 // BOOTSTRAP IMPLEMENTATION
@@ -231,28 +246,41 @@ tdfu_error_t bootstrap_load_data_to_memory(usb_device_t *device, const uint8_t *
         return TDFU_ERROR_INVALID_PARAMETER;
     }
 
+    // Round the stage1 length up to a cache line (see TDFU_STAGE1_ALIGN) and
+    // zero-pad, so the mask ROM's cache-as-RAM I-cache fill stays in bounds.
+    const uint8_t *xfer = data;
+    size_t xfer_size = size;
+    uint8_t *padbuf = NULL;
+    if (size & (TDFU_STAGE1_ALIGN - 1u)) {
+        xfer_size = (size + TDFU_STAGE1_ALIGN - 1u) & ~(size_t)(TDFU_STAGE1_ALIGN - 1u);
+        padbuf = malloc(xfer_size);
+        if (padbuf) {
+            memcpy(padbuf, data, size);
+            memset(padbuf + size, 0, xfer_size - size);
+            xfer = padbuf;
+        } else {
+            xfer_size = size; // OOM: fall back to the unpadded transfer
+        }
+    }
+
     // Step 1: Set target address
     DEBUG_PRINT("Setting data address to 0x%08x\n", address);
     tdfu_error_t result = protocol_set_data_address(device, address);
-    if (result != TDFU_SUCCESS) {
-        return result;
-    }
 
-    // Step 2: Set data length
-    DEBUG_PRINT("Setting data length to %zu bytes\n", size);
-    result = protocol_set_data_length(device, (uint32_t)size);
-    if (result != TDFU_SUCCESS) {
-        return result;
+    // Step 2: Set data length (cache-line aligned)
+    if (result == TDFU_SUCCESS) {
+        DEBUG_PRINT("Setting data length to %zu bytes (from %zu)\n", xfer_size, size);
+        result = protocol_set_data_length(device, (uint32_t)xfer_size);
     }
 
     // Step 3: Transfer data
-    DEBUG_PRINT("Transferring data (%zu bytes)...\n", size);
-    result = bootstrap_transfer_data(device, data, size);
-    if (result != TDFU_SUCCESS) {
-        return result;
+    if (result == TDFU_SUCCESS) {
+        DEBUG_PRINT("Transferring data (%zu bytes)...\n", xfer_size);
+        result = bootstrap_transfer_data(device, xfer, xfer_size);
     }
 
-    return TDFU_SUCCESS;
+    free(padbuf);
+    return result;
 }
 
 tdfu_error_t bootstrap_program_stage2(usb_device_t *device, const uint8_t *data, size_t size) {
