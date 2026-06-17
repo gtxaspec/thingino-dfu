@@ -1,5 +1,7 @@
 # thingino-dfu
 
+> 💡 **Just want to use it?** Visit [https://webflash.thingino.com/](https://webflash.thingino.com/) — no install required.
+
 USB flashing tool for Ingenic SoC devices (T10-T41, A1). It boots a device from its USB bootrom into U-Boot, then reads or writes the on-board SPI flash. The SoC variant is auto-detected - no manual configuration needed.
 
 Two backends are supported:
