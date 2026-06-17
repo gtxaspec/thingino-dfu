@@ -1230,6 +1230,14 @@ function closeSettings() {
     document.getElementById('settings-overlay').classList.add('d-none');
 }
 
+function openWindowsHelp() {
+    document.getElementById('windows-help-overlay').classList.remove('d-none');
+}
+
+function closeWindowsHelp() {
+    document.getElementById('windows-help-overlay').classList.add('d-none');
+}
+
 function saveSettings() {
     var sel = document.querySelector('input[name="backend-mode"]:checked');
     var mode = sel ? sel.value : 'dfu';
@@ -1262,7 +1270,7 @@ function saveSettings() {
 
 // Expose handlers referenced by HTML onclick/onchange attributes
 Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSelected, doRead,
-                        openSettings, closeSettings, saveSettings, toggleRemoteFields,
+                        openSettings, closeSettings, openWindowsHelp, closeWindowsHelp, saveSettings, toggleRemoteFields,
                         toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader,
                         selectRemoteDevice });
 

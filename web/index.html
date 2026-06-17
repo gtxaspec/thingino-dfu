@@ -123,6 +123,9 @@
                     data-bs-toggle="tooltip" title="Connect to a device in USB bootrom mode">
                     <i class="bi bi-usb-symbol me-1"></i> Connect Device
                 </button>
+                <a href="#" class="small text-secondary text-decoration-none ms-2" onclick="openWindowsHelp(event)">
+                    <i class="bi bi-windows"></i> Windows? You need a driver first
+                </a>
             </div>
             <div id="device-info" class="device-info d-none">
                 <div id="device-picker-row" class="mb-2 d-none">
@@ -237,6 +240,34 @@
         <div class="card-footer d-flex justify-content-end gap-2">
             <button class="btn btn-outline-secondary btn-sm" onclick="closeSettings()">Cancel</button>
             <button class="btn btn-outline-primary btn-sm" onclick="saveSettings()">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Windows driver help overlay -->
+<div id="windows-help-overlay" class="d-none" style="position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1050; display: flex; align-items: center; justify-content: center; padding: 1rem;">
+    <div class="card flasher-card">
+        <div class="card-header d-flex align-items-center gap-2">
+            <h2 class="card-title mb-0 fs-6"><i class="bi bi-windows me-1"></i> Windows Driver Setup</h2>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-1 ms-auto" onclick="closeWindowsHelp()" title="Close"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="card-body">
+            <p class="text-secondary">Windows needs a WinUSB driver installed before the web flasher can communicate with the device. Follow these steps:</p>
+            <ol class="lh-lg">
+                <li>If the Ingenic vendor USB driver is installed, remove it first via <strong>Device Manager</strong>.</li>
+                <li>Connect the device in USB boot mode.</li>
+                <li>Download and run <a href="https://zadig.akeo.ie/" target="_blank" class="text-warning">Zadig <i class="bi bi-box-arrow-up-right" style="font-size:0.7rem"></i></a>.</li>
+                <li>In Zadig, select <strong>Ingenic USB Boot Device</strong> from the dropdown.</li>
+                <li>Set the target driver to <strong>WinUSB</strong> and click <strong>Install</strong> (or <strong>Replace Driver</strong>).</li>
+                <li>Return to this page and click <strong>Connect Device</strong>.</li>
+            </ol>
+            <div class="alert alert-warning small mb-0">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                <strong>Important:</strong> The Ingenic vendor driver (<code>libusb0.sys</code>) is not compatible and must be removed before installing WinUSB via Zadig.
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-end gap-2">
+            <button class="btn btn-outline-primary btn-sm" onclick="closeWindowsHelp()">Got it</button>
         </div>
     </div>
 </div>
