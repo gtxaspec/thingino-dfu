@@ -756,7 +756,13 @@ tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant) 
         *variant = TDFU_VARIANT_T30;
         break;
     case 0x0032:
-        *variant = TDFU_VARIANT_T32;
+        /* T32: the sub1 grade code selects the DDR type (mirrors the T41 LQ/NQ
+         * split). DDR2: T32LQ (0x9999) -> "t32". DDR3: T32NQ (0xAAAA) + T32VN/VX/XQ
+         * -> "t32_ddr3" (the conservative @350 t32vn profile underclocks them all). */
+        if (subtype1 == 0x9999)
+            *variant = TDFU_VARIANT_T32; /* DDR2 (T32LQ) */
+        else
+            *variant = TDFU_VARIANT_T32_DDR3; /* DDR3 (T32NQ et al.) */
         break;
     case 0x0031:
         /* T31 family — DDR type depends on sub-variant:

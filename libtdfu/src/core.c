@@ -389,6 +389,26 @@ tdfu_error_t tdfu_web_dfu_bootstrap_files(int device_index, const char *spl_path
     return tdfu_dfu_bootstrap(&g_manager, device_index, "", NULL, spl_path, uboot_path);
 }
 
+/* Refine the SoC variant via the register-stub probe. The bootrom magic alone
+ * can't tell T32 from T31 (both report "T31V"), nor the DDR grades apart, so the
+ * web runs this after a bootrom-stage discover, before picking the DFU loader.
+ * Returns the refined variant name, or "" on failure (caller keeps the magic). */
+const char *tdfu_web_detect_soc(int device_index) {
+    if (!g_initialized || device_index < 0 || device_index >= g_device_count)
+        return "";
+    usb_device_t *device = NULL;
+    if (usb_manager_open_device(&g_manager, &g_devices[device_index], &device) != TDFU_SUCCESS)
+        return "";
+    tdfu_variant_t v = g_devices[device_index].variant;
+    tdfu_error_t r = protocol_detect_soc(device, &v);
+    usb_device_close(device);
+    free(device);
+    if (r != TDFU_SUCCESS)
+        return "";
+    g_devices[device_index].variant = v;
+    return tdfu_variant_to_string(v);
+}
+
 static int web_dfu_resolve_alt(int device_index, const char *alt_name) {
     tdfu_dfu_info_t info;
     tdfu_error_t pr = tdfu_dfu_probe(&g_manager, device_index, &info);

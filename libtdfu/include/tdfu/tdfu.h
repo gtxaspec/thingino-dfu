@@ -153,6 +153,7 @@ typedef enum tdfu_variant {
     TDFU_VARIANT_T41A,
     TDFU_VARIANT_T41ZL,
     TDFU_VARIANT_T41ZX,
+    TDFU_VARIANT_T32_DDR3, // T32 DDR3 (T32NQ/VN/VX/XQ); base T32 = DDR2 (T32LQ). -> "t32_ddr3"
 } tdfu_variant_t;
 #define TDFU_VARIANT_DEFINED
 

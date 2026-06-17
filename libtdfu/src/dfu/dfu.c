@@ -698,6 +698,8 @@ static const char *dfu_variant_dir(tdfu_variant_t v) {
         return "t31_ddr3";
     case TDFU_VARIANT_T32:
         return "t32";
+    case TDFU_VARIANT_T32_DDR3:
+        return "t32_ddr3";
     case TDFU_VARIANT_T40:
         return "t40";
     case TDFU_VARIANT_T40XP: /* T40XP is DDR3 */

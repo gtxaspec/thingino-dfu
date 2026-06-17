@@ -79,6 +79,8 @@ const char *tdfu_variant_to_string(tdfu_variant_t variant) {
         return "t41";
     case TDFU_VARIANT_T32:
         return "t32";
+    case TDFU_VARIANT_T32_DDR3:
+        return "t32_ddr3";
     case TDFU_VARIANT_X1000:
         return "x1000";
     case TDFU_VARIANT_X1600:
@@ -181,6 +183,8 @@ tdfu_variant_t tdfu_variant_from_string(const char *str) {
         return TDFU_VARIANT_T40;
     if (strcmp(lower, "t32") == 0)
         return TDFU_VARIANT_T32;
+    if (strcmp(lower, "t32_ddr3") == 0)
+        return TDFU_VARIANT_T32_DDR3;
     if (strcmp(lower, "x1000") == 0)
         return TDFU_VARIANT_X1000;
     if (strcmp(lower, "x1600") == 0)
