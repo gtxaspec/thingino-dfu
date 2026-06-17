@@ -1,4 +1,4 @@
-# Keep firmware/dfu/<soc>/{spl,uboot}.bin in sync with the rolling "usbboot"
+# Keep firmware/dfu/<soc>/{spl,tpl,uboot}.bin in sync with the rolling "usbboot"
 # pre-release at gtxaspec/u-boot (the mainline DFU USB-boot loaders the daemon
 # USB-boots during bootstrap). Runs daily and on demand; when the release's
 # binaries differ from what is committed, it commits the refreshed loaders
@@ -9,9 +9,10 @@
 # (`gh release download`); this repo is a plain token-authed `git clone` + push.
 # Only this job is granted contents:write.
 #
-# Mapping: the release packs one <defconfig>-u-boot-spl.bin + <defconfig>-u-boot.bin
-# pair per SoC, where defconfig = isvp_<soc>_usbboot[_ddr3]. Each pair maps to
-# firmware/dfu/<soc>[_ddr3]/{spl,uboot}.bin.
+# Mapping: the release packs <defconfig>-u-boot.bin plus a stage1 loader per SoC -
+# -u-boot-spl.bin for the big-SPL SoCs, -u-boot-tpl.bin for the capped TPL SoCs
+# (T10/T20/T21/T30) - where defconfig = isvp_<soc>_usbboot[_ddr3]. They map to
+# firmware/dfu/<soc>[_ddr3]/{spl|tpl,uboot}.bin.
 #
 # Change detection is by SOURCE COMMIT (firmware/dfu/.usbboot-source), not bytes:
 # the binaries embed their build timestamp, so a release recreated from the same
@@ -81,15 +82,20 @@ jobs:
         run: |
           for f in assets/*; do
             base="$(basename "$f")"
+            # stage1 is -u-boot-spl.bin on the big-SPL SoCs, -u-boot-tpl.bin on
+            # the capped TPL SoCs (T10/T20/T21/T30); a SoC ships exactly one. Drop
+            # the other stage1 so a SoC that changes kind doesn't keep the stale one.
             case "$base" in
-              *-u-boot-spl.bin) defconfig="${base%-u-boot-spl.bin}"; out="spl.bin" ;;
-              *-u-boot.bin)     defconfig="${base%-u-boot.bin}";     out="uboot.bin" ;;
+              *-u-boot-spl.bin) defconfig="${base%-u-boot-spl.bin}"; out="spl.bin"; stale="tpl.bin" ;;
+              *-u-boot-tpl.bin) defconfig="${base%-u-boot-tpl.bin}"; out="tpl.bin"; stale="spl.bin" ;;
+              *-u-boot.bin)     defconfig="${base%-u-boot.bin}";     out="uboot.bin"; stale="" ;;
               *) echo "skip unrecognized asset: $base"; continue ;;
             esac
             family="${defconfig#isvp_}"   # t31_usbboot, t40_usbboot_ddr3
             family="${family/_usbboot/}"  # t31, t40_ddr3
             mkdir -p "repo/firmware/dfu/$family"
             cp "$f" "repo/firmware/dfu/$family/$out"
+            [ -n "$stale" ] && rm -f "repo/firmware/dfu/$family/$stale"
           done
           echo "==== firmware/dfu families ===="
           ls -1 repo/firmware/dfu

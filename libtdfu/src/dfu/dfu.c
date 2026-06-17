@@ -726,7 +726,7 @@ static const char *dfu_variant_dir(tdfu_variant_t v) {
  * JNI (which provides its own fd-wrapped device). */
 tdfu_error_t tdfu_dfu_bootstrap_device(usb_device_t *dev, const uint8_t *spl, size_t spl_len, const uint8_t *uboot,
                                        size_t uboot_len) {
-    LOG_INFO("stage1 SPL: %zu bytes -> 0x%08x (entry 0x%08x)\n", spl_len, DFU_SPL_ADDR, DFU_SPL_ENTRY);
+    LOG_INFO("stage1: %zu bytes -> 0x%08x (entry 0x%08x)\n", spl_len, DFU_SPL_ADDR, DFU_SPL_ENTRY);
     tdfu_error_t r = bootstrap_load_data_to_memory(dev, spl, spl_len, DFU_SPL_ADDR);
     if (r != TDFU_SUCCESS)
         return r;
@@ -793,7 +793,13 @@ tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const 
         }
         const char *name = dfu_variant_dir(variant);
         LOG_INFO("DFU bootstrap: SoC %s\n", name);
-        snprintf(spl_path, sizeof(spl_path), "%s/dfu/%s/spl.bin", root, name);
+        /* Capped XBurst1 SoCs (T10/T20/T21/T30) USB-boot a TPL as stage1: it
+         * brings up DDR in cache-as-RAM and returns to the bootrom, just like a
+         * big-SPL SoC's SPL does. Their DRAM-resident SPL is NOR-only and unused
+         * here. Prefer tpl.bin; fall back to spl.bin for the big-SPL SoCs. */
+        snprintf(spl_path, sizeof(spl_path), "%s/dfu/%s/tpl.bin", root, name);
+        if (firmware_file_check_readable(spl_path) != TDFU_SUCCESS)
+            snprintf(spl_path, sizeof(spl_path), "%s/dfu/%s/spl.bin", root, name);
         snprintf(uboot_path, sizeof(uboot_path), "%s/dfu/%s/uboot.bin", root, name);
     }
 
