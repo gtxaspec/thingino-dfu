@@ -400,9 +400,8 @@ Java_com_thingino_dfu_TdfuBridge_nativeBootstrap(
         tdfu_variant_t v = tdfu_variant_from_string(variant_cstr);
         const char *ddir = dfu_asset_dir(v);
         char spl_asset[256], uboot_asset[256], spl_path[512], uboot_path[512];
-        snprintf(spl_asset, sizeof(spl_asset), "firmware/dfu/%s/spl.bin", ddir);
         snprintf(uboot_asset, sizeof(uboot_asset), "firmware/dfu/%s/uboot.bin", ddir);
-        snprintf(spl_path, sizeof(spl_path), "%s/dfu_%s_spl.bin", fw_dir_cstr, ddir);
+        snprintf(spl_path, sizeof(spl_path), "%s/dfu_%s_stage1.bin", fw_dir_cstr, ddir);
         snprintf(uboot_path, sizeof(uboot_path), "%s/dfu_%s_uboot.bin", fw_dir_cstr, ddir);
 
         jni_log("DFU bootstrap (bootrom -> U-Boot DFU gadget)...\n");
@@ -411,7 +410,15 @@ Java_com_thingino_dfu_TdfuBridge_nativeBootstrap(
         uint8_t *spl = NULL, *uboot = NULL;
         size_t sl = 0, ul = 0;
         tdfu_error_t dr = TDFU_ERROR_FILE_IO;
-        if (extract_asset_to_file(env, asset_manager, spl_asset, spl_path) == 0 &&
+        /* stage1 is tpl.bin on the capped XBurst1 SoCs (T10/T20/T21/T30) and
+         * spl.bin on the big-SPL SoCs - mirror the tpl-first pick in dfu.c. */
+        snprintf(spl_asset, sizeof(spl_asset), "firmware/dfu/%s/tpl.bin", ddir);
+        int s1 = extract_asset_to_file(env, asset_manager, spl_asset, spl_path);
+        if (s1 != 0) {
+            snprintf(spl_asset, sizeof(spl_asset), "firmware/dfu/%s/spl.bin", ddir);
+            s1 = extract_asset_to_file(env, asset_manager, spl_asset, spl_path);
+        }
+        if (s1 == 0 &&
             extract_asset_to_file(env, asset_manager, uboot_asset, uboot_path) == 0 &&
             read_file_to_mem(spl_path, &spl, &sl) == 0 && read_file_to_mem(uboot_path, &uboot, &ul) == 0) {
             usb_device_t *ddev = device_from_fd(fd);
