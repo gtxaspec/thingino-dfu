@@ -272,17 +272,30 @@ async function loadDfuFirmwareToMemFS(variant) {
     try { Module.FS.mkdir('./firmware/dfu'); } catch (e) { /* exists */ }
     try { Module.FS.mkdir(basePath); } catch (e) { /* exists */ }
 
-    var files = ['spl.bin', 'uboot.bin'];
-    for (var i = 0; i < files.length; i++) {
-        var url = 'firmware/dfu/' + dir + '/' + files[i];
-        var response = await fetch(url);
-        if (!response.ok) {
-            throw new Error('Failed to fetch ' + url + ': ' + response.status);
-        }
-        var data = new Uint8Array(await response.arrayBuffer());
-        Module.FS.writeFile(basePath + '/' + files[i], data);
-        console.log('Loaded dfu ' + files[i] + ': ' + data.length + ' bytes');
+    // stage1 is tpl.bin on the capped XBurst1 SoCs (T10/T20/T21/T30) and spl.bin
+    // on the big-SPL SoCs - mirror the tpl-first pick in dfu.c (tdfu_dfu_bootstrap)
+    // so the C bootstrap finds the right stage1 in MEMFS. (A 404 on tpl.bin for a
+    // big-SPL SoC is expected; we then fetch spl.bin.)
+    var stage1 = 'tpl.bin';
+    var s1 = await fetch('firmware/dfu/' + dir + '/tpl.bin');
+    if (!s1.ok) {
+        stage1 = 'spl.bin';
+        s1 = await fetch('firmware/dfu/' + dir + '/spl.bin');
     }
+    if (!s1.ok) {
+        throw new Error('Failed to fetch dfu stage1 for ' + dir + ': ' + s1.status);
+    }
+    var s1data = new Uint8Array(await s1.arrayBuffer());
+    Module.FS.writeFile(basePath + '/' + stage1, s1data);
+    console.log('Loaded dfu stage1 ' + stage1 + ': ' + s1data.length + ' bytes');
+
+    var ub = await fetch('firmware/dfu/' + dir + '/uboot.bin');
+    if (!ub.ok) {
+        throw new Error('Failed to fetch firmware/dfu/' + dir + '/uboot.bin: ' + ub.status);
+    }
+    var ubdata = new Uint8Array(await ub.arrayBuffer());
+    Module.FS.writeFile(basePath + '/uboot.bin', ubdata);
+    console.log('Loaded dfu uboot.bin: ' + ubdata.length + ' bytes');
 }
 
 /* ------------------------------------------------------------------ */
