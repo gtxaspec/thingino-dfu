@@ -482,20 +482,39 @@ int main(int argc, char *argv[]) {
             printf("Re-run with -l / -w / -r once the DFU device enumerates.\n");
             return 0;
         }
+        /* -l: list every connected Ingenic device (bootrom AND DFU), like the
+         * cloner/remote paths. Probing only for a DFU gadget can't see a bootrom
+         * device - and the probe's recovery path would issue a needless USB reset
+         * on it. So print the inventory, then show DFU alt-settings only when the
+         * targeted device is actually a gadget. */
+        if (options.list_devices) {
+            result = list_devices(&manager);
+            tdfu_device_info_t *devs = NULL;
+            int n = 0;
+            if (usb_manager_find_devices(&manager, &devs, &n) == TDFU_SUCCESS) {
+                if (options.device_index >= 0 && options.device_index < n &&
+                    devs[options.device_index].stage == TDFU_STAGE_DFU) {
+                    tdfu_dfu_info_t dfu_info;
+                    if (tdfu_dfu_probe(&manager, options.device_index, &dfu_info) == TDFU_SUCCESS) {
+                        printf("\nDFU device %d: %d alt setting(s), transfer size %u bytes, DFU %x.%02x\n",
+                               options.device_index, dfu_info.alt_count, dfu_info.transfer_size,
+                               (dfu_info.bcd_dfu >> 8) & 0xff, dfu_info.bcd_dfu & 0xff);
+                        for (int i = 0; i < dfu_info.alt_count; i++)
+                            printf("  alt %d: \"%s\"\n", dfu_info.alts[i].alt, dfu_info.alts[i].name);
+                    }
+                }
+                free(devs);
+            }
+            usb_manager_cleanup(&manager);
+            return result != TDFU_SUCCESS ? EXIT_DEVICE_ERROR : 0;
+        }
+
         tdfu_dfu_info_t dfu_info;
         result = tdfu_dfu_probe(&manager, options.device_index, &dfu_info);
         if (result != TDFU_SUCCESS) {
             LOG_ERROR("DFU probe failed: %s\n", tdfu_error_to_string(result));
             usb_manager_cleanup(&manager);
             return EXIT_DEVICE_ERROR;
-        }
-        if (options.list_devices) {
-            printf("DFU device: %d alt setting(s), transfer size %u bytes, DFU %x.%02x\n", dfu_info.alt_count,
-                   dfu_info.transfer_size, (dfu_info.bcd_dfu >> 8) & 0xff, dfu_info.bcd_dfu & 0xff);
-            for (int i = 0; i < dfu_info.alt_count; i++)
-                printf("  alt %d: \"%s\"\n", dfu_info.alts[i].alt, dfu_info.alts[i].name);
-            usb_manager_cleanup(&manager);
-            return 0;
         }
         int alt = -1;
         if (options.alt)
