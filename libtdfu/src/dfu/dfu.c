@@ -685,8 +685,9 @@ static const char *dfu_variant_dir(tdfu_variant_t v) {
     case TDFU_VARIANT_T21:
         return "t21";
     case TDFU_VARIANT_T23:
-    case TDFU_VARIANT_T23DL:
         return "t23";
+    case TDFU_VARIANT_T23DL:
+        return "t23_32mb"; /* 32 MB M14D2561616A; the t23 loader is 64 MB */
     case TDFU_VARIANT_T30:
         return "t30";
     case TDFU_VARIANT_T31:
