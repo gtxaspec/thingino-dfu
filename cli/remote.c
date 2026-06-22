@@ -611,7 +611,7 @@ int remote_bootstrap(int device_index, const char *cpu_variant, const char *firm
  *   [1:device_idx][1:variant_len][N:variant]
  *   [4:fw_len][fw_data][4:crc32]
  */
-int remote_write_firmware(int device_index, const char *cpu_variant, const char *firmware_file) {
+int remote_write_firmware(int device_index, const char *cpu_variant, const char *firmware_file, const char *alt) {
     uint8_t *fw_data = NULL;
     size_t fw_len = 0;
     if (read_file(firmware_file, &fw_data, &fw_len) < 0) {
@@ -627,7 +627,10 @@ int remote_write_firmware(int device_index, const char *cpu_variant, const char 
     /* variant is optional (DFU write passes none - the daemon resolves the alt) */
     const char *variant = cpu_variant ? cpu_variant : "";
     size_t variant_len = strlen(variant);
-    size_t payload_len = 2 + variant_len + 4 + fw_len + 4;
+    /* alt selector: empty = daemon default (alt 0 = flash); name/num targets it */
+    const char *alt_s = alt ? alt : "";
+    size_t alt_len = strlen(alt_s);
+    size_t payload_len = 2 + variant_len + 1 + alt_len + 4 + fw_len + 4;
     uint8_t *payload = malloc(payload_len);
     if (!payload) {
         free(fw_data);
@@ -639,6 +642,9 @@ int remote_write_firmware(int device_index, const char *cpu_variant, const char 
     *p++ = (uint8_t)variant_len;
     memcpy(p, variant, variant_len);
     p += variant_len;
+    *p++ = (uint8_t)alt_len;
+    memcpy(p, alt_s, alt_len);
+    p += alt_len;
     write_be32(p, fw_len);
     p += 4;
     memcpy(p, fw_data, fw_len);
@@ -679,20 +685,25 @@ int remote_write_firmware(int device_index, const char *cpu_variant, const char 
  * Sends CMD_READ with [1:device_idx][4:offset][4:length]
  * Response contains [fw_data][4:crc32]
  */
-int remote_read_firmware(int device_index, const char *output_file) {
-    /* Default: read 8MB from offset 0 (typical SPI NOR) */
-    uint32_t offset = 0;
-    uint32_t length = 8 * 1024 * 1024;
+int remote_read_firmware(int device_index, const char *output_file, const char *alt) {
+    /* alt selector: empty = daemon default (alt 0 = flash); name/num targets it.
+     * The daemon uploads the whole selected alt, so no offset/length here. */
+    const char *alt_s = alt ? alt : "";
+    size_t alt_len = strlen(alt_s);
 
-    printf("Reading firmware from remote device...\n");
-    printf("  Offset: 0x%x, Length: %u bytes\n", offset, length);
+    printf("Reading firmware from remote device%s%s...\n",
+           alt_s[0] ? " alt " : "", alt_s);
 
-    uint8_t payload[9];
-    payload[0] = (uint8_t)device_index;
-    write_be32(payload + 1, offset);
-    write_be32(payload + 5, length);
+    /* Payload: [idx][variant_len=0][alt_len][alt] */
+    uint8_t payload[3 + 64];
+    int n = 0;
+    payload[n++] = (uint8_t)device_index;
+    payload[n++] = 0;
+    payload[n++] = (uint8_t)alt_len;
+    memcpy(payload + n, alt_s, alt_len);
+    n += (int)alt_len;
 
-    if (send_command(CMD_READ, payload, sizeof(payload)) < 0)
+    if (send_command(CMD_READ, payload, (uint32_t)n) < 0)
         return -1;
 
     uint8_t resp_status;

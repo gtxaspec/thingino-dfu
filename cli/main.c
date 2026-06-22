@@ -429,7 +429,7 @@ int main(int argc, char *argv[]) {
                 }
             }
             if (rc == 0)
-                rc = remote_write_firmware(options.device_index, cpu, options.input_file);
+                rc = remote_write_firmware(options.device_index, cpu, options.input_file, options.alt);
             rc = rc < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else if (options.bootstrap) {
             rc = remote_bootstrap(options.device_index, cpu, options.firmware_dir, options.spl_file,
@@ -437,7 +437,7 @@ int main(int argc, char *argv[]) {
                      ? EXIT_DEVICE_ERROR
                      : 0;
         } else if (options.read_firmware && options.output_file) {
-            rc = remote_read_firmware(options.device_index, options.output_file) < 0 ? EXIT_TRANSFER_ERROR : 0;
+            rc = remote_read_firmware(options.device_index, options.output_file, options.alt) < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else {
             printf("Remote mode: specify -l, -b, -w, or -r\n");
             rc = 1;

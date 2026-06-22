@@ -338,11 +338,17 @@ static int stage_temp_blob(char *path_out, size_t path_sz, const uint8_t *data, 
  * gadget). Re-probe for a few seconds - libusb re-scans on each call - so a
  * one-shot `-w` (bootstrap + write) and `-b -w` don't race the re-enumeration
  * window and fail with a spurious "Device not found". */
-static int dfu_pick_alt(usb_manager_t *manager, int device_index) {
+static int dfu_pick_alt(usb_manager_t *manager, int device_index, const char *alt_sel) {
     tdfu_dfu_info_t info;
     for (int attempt = 0; attempt < 20; attempt++) {
-        if (tdfu_dfu_probe(manager, device_index, &info) == TDFU_SUCCESS)
+        if (tdfu_dfu_probe(manager, device_index, &info) == TDFU_SUCCESS) {
+            /* An explicit selector (--alt, name or number) wins; otherwise
+             * the first alt - alt 0 is the boot flash on our loaders, so the
+             * default stays NOR/NAND and the SD must be asked for by name. */
+            if (alt_sel && *alt_sel)
+                return tdfu_dfu_find_alt(&info, alt_sel);
             return info.alt_count > 0 ? info.alts[0].alt : -1;
+        }
         usleep(250000); /* 250 ms; ~5 s total */
     }
     return -1;
@@ -468,6 +474,16 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len, con
     memcpy(variant_str, p, variant_len);
     p += variant_len;
 
+    /* DFU alt selector (name or number; empty = default alt 0 = flash). */
+    char alt_str[32] = {0};
+    if (p >= end)
+        return send_error(client_fd, "missing alt field");
+    uint8_t alt_len = *p++;
+    if (p + alt_len > end)
+        return send_error(client_fd, "bad alt length");
+    memcpy(alt_str, p, alt_len < sizeof(alt_str) ? alt_len : sizeof(alt_str) - 1);
+    p += alt_len;
+
     /* Parse firmware binary + CRC32 */
     if (p + 4 > end)
         return send_error(client_fd, "missing firmware length");
@@ -523,8 +539,8 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len, con
         result = tdfu_op_write_firmware(&manager, device_index, tmpfile, variant_str, NULL, false, false, false,
                                         g_debug_enabled, false, NULL, NULL, NULL, firmware_dir, 0);
     } else {
-        /* DFU: download to the gadget's (single/first) alt setting. */
-        int alt = dfu_pick_alt(&manager, device_index);
+        /* DFU: download to the requested alt (default alt 0 = flash). */
+        int alt = dfu_pick_alt(&manager, device_index, alt_str[0] ? alt_str : NULL);
         result = (alt < 0) ? TDFU_ERROR_DEVICE_NOT_FOUND
                            : tdfu_dfu_download(&manager, device_index, alt, tmpfile);
     }
@@ -564,6 +580,17 @@ static int handle_read(int client_fd, const uint8_t *payload, uint32_t len, bool
     if (variant_len >= sizeof(variant_str))
         variant_len = sizeof(variant_str) - 1;
     memcpy(variant_str, p, variant_len);
+    p += variant_len;
+
+    /* DFU alt selector (name or number; empty = default alt 0 = flash). */
+    char alt_str[32] = {0};
+    if (p < end) {
+        uint8_t alt_len = *p++;
+        if (p + alt_len > end)
+            return send_error(client_fd, "bad alt length");
+        memcpy(alt_str, p, alt_len < sizeof(alt_str) ? alt_len : sizeof(alt_str) - 1);
+        p += alt_len;
+    }
 
     const char *force_cpu = variant_len > 0 ? variant_str : NULL;
     printf("Read request: device=%d, cpu=%s\n", device_index, force_cpu ? force_cpu : "(auto)");
@@ -595,8 +622,8 @@ static int handle_read(int client_fd, const uint8_t *payload, uint32_t len, bool
     if (use_cloner) {
         result = tdfu_op_read_firmware(&manager, device_index, tmpfile, force_cpu, NULL);
     } else {
-        /* DFU: upload the gadget's (single/first) alt setting. */
-        int alt = dfu_pick_alt(&manager, device_index);
+        /* DFU: upload the requested alt (default alt 0 = flash). */
+        int alt = dfu_pick_alt(&manager, device_index, alt_str[0] ? alt_str : NULL);
         result = (alt < 0) ? TDFU_ERROR_DEVICE_NOT_FOUND
                            : tdfu_dfu_upload(&manager, device_index, alt, tmpfile, 0);
     }
