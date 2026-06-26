@@ -15,13 +15,11 @@
 
 name: Pages
 
+# Deploys on a release tag (v*) so the public flasher tracks releases, not every
+# push to main. Use "Run workflow" (workflow_dispatch) for an ad-hoc redeploy.
 on:
   push:
-    branches: [main]
-    paths:
-      - 'web/**'
-      - 'firmware/**'
-      - '.github/workflows/pages.yml'
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
