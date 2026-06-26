@@ -169,11 +169,15 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
         crc.update(firmwareData)
         val crcValue = crc.value.toInt()
 
-        val buf = ByteBuffer.allocate(2 + variantBytes.size + 4 + firmwareData.size + 4)
+        // Wire format the daemon parses:
+        //   [idx][variant_len][variant][alt_len][alt][fw_len][fw][crc]
+        // alt is empty here (alt_len = 0 => daemon's default alt 0 = flash).
+        val buf = ByteBuffer.allocate(2 + variantBytes.size + 1 + 4 + firmwareData.size + 4)
             .order(ByteOrder.BIG_ENDIAN)
         buf.put(deviceIndex.toByte())
         buf.put(variantBytes.size.toByte())
         buf.put(variantBytes)
+        buf.put(0.toByte())  // alt_len = 0
         buf.putInt(firmwareData.size)
         buf.put(firmwareData)
         buf.putInt(crcValue)
