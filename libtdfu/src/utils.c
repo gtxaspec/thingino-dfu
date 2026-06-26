@@ -1,6 +1,8 @@
 #include "tdfu/tdfu.h"
 #include <ctype.h>
 #include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 // ============================================================================
@@ -28,26 +30,6 @@ void tdfu_log_output(const char *fmt, ...) {
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
-
-// Forward declarations for functions that need to be implemented elsewhere
-extern tdfu_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t *config);
-
-uint32_t calculate_crc32(const uint8_t *data, size_t length) {
-    uint32_t crc = CRC32_INITIAL;
-
-    for (size_t i = 0; i < length; i++) {
-        crc ^= data[i];
-        for (int j = 0; j < 8; j++) {
-            if (crc & 1) {
-                crc = (crc >> 1) ^ CRC32_POLYNOMIAL;
-            } else {
-                crc >>= 1;
-            }
-        }
-    }
-
-    return crc ^ 0xFFFFFFFF;
-}
 
 const char *tdfu_variant_to_string(tdfu_variant_t variant) {
     switch (variant) {
@@ -403,4 +385,61 @@ tdfu_variant_t detect_variant_from_magic(const char *magic) {
 
     DEBUG_PRINT("detect_variant_from_magic: defaulting to T31X\n");
     return TDFU_VARIANT_T31X; // Default to T31X
+}
+
+// ============================================================================
+// FILE I/O HELPERS
+// ============================================================================
+
+tdfu_error_t load_file(const char *filename, uint8_t **data, size_t *size) {
+    if (!filename || !data || !size)
+        return TDFU_ERROR_INVALID_PARAMETER;
+
+    FILE *file = fopen(filename, "rb");
+    if (!file)
+        return TDFU_ERROR_FILE_IO;
+
+    if (fseek(file, 0, SEEK_END) != 0) {
+        fclose(file);
+        return TDFU_ERROR_FILE_IO;
+    }
+    long file_size = ftell(file);
+    if (file_size < 0) {
+        fclose(file);
+        return TDFU_ERROR_FILE_IO;
+    }
+    if (fseek(file, 0, SEEK_SET) != 0) {
+        fclose(file);
+        return TDFU_ERROR_FILE_IO;
+    }
+
+    *data = (uint8_t *)malloc(file_size);
+    if (!*data) {
+        fclose(file);
+        return TDFU_ERROR_MEMORY;
+    }
+
+    size_t bytes_read = fread(*data, 1, file_size, file);
+    fclose(file);
+
+    if (bytes_read != (size_t)file_size) {
+        free(*data);
+        *data = NULL;
+        return TDFU_ERROR_FILE_IO;
+    }
+
+    *size = bytes_read;
+    return TDFU_SUCCESS;
+}
+
+tdfu_error_t firmware_file_check_readable(const char *path) {
+    if (!path)
+        return TDFU_ERROR_INVALID_PARAMETER;
+
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        return TDFU_ERROR_FILE_IO;
+
+    fclose(f);
+    return TDFU_SUCCESS;
 }

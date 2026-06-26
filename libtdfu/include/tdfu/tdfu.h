@@ -43,19 +43,6 @@ void tdfu_log_output(const char *fmt, ...);
 #define DEBUG_PRINT LOG_DEBUG
 
 // ============================================================================
-// FORWARD DECLARATIONS
-// ============================================================================
-
-// Forward declare firmware_binary_t (defined in firmware/firmware_database.h)
-typedef struct {
-    const char *processor;
-    const uint8_t *spl_data;
-    size_t spl_size;
-    const uint8_t *uboot_data;
-    size_t uboot_size;
-} firmware_binary_t;
-
-// ============================================================================
 // CONSTANTS
 // ============================================================================
 
@@ -65,7 +52,7 @@ typedef struct {
 #define PRODUCT_ID_BOOTROM    0x4770 // X series bootrom (601a:4770) - future
 #define PRODUCT_ID_BOOTROM2   0xC309 // T/A/C series bootrom (a108:c309)
 #define PRODUCT_ID_BOOTROM3   0x601A // Alternative bootrom ID
-#define PRODUCT_ID_FIRMWARE   0x8887 // firmware-stage PID (vestigial - not seen in production; the stage is read via VR_GET_CPU_INFO while the device keeps its bootrom VID:PID)
+#define PRODUCT_ID_FIRMWARE   0x8887 // firmware-stage PID (vestigial; device keeps its bootrom VID:PID)
 #define PRODUCT_ID_FIRMWARE2  0x601E // firmware-stage PID (vestigial)
 #define PRODUCT_ID_DFU        0x4D44 // U-Boot DFU gadget (device already in DFU mode)
 
@@ -77,43 +64,13 @@ typedef struct {
 #define VR_PROG_STAGE1   0x04
 #define VR_PROG_STAGE2   0x05
 
-// Firmware stage commands (0x10-0x26)
-#define VR_FW_READ         0x10
-#define VR_FW_HANDSHAKE    0x11
-#define VR_FW_WRITE2       0x14
-#define VR_REBOOT          0x16 /* Also used as FW_READ_STATUS1 in some contexts */
-#define VR_FW_READ_STATUS2 0x19
-#define VR_FW_READ_STATUS3 0x25
-#define VR_FW_READ_STATUS4 0x26
-
-// Traditional firmware operations
-#define VR_WRITE 0x12
-#define VR_READ  0x13 /* Also used as FW_WRITE1 (sends a read/write command) */
-
-// NAND operations (available in bootloader)
-#define VR_NAND_OPS          0x07
-#define NAND_OPERATION_READ  0x05 // NAND read subcommand
-#define NAND_OPERATION_WRITE 0x06 // NAND write subcommand
-
-// USB Configuration constants
-#define DEFAULT_BUFFER_SIZE (1024 * 1024) // 1MB default buffer
-#define REQUEST_TYPE_VENDOR 0xC0          // USB vendor request type for device-to-host
-#define REQUEST_TYPE_OUT    0x40          // USB vendor request type for host-to-device
-
-// Bootstrap constants
-#define BOOTLOADER_ADDRESS_SDRAM   0x80000000
-#define BOOTSTRAP_TIMEOUT_SECONDS  30
-#define BOOTSTRAP_POLL_INTERVAL_MS 500
-#define CRC32_POLYNOMIAL           0xEDB88320
-#define CRC32_INITIAL              0xFFFFFFFF
+// USB vendor request types
+#define REQUEST_TYPE_VENDOR 0xC0 // device-to-host vendor request
+#define REQUEST_TYPE_OUT    0x40 // host-to-device vendor request
 
 // Endpoints
 #define ENDPOINT_IN  0x81 // Bulk IN
 #define ENDPOINT_OUT 0x01 // Bulk OUT
-
-// Error codes
-#define ACK_SUCCESS 0x00
-#define ACK_ERROR   0x01
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -209,67 +166,6 @@ typedef struct {
     tdfu_stage_t stage;
 } cpu_info_t;
 
-// Write command structure
-typedef struct {
-    uint32_t partition;
-    uint32_t offset;
-    uint32_t length;
-    uint32_t crc32;
-} write_command_t;
-
-// Read command structure
-typedef struct {
-    uint32_t partition;
-    uint32_t offset;
-    uint32_t length;
-} read_command_t;
-
-// Flash memory bank structure
-typedef struct {
-    uint32_t offset;
-    uint32_t size;
-    char label[16];
-    bool enabled;
-} flash_bank_t;
-
-// Firmware read configuration
-typedef struct {
-    uint32_t total_size;
-    int bank_count;
-    flash_bank_t *banks;
-    uint32_t block_size;
-} firmware_read_config_t;
-
-// Firmware files structure
-typedef struct {
-    uint8_t *config;
-    size_t config_size;
-    uint8_t *spl;
-    size_t spl_size;
-    uint8_t *uboot;
-    size_t uboot_size;
-} firmware_files_t;
-
-// Bootstrap configuration
-typedef struct {
-    uint32_t sdram_address;
-    int timeout;
-    bool verbose;
-    bool skip_ddr;
-    const char *config_file;  // Custom DDR config file path (NULL = use default)
-    const char *spl_file;     // Custom SPL file path (NULL = use default)
-    const char *uboot_file;   // Custom U-Boot file path (NULL = use default)
-    const char *firmware_dir; // Firmware root directory (NULL = "./firmware")
-} bootstrap_config_t;
-
-// Bootstrap progress
-typedef struct {
-    char stage[32];
-    int current;
-    int total;
-    char description[128];
-} bootstrap_progress_t;
-
 // USB device structure
 typedef struct {
     libusb_device_handle *handle;
@@ -319,106 +215,29 @@ tdfu_error_t usb_device_vendor_request(usb_device_t *device, uint8_t request_typ
                                            uint16_t index, uint8_t *data, uint16_t length, uint8_t *response,
                                            int *response_length);
 
-// Protocol functions
+// Protocol functions (bootrom stage + SoC auto-detect)
 tdfu_error_t protocol_set_data_address(usb_device_t *device, uint32_t addr);
 tdfu_error_t protocol_set_data_length(usb_device_t *device, uint32_t length);
 tdfu_error_t protocol_flush_cache(usb_device_t *device);
-tdfu_error_t protocol_read_status(usb_device_t *device, uint8_t *status_buffer, int buffer_size, int *status_len);
 tdfu_error_t protocol_prog_stage1(usb_device_t *device, uint32_t addr);
 tdfu_error_t protocol_prog_stage2(usb_device_t *device, uint32_t addr);
-tdfu_error_t protocol_get_ack(usb_device_t *device, int32_t *status);
-tdfu_error_t protocol_init(usb_device_t *device);
 tdfu_error_t protocol_read_memory(usb_device_t *device, uint32_t addr, uint32_t len, uint8_t *out);
 tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant);
-tdfu_error_t protocol_nand_read(usb_device_t *device, uint32_t offset, uint32_t size, uint8_t **data,
-                                    int *transferred);
 
-// Firmware functions
-tdfu_error_t firmware_load(tdfu_variant_t variant, firmware_files_t *firmware);
-tdfu_error_t firmware_load_from_dir(tdfu_variant_t variant, const char *firmware_dir,
-                                        firmware_files_t *firmware);
-tdfu_error_t firmware_load_from_files(tdfu_variant_t variant, const char *config_file, const char *spl_file,
-                                          const char *uboot_file, firmware_files_t *firmware);
-void firmware_cleanup(firmware_files_t *firmware);
+// File helpers
 tdfu_error_t load_file(const char *filename, uint8_t **data, size_t *size);
 tdfu_error_t firmware_file_check_readable(const char *path);
-tdfu_error_t firmware_validate(const firmware_files_t *firmware);
 
-// DDR functions
-tdfu_error_t ddr_validate_binary(const uint8_t *data, size_t size);
-
-// Bootstrap functions
-tdfu_error_t bootstrap_device(usb_device_t *device, const bootstrap_config_t *config);
-tdfu_error_t bootstrap_ensure_bootstrapped(usb_device_t *device, const bootstrap_config_t *config);
+// Bootrom data-upload helpers (used by the DFU bootstrap path)
 tdfu_error_t bootstrap_load_data_to_memory(usb_device_t *device, const uint8_t *data, size_t size,
                                                uint32_t address);
-tdfu_error_t bootstrap_program_stage2(usb_device_t *device, const uint8_t *data, size_t size);
 tdfu_error_t bootstrap_transfer_data(usb_device_t *device, const uint8_t *data, size_t size);
 
-// Additional protocol functions
-tdfu_error_t protocol_fw_read(usb_device_t *device, int data_len, uint8_t **data, int *actual_len);
-tdfu_error_t protocol_fw_handshake(usb_device_t *device);
-tdfu_error_t protocol_fw_write_chunk1(usb_device_t *device, const uint8_t *data);
-tdfu_error_t protocol_fw_write_chunk2(usb_device_t *device, const uint8_t *data);
-tdfu_error_t protocol_traditional_read(usb_device_t *device, int data_len, uint8_t **data, int *actual_len);
-tdfu_error_t protocol_fw_read_operation(usb_device_t *device, uint32_t offset, uint32_t length, uint8_t **data,
-                                            int *actual_len);
-tdfu_error_t protocol_fw_read_status(usb_device_t *device, int status_cmd, uint32_t *status);
-tdfu_error_t protocol_vendor_style_read(usb_device_t *device, uint32_t offset, uint32_t size, uint8_t **data,
-                                            int *actual_len);
-
-// Proper bootloader protocol functions (using code execution pattern)
-tdfu_error_t protocol_load_and_execute_code(usb_device_t *device, uint32_t ram_address, const uint8_t *code,
-                                                uint32_t code_size);
-tdfu_error_t protocol_proper_firmware_read(usb_device_t *device, uint32_t flash_offset, uint32_t read_size,
-                                               uint8_t **out_data, int *out_len);
-tdfu_error_t protocol_proper_firmware_write(usb_device_t *device, uint32_t flash_offset, const uint8_t *data,
-                                                uint32_t data_size);
-
-// Firmware read functions
-tdfu_error_t firmware_read_full(usb_device_t *device, uint32_t read_size, uint8_t **data, uint32_t *actual_size);
-
-// Firmware handshake protocol functions (40-byte chunk transfers)
-tdfu_error_t firmware_handshake_read_chunk(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
-                                               uint32_t chunk_size, uint32_t total_size, uint8_t **out_data,
-                                               int *out_len);
-tdfu_error_t firmware_handshake_write_chunk(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
-                                                const uint8_t *data, uint32_t data_size);
-tdfu_error_t firmware_handshake_write_chunk_a1(usb_device_t *device, uint32_t chunk_index, uint32_t chunk_offset,
-                                                   const uint8_t *data, uint32_t data_size);
-tdfu_error_t firmware_handshake_write_chunk_vendor(usb_device_t *device, uint32_t chunk_index,
-                                                       uint32_t chunk_offset, const uint8_t *data, uint32_t data_size);
-tdfu_error_t firmware_handshake_init(usb_device_t *device);
-
-// Firmware writer functions
-tdfu_error_t write_firmware_to_device(usb_device_t *device, const char *firmware_file,
-                                          const firmware_binary_t *fw_binary, bool no_erase, bool is_a1_board,
-                                          uint32_t chunk_size);
-tdfu_error_t send_bulk_data(usb_device_t *device, uint8_t endpoint, const uint8_t *data, uint32_t size);
-
-// Utility functions (additional)
-tdfu_variant_t detect_variant_from_magic(const char *magic);
-
 // Utility functions
-uint32_t calculate_crc32(const uint8_t *data, size_t length);
+tdfu_variant_t detect_variant_from_magic(const char *magic);
 const char *tdfu_variant_to_string(tdfu_variant_t variant);
 tdfu_variant_t tdfu_variant_from_string(const char *str);
 const char *tdfu_stage_to_string(tdfu_stage_t stage);
 const char *tdfu_error_to_string(tdfu_error_t error);
-
-// High-level device operations (libtdfu/src/operations.c)
-const char *tdfu_get_last_detected_variant(void);
-tdfu_error_t tdfu_op_bootstrap(usb_manager_t *manager, int index, const char *force_cpu, bool verbose,
-                                     bool skip_ddr, const char *config_file, const char *spl_file,
-                                     const char *uboot_file, const char *firmware_dir);
-
-tdfu_error_t tdfu_op_read_firmware(usb_manager_t *manager, int index, const char *output_file,
-                                         const char *force_cpu, const char *flash_chip_name);
-
-tdfu_error_t tdfu_op_write_firmware(usb_manager_t *manager, int device_index, const char *firmware_file,
-                                          const char *force_cpu, const char *flash_chip_name, bool no_erase,
-                                          bool reboot_after, bool do_bootstrap, bool verbose, bool skip_ddr,
-                                          const char *config_file, const char *spl_file, const char *uboot_file,
-                                          const char *firmware_dir, uint32_t chunk_size);
 
 #endif // TDFU_H

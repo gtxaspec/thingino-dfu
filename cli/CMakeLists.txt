@@ -1,11 +1,8 @@
-# cloner-cli - command line interface
+# thingino-dfu - command line interface
 
 add_executable(thingino-dfu main.c remote.c)
 target_include_directories(thingino-dfu PRIVATE
     ${CMAKE_SOURCE_DIR}/libtdfu/src
-    ${CMAKE_SOURCE_DIR}/libtdfu/src/ddr
-    ${CMAKE_SOURCE_DIR}/libtdfu/src/firmware
-    ${CMAKE_SOURCE_DIR}/libtdfu/src/flash
 )
 if (WIN32)
     target_link_libraries(thingino-dfu tdfu ws2_32)

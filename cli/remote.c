@@ -13,8 +13,6 @@
 
 #include "tdfu/protocol.h"
 #include "tdfu/tdfu.h"
-#include "ddr_binary_builder.h"
-#include "ddr_config_database.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -47,24 +45,6 @@ static uint32_t remote_crc32(const uint8_t *data, size_t len) {
 }
 
 static int remote_fd = -1;
-static bool g_remote_cloner = false; /* select cloner backend on the daemon */
-
-void remote_set_cloner(bool on) {
-    g_remote_cloner = on;
-}
-
-/* Map variant name to firmware directory name (mirrors loader.c) */
-static const char *variant_to_fw_dir(const char *variant) {
-    /* Most variants use their name directly as the firmware subdir.
-     * Only override where the dir name differs from the variant. */
-    if (strcmp(variant, "t31x") == 0 || strcmp(variant, "t31zx") == 0 || strcmp(variant, "t31") == 0)
-        return "t31";
-    if (strcmp(variant, "a1") == 0 || strcmp(variant, "a1ne") == 0)
-        return "a1_n_ne_x";
-    if (strcmp(variant, "a1nt") == 0)
-        return "a1_nt_a";
-    return variant;
-}
 
 static int net_send_all(int fd, const void *buf, size_t len) {
     const uint8_t *p = buf;
@@ -179,7 +159,7 @@ static int send_command(uint8_t cmd, const void *payload, uint32_t len) {
     tdfu_msg_header_t hdr = {
         .magic = tdfu_htonl(TDFU_PROTO_MAGIC),
         .version = TDFU_PROTO_VERSION,
-        .command = (uint8_t)(g_remote_cloner ? (cmd | TDFU_CMD_CLONER_FLAG) : cmd),
+        .command = cmd,
         .payload_len = tdfu_htonl(len),
     };
     if (net_send_all(remote_fd, &hdr, sizeof(hdr)) < 0)
@@ -362,7 +342,7 @@ const char *remote_detect_variant(int device_index) {
 
 /* Return the USB stage of a remote device by index: 0 = bootrom,
  * 1 = firmware/DFU gadget, or -1 on error / out of range. Lets a bare
- * -w decide whether it must bootstrap first (mirrors local cloner mode). */
+ * -w decide whether it must bootstrap first. */
 int remote_device_stage(int device_index) {
     if (send_command(CMD_DISCOVER, NULL, 0) < 0)
         return -1;
@@ -391,215 +371,83 @@ int remote_device_stage(int device_index) {
 }
 
 /**
- * Bootstrap a remote device. Reads firmware files locally and sends
- * them over the wire.
+ * Bootstrap a remote device over the wire.
  *
- * Payload format:
- *   [1:device_index][1:variant_len][N:variant_str]
- *   [4:ddr_len][ddr_data][4:ddr_crc32]
- *   [4:spl_len][spl_data][4:spl_crc32]
- *   [4:uboot_len][uboot_data][4:uboot_crc32]
+ * The daemon USB-boots firmware/dfu/<soc>/ itself, so by default the client
+ * sends only the device index + variant. If the user passed both --spl and
+ * --uboot, those blobs are streamed and the daemon uses them instead (skipping
+ * SoC detection), matching local --spl/--uboot.
+ *
+ * Payload: [1:device_index][1:variant_len][N:variant_str]
+ *          optionally [4:spl_len][spl][4:uboot_len][uboot]
  */
 int remote_bootstrap(int device_index, const char *cpu_variant, const char *firmware_dir, const char *spl_file,
                      const char *uboot_file) {
-    if (!g_remote_cloner) {
-        /* DFU backend: by default the daemon USB-boots firmware/dfu/<soc>/ itself,
-         * so the client sends only device index + variant. If the user passed both
-         * --spl and --uboot, stream those blobs and the daemon uses them instead
-         * (skipping SoC detection), matching local --spl/--uboot. */
-        size_t vlen = cpu_variant ? strlen(cpu_variant) : 0;
-        if (vlen > 63)
-            vlen = 63;
+    (void)firmware_dir;
+    size_t vlen = cpu_variant ? strlen(cpu_variant) : 0;
+    if (vlen > 63)
+        vlen = 63;
 
-        uint8_t *spl = NULL, *uboot = NULL;
-        size_t spl_len = 0, uboot_len = 0;
-        bool override = spl_file && spl_file[0] && uboot_file && uboot_file[0];
-        if (override) {
-            if (read_file(spl_file, &spl, &spl_len) < 0) {
-                fprintf(stderr, "Failed to read --spl file: %s\n", spl_file);
-                return -1;
-            }
-            if (read_file(uboot_file, &uboot, &uboot_len) < 0) {
-                fprintf(stderr, "Failed to read --uboot file: %s\n", uboot_file);
-                free(spl);
-                return -1;
-            }
+    uint8_t *spl = NULL, *uboot = NULL;
+    size_t spl_len = 0, uboot_len = 0;
+    bool override = spl_file && spl_file[0] && uboot_file && uboot_file[0];
+    if (override) {
+        if (read_file(spl_file, &spl, &spl_len) < 0) {
+            fprintf(stderr, "Failed to read --spl file: %s\n", spl_file);
+            return -1;
         }
-
-        size_t plen = 2 + vlen + (override ? 4 + spl_len + 4 + uboot_len : 0);
-        uint8_t *payload = malloc(plen);
-        if (!payload) {
+        if (read_file(uboot_file, &uboot, &uboot_len) < 0) {
+            fprintf(stderr, "Failed to read --uboot file: %s\n", uboot_file);
             free(spl);
-            free(uboot);
             return -1;
         }
-        uint8_t *q = payload;
-        *q++ = (uint8_t)device_index;
-        *q++ = (uint8_t)vlen;
-        if (vlen) {
-            memcpy(q, cpu_variant, vlen);
-            q += vlen;
-        }
-        if (override) {
-            write_be32(q, (uint32_t)spl_len);
-            q += 4;
-            memcpy(q, spl, spl_len);
-            q += spl_len;
-            write_be32(q, (uint32_t)uboot_len);
-            q += 4;
-            memcpy(q, uboot, uboot_len);
-            q += uboot_len;
-            printf("Sending custom SPL (%zu B) + U-Boot (%zu B) to daemon\n", spl_len, uboot_len);
-        }
-        free(spl);
-        free(uboot);
-
-        int sc = send_command(CMD_BOOTSTRAP, payload, (uint32_t)plen);
-        free(payload);
-        if (sc < 0)
-            return -1;
-        uint8_t st = 0;
-        uint8_t *resp = NULL;
-        uint32_t rl = 0;
-        if (recv_response(&st, &resp, &rl) < 0) {
-            fprintf(stderr, "Lost connection during bootstrap\n");
-            return -1;
-        }
-        if (st != RESP_OK) {
-            fprintf(stderr, "Bootstrap failed: %s\n", resp ? (char *)resp : "unknown");
-            free(resp);
-            return -1;
-        }
-        printf("Bootstrap completed successfully (remote DFU)\n");
-        free(resp);
-        return 0;
     }
 
-    const char *fw_dir = firmware_dir ? firmware_dir : "./firmware";
-    const char *fw_subdir = variant_to_fw_dir(cpu_variant);
-
-    /* Generate DDR config dynamically (same as local mode) */
-    char path[512];
-    uint8_t *ddr = NULL, *spl = NULL, *uboot = NULL;
-    size_t ddr_len = 0, spl_len = 0, uboot_len = 0;
-
-    tdfu_variant_t variant_enum = tdfu_variant_from_string(cpu_variant);
-    platform_config_t platform;
-    if (ddr_get_platform_config_by_variant(variant_enum, &platform) != 0) {
-        fprintf(stderr, "Unknown platform: %s\n", cpu_variant);
-        return -1;
-    }
-    const ddr_chip_config_t *chip = ddr_chip_config_get_default(cpu_variant);
-    if (!chip) {
-        fprintf(stderr, "No DDR chip config for: %s\n", cpu_variant);
-        return -1;
-    }
-    ddr_phy_params_t phy_params;
-    ddr_chip_to_phy_params(chip, platform.ddr_freq, &phy_params);
-
-    ddr = malloc(1024);
-    if (!ddr)
-        return -1;
-    ddr_len = ddr_build_binary(&platform, &phy_params, ddr);
-    if (ddr_len == 0) {
-        fprintf(stderr, "DDR generation failed for %s\n", cpu_variant);
-        free(ddr);
-        return -1;
-    }
-
-    snprintf(path, sizeof(path), "%s/%s/spl.bin", fw_dir, fw_subdir);
-    if (read_file(path, &spl, &spl_len) < 0) {
-        fprintf(stderr, "Failed to read SPL: %s\n", path);
-        free(ddr);
-        return -1;
-    }
-
-    snprintf(path, sizeof(path), "%s/%s/uboot.bin", fw_dir, fw_subdir);
-    if (read_file(path, &uboot, &uboot_len) < 0) {
-        fprintf(stderr, "Failed to read U-Boot: %s\n", path);
-        free(ddr);
-        free(spl);
-        return -1;
-    }
-
-    printf("Sending firmware to remote daemon:\n");
-    printf("  DDR:   %zu bytes\n", ddr_len);
-    printf("  SPL:   %zu bytes\n", spl_len);
-    printf("  U-Boot: %zu bytes\n", uboot_len);
-
-    /* Compute CRC32 for each binary */
-    uint32_t ddr_crc = remote_crc32(ddr, ddr_len);
-    uint32_t spl_crc = remote_crc32(spl, spl_len);
-    uint32_t uboot_crc = remote_crc32(uboot, uboot_len);
-
-    /* Build payload */
-    size_t variant_len = strlen(cpu_variant);
-    size_t payload_len = 2 + variant_len + 4 + ddr_len + 4 + 4 + spl_len + 4 + 4 + uboot_len + 4;
-
-    uint8_t *payload = malloc(payload_len);
+    size_t plen = 2 + vlen + (override ? 4 + spl_len + 4 + uboot_len : 0);
+    uint8_t *payload = malloc(plen);
     if (!payload) {
-        free(ddr);
         free(spl);
         free(uboot);
         return -1;
     }
-
-    uint8_t *p = payload;
-    *p++ = (uint8_t)device_index;
-    *p++ = (uint8_t)variant_len;
-    memcpy(p, cpu_variant, variant_len);
-    p += variant_len;
-
-    /* DDR */
-    write_be32(p, ddr_len);
-    p += 4;
-    memcpy(p, ddr, ddr_len);
-    p += ddr_len;
-    write_be32(p, ddr_crc);
-    p += 4;
-
-    /* SPL */
-    write_be32(p, spl_len);
-    p += 4;
-    memcpy(p, spl, spl_len);
-    p += spl_len;
-    write_be32(p, spl_crc);
-    p += 4;
-
-    /* U-Boot */
-    write_be32(p, uboot_len);
-    p += 4;
-    memcpy(p, uboot, uboot_len);
-    p += uboot_len;
-    write_be32(p, uboot_crc);
-    p += 4;
-
-    free(ddr);
+    uint8_t *q = payload;
+    *q++ = (uint8_t)device_index;
+    *q++ = (uint8_t)vlen;
+    if (vlen) {
+        memcpy(q, cpu_variant, vlen);
+        q += vlen;
+    }
+    if (override) {
+        write_be32(q, (uint32_t)spl_len);
+        q += 4;
+        memcpy(q, spl, spl_len);
+        q += spl_len;
+        write_be32(q, (uint32_t)uboot_len);
+        q += 4;
+        memcpy(q, uboot, uboot_len);
+        q += uboot_len;
+        printf("Sending custom SPL (%zu B) + U-Boot (%zu B) to daemon\n", spl_len, uboot_len);
+    }
     free(spl);
     free(uboot);
 
-    if (send_command(CMD_BOOTSTRAP, payload, payload_len) < 0) {
-        free(payload);
-        return -1;
-    }
+    int sc = send_command(CMD_BOOTSTRAP, payload, (uint32_t)plen);
     free(payload);
-
-    /* Wait for response (bootstrap takes several seconds) */
-    uint8_t resp_status;
+    if (sc < 0)
+        return -1;
+    uint8_t st = 0;
     uint8_t *resp = NULL;
-    uint32_t resp_len = 0;
-    if (recv_response(&resp_status, &resp, &resp_len) < 0) {
+    uint32_t rl = 0;
+    if (recv_response(&st, &resp, &rl) < 0) {
         fprintf(stderr, "Lost connection during bootstrap\n");
         return -1;
     }
-
-    if (resp_status != RESP_OK) {
+    if (st != RESP_OK) {
         fprintf(stderr, "Bootstrap failed: %s\n", resp ? (char *)resp : "unknown");
         free(resp);
         return -1;
     }
-
-    printf("Bootstrap completed successfully (remote)\n");
+    printf("Bootstrap completed successfully (remote DFU)\n");
     free(resp);
     return 0;
 }

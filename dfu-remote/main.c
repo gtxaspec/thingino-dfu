@@ -322,10 +322,10 @@ static int stage_temp_blob(char *path_out, size_t path_sz, const uint8_t *data, 
 }
 
 /**
- * Handle CMD_BOOTSTRAP - DFU: bootrom -> U-Boot DFU gadget (or cloner staging).
+ * Handle CMD_BOOTSTRAP - bootrom -> U-Boot DFU gadget.
  *
  * Payload: [1:device_idx][1:variant_len][N:variant]
- *          optional (DFU only): [4:spl_len][spl][4:uboot_len][uboot]
+ *          optional: [4:spl_len][spl][4:uboot_len][uboot]
  *          both blobs together => use them and skip SoC detect; absent =>
  *          USB-boot firmware/dfu/<soc>/{spl,uboot}.bin from firmware_dir.
  */
@@ -354,8 +354,7 @@ static int dfu_pick_alt(usb_manager_t *manager, int device_index, const char *al
     return -1;
 }
 
-static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len, const char *firmware_dir,
-                            bool use_cloner) {
+static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len, const char *firmware_dir) {
     if (len < 2)
         return send_error(client_fd, "payload too short");
 
@@ -377,7 +376,7 @@ static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len,
      * local explicit_files path; absent => use firmware/dfu/<soc>/. */
     char spl_tmp[64] = {0}, uboot_tmp[64] = {0};
     const char *spl_override = NULL, *uboot_override = NULL;
-    if (!use_cloner && p < end) {
+    if (p < end) {
         if (p + 4 > end)
             return send_error(client_fd, "bad SPL override length");
         uint32_t spl_len = read_be32(p);
@@ -420,16 +419,10 @@ static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len,
     }
 
     g_log_client_fd = client_fd;
-    tdfu_error_t result;
-    if (use_cloner) {
-        result = tdfu_op_bootstrap(&manager, device_index, variant_str, g_debug_enabled, false, NULL, NULL, NULL,
-                                   firmware_dir);
-    } else {
-        /* DFU: bootrom -> U-Boot DFU gadget. Custom SPL/U-Boot (if supplied)
-         * override firmware/dfu/<soc>/ and skip SoC detection. */
-        result = tdfu_dfu_bootstrap(&manager, device_index, firmware_dir, variant_str[0] ? variant_str : NULL,
-                                    spl_override, uboot_override);
-    }
+    /* DFU: bootrom -> U-Boot DFU gadget. Custom SPL/U-Boot (if supplied)
+     * override firmware/dfu/<soc>/ and skip SoC detection. */
+    tdfu_error_t result = tdfu_dfu_bootstrap(&manager, device_index, firmware_dir,
+                                             variant_str[0] ? variant_str : NULL, spl_override, uboot_override);
     g_log_client_fd = -1;
 
     usb_manager_cleanup(&manager);
@@ -455,8 +448,7 @@ static int handle_bootstrap(int client_fd, const uint8_t *payload, uint32_t len,
  *   [1:device_idx][1:variant_len][N:variant]
  *   [4:fw_len][fw_data][4:crc32]
  */
-static int handle_write(int client_fd, const uint8_t *payload, uint32_t len, const char *firmware_dir,
-                        bool use_cloner) {
+static int handle_write(int client_fd, const uint8_t *payload, uint32_t len) {
     if (len < 2)
         return send_error(client_fd, "payload too short");
 
@@ -534,16 +526,10 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len, con
     }
 
     g_log_client_fd = client_fd;
-    tdfu_error_t result;
-    if (use_cloner) {
-        result = tdfu_op_write_firmware(&manager, device_index, tmpfile, variant_str, NULL, false, false, false,
-                                        g_debug_enabled, false, NULL, NULL, NULL, firmware_dir, 0);
-    } else {
-        /* DFU: download to the requested alt (default alt 0 = flash). */
-        int alt = dfu_pick_alt(&manager, device_index, alt_str[0] ? alt_str : NULL);
-        result = (alt < 0) ? TDFU_ERROR_DEVICE_NOT_FOUND
-                           : tdfu_dfu_download(&manager, device_index, alt, tmpfile);
-    }
+    /* DFU: download to the requested alt (default alt 0 = flash). */
+    int alt = dfu_pick_alt(&manager, device_index, alt_str[0] ? alt_str : NULL);
+    tdfu_error_t result = (alt < 0) ? TDFU_ERROR_DEVICE_NOT_FOUND
+                                    : tdfu_dfu_download(&manager, device_index, alt, tmpfile);
     g_log_client_fd = -1;
 
     remove(tmpfile);
@@ -564,7 +550,7 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len, con
  *
  * Payload: [1:device_idx][1:variant_len][N:variant]
  */
-static int handle_read(int client_fd, const uint8_t *payload, uint32_t len, bool use_cloner) {
+static int handle_read(int client_fd, const uint8_t *payload, uint32_t len) {
     if (len < 2)
         return send_error(client_fd, "payload too short");
 
@@ -618,15 +604,10 @@ static int handle_read(int client_fd, const uint8_t *payload, uint32_t len, bool
     g_state = "reading";
     g_cancel = 0;
     g_log_client_fd = client_fd;
-    tdfu_error_t result;
-    if (use_cloner) {
-        result = tdfu_op_read_firmware(&manager, device_index, tmpfile, force_cpu, NULL);
-    } else {
-        /* DFU: upload the requested alt (default alt 0 = flash). */
-        int alt = dfu_pick_alt(&manager, device_index, alt_str[0] ? alt_str : NULL);
-        result = (alt < 0) ? TDFU_ERROR_DEVICE_NOT_FOUND
-                           : tdfu_dfu_upload(&manager, device_index, alt, tmpfile, 0);
-    }
+    /* DFU: upload the requested alt (default alt 0 = flash). */
+    int alt = dfu_pick_alt(&manager, device_index, alt_str[0] ? alt_str : NULL);
+    tdfu_error_t result = (alt < 0) ? TDFU_ERROR_DEVICE_NOT_FOUND
+                                    : tdfu_dfu_upload(&manager, device_index, alt, tmpfile, 0);
     g_log_client_fd = -1;
     usb_manager_cleanup(&manager);
 
@@ -710,20 +691,20 @@ static int handle_cancel(int client_fd) {
 /* Client connection handler                                           */
 /* ------------------------------------------------------------------ */
 
-/* Dispatch one already-parsed command. High bit of `command` selects the
- * backend (set = legacy cloner, clear = DFU). */
+/* Dispatch one already-parsed command. The high bit of `command` was the legacy
+ * cloner-backend selector; it is now ignored (masked off) so an older client
+ * that still sets it resolves to the DFU handler. */
 static int dispatch_command(int fd, uint8_t command, const uint8_t *payload, uint32_t payload_len,
                             const char *firmware_dir) {
-    bool use_cloner = (command & TDFU_CMD_CLONER_FLAG) != 0;
     switch (command & TDFU_CMD_MASK) {
     case CMD_DISCOVER:
         return handle_discover(fd);
     case CMD_BOOTSTRAP:
-        return handle_bootstrap(fd, payload, payload_len, firmware_dir, use_cloner);
+        return handle_bootstrap(fd, payload, payload_len, firmware_dir);
     case CMD_WRITE:
-        return handle_write(fd, payload, payload_len, firmware_dir, use_cloner);
+        return handle_write(fd, payload, payload_len);
     case CMD_READ:
-        return handle_read(fd, payload, payload_len, use_cloner);
+        return handle_read(fd, payload, payload_len);
     case CMD_STATUS:
         return handle_status(fd);
     case CMD_CANCEL:

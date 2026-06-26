@@ -21,7 +21,7 @@ tdfu_error_t usb_manager_init(usb_manager_t *manager) {
     return TDFU_SUCCESS;
 }
 
-// Helper: check if a USB device is an Ingenic cloner device
+// Helper: check if a USB device is an Ingenic bootrom/DFU device
 static bool is_ingenic_device(const struct libusb_device_descriptor *desc, bool *out_bootrom, bool *out_firmware,
                               bool *out_dfu) {
     bool is_ingenic = (desc->idVendor == VENDOR_ID_INGENIC || desc->idVendor == VENDOR_ID_INGENIC_ALT);

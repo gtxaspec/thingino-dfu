@@ -3,9 +3,6 @@
 
 #include <stdbool.h>
 
-/* Select the daemon backend: false = DFU (default), true = legacy cloner. */
-void remote_set_cloner(bool on);
-
 int remote_connect(const char *host, int port, const char *token);
 void remote_disconnect(void);
 int remote_list_devices(void);
