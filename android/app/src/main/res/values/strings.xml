@@ -4,6 +4,8 @@
     <string name="status_disconnected">No device connected</string>
     <string name="btn_read">READ</string>
     <string name="btn_write">WRITE</string>
+    <string name="btn_diag">Info / Diag</string>
+    <string name="diag_title">Device Diagnostics</string>
     <string name="mode_local_usb">Local USB</string>
     <string name="mode_remote">Remote</string>
     <string name="hint_host">Host</string>

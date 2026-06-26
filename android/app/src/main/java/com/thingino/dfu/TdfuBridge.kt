@@ -95,4 +95,14 @@ object TdfuBridge {
      */
     @JvmStatic
     external fun nativeSetDebug(enabled: Boolean)
+
+    // NOTE: There is deliberately no nativeDiag() / local-USB diagnostics path.
+    // libtdfu's tdfu_diag() takes a usb_manager_t and enumerates devices via
+    // libusb_get_device_list(), which cannot work on Android's fd-wrap path
+    // (the JNI uses LIBUSB_OPTION_NO_DEVICE_DISCOVERY). Worse, the eFuse shadow
+    // window that diag reads is cleared to zero by any stage1 stub — including
+    // the SoC auto-detect that already runs at connect time — so a local read
+    // would return zeros. Diagnostics are therefore REMOTE-ONLY: the daemon runs
+    // tdfu_diag() on a pristine bootrom and ships the formatted text over the
+    // wire (RemoteClient.diag / CMD_DIAG). See libtdfu/include/tdfu/diag.h.
 }

@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     private lateinit var socText: TextView
     private lateinit var readButton: Button
     private lateinit var writeButton: Button
+    private lateinit var diagButton: Button
     private lateinit var progressBar: ProgressBar
     private lateinit var progressText: TextView
     private lateinit var logScroll: ScrollView
@@ -73,6 +74,10 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     private var remoteClient: RemoteClient? = null
     private var remoteDevices: List<RemoteClient.DeviceEntry> = emptyList()
     private var selectedDeviceIndex: Int = 0
+    // Last successful diagnostics readout. The eFuse is only readable on a
+    // pristine bootrom; after bootstrap the device leaves bootrom, so we keep
+    // the last readout to stay viewable. Cleared only on an explicit reconnect.
+    private var lastDiagText: String? = null
 
     // File picker result
     private val filePickerLauncher = registerForActivityResult(
@@ -102,6 +107,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         socText = findViewById(R.id.socText)
         readButton = findViewById(R.id.readButton)
         writeButton = findViewById(R.id.writeButton)
+        diagButton = findViewById(R.id.diagButton)
         progressBar = findViewById(R.id.progressBar)
         progressText = findViewById(R.id.progressText)
         logScroll = findViewById(R.id.logScroll)
@@ -115,6 +121,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                     val dev = remoteDevices[pos]
                     detectedSoc = dev.variantName
                     socText.text = "SoC: ${dev.variantName.uppercase()} (${dev.stageName})"
+                    refreshDiagButton()
                 }
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
@@ -143,6 +150,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
         readButton.setOnClickListener { startReadOperation() }
         writeButton.setOnClickListener { pickFileForWrite() }
+        diagButton.setOnClickListener { startDiagOperation() }
 
         // Mode toggle
         modeRadioGroup.setOnCheckedChangeListener { _, checkedId ->
@@ -259,6 +267,11 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
         // Save for next time
         prefs.edit().putString(PREF_HOST, host).putInt(PREF_PORT, port).apply()
+
+        // Explicit user connect = genuinely new connection: drop any cached diag.
+        // (The automatic post-bootstrap re-discover does NOT call this, so the
+        // cached readout survives a device leaving bootrom — which is the point.)
+        lastDiagText = null
 
         connectButton.isEnabled = false
         appendLog("Connecting to $host:$port...\n")
@@ -792,6 +805,98 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     }
 
     // ======================================================================
+    // Diagnostics (read-only eFuse / secure-boot readout) — remote only
+    // ======================================================================
+
+    private fun startDiagOperation() {
+        if (operationRunning) return
+
+        // Local USB diag is intentionally not wired: tdfu_diag() needs an
+        // enumerable usb_manager_t (impossible on Android's no-discovery fd-wrap
+        // path), and the connect-time SoC auto-detect stub already clears the
+        // eFuse shadow window. Diagnostics run on the daemon over the wire.
+        if (!isRemoteMode) {
+            appendLog("Info / Diag is available in Remote (daemon) mode only.\n")
+            return
+        }
+
+        val client = remoteClient ?: return
+        val index = selectedDeviceIndex
+
+        // The eFuse is only readable on a pristine bootrom device. Once it has
+        // been bootstrapped it becomes the a108:4d44 DFU gadget (stage != 0) and
+        // a fresh read would fail — so don't attempt it; show the cached readout.
+        val dev = remoteDevices.getOrNull(index)
+        if (dev?.stage != 0) {
+            val cached = lastDiagText
+            if (cached != null) {
+                showDiagDialog(cached, cached = true)
+            } else {
+                appendLog("No cached info yet — tap Info before bootstrapping.\n")
+            }
+            return
+        }
+
+        operationRunning = true
+        setButtonsEnabled(false)
+        appendLog("\n--- DIAGNOSTICS ---\n")
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val report = client.diag(index)
+
+            withContext(Dispatchers.Main) {
+                if (report != null) {
+                    lastDiagText = report
+                    appendLog("Diagnostics received (${report.length} bytes)\n")
+                    showDiagDialog(report)
+                } else {
+                    // Read failed (e.g. the device just left bootrom): fall back
+                    // to the last successful readout if we have one.
+                    val cached = lastDiagText
+                    if (cached != null) {
+                        appendLog("Diagnostics read failed — showing cached readout\n")
+                        showDiagDialog(cached, cached = true)
+                    } else {
+                        appendLog("Diagnostics failed\n")
+                        updateStatus("Diagnostics failed")
+                    }
+                }
+                finishOperation()
+            }
+        }
+    }
+
+    /**
+     * Show the multi-line diagnostics report in a scrollable monospace dialog.
+     * When [cached] is true the readout came from a previous (bootrom-stage)
+     * read and the device can no longer be re-read, so a note is appended.
+     */
+    private fun showDiagDialog(report: String, cached: Boolean = false) {
+        val body = if (cached)
+            report + "\n\n(cached — device is no longer in bootrom mode)"
+        else
+            report
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val textView = TextView(this).apply {
+            text = body
+            typeface = android.graphics.Typeface.MONOSPACE
+            textSize = 11f
+            setTextIsSelectable(true)
+            setPadding(pad, pad, pad, pad)
+        }
+        // Nest a horizontal scroller inside the vertical one so the wide eFuse
+        // hex-dump lines stay aligned and remain fully scrollable.
+        val hScroll = android.widget.HorizontalScrollView(this).apply { addView(textView) }
+        val vScroll = ScrollView(this).apply { addView(hScroll) }
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.diag_title)
+            .setView(vScroll)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    // ======================================================================
     // UI Helpers
     // ======================================================================
 
@@ -811,6 +916,28 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         writeButton.isEnabled = enabled
         readButton.alpha = if (enabled) 1.0f else 0.5f
         writeButton.alpha = if (enabled) 1.0f else 0.5f
+        refreshDiagButton()
+    }
+
+    /**
+     * Diag is read-only and REMOTE-ONLY: it only works on a pristine bootrom
+     * device via the daemon's usb_manager. The local USB (JNI) path can't run it
+     * — Android's fd-wrap path has no enumerable usb_manager_t, and the eFuse
+     * shadow window is already cleared by the connect-time SoC auto-detect stub
+     * (see TdfuBridge / diag.h).
+     *
+     * Enabled when connected (remote) AND either the selected device is still in
+     * bootrom stage (a fresh read is possible) OR we have a cached readout to
+     * show (so the button stays usable after the device is bootstrapped out of
+     * bootrom and the eFuse can no longer be read).
+     */
+    private fun refreshDiagButton() {
+        val dev = remoteDevices.getOrNull(selectedDeviceIndex)
+        val connected = isRemoteMode && remoteClient?.isConnected() == true
+        val enabled = !operationRunning && connected &&
+            (dev?.stage == 0 || lastDiagText != null)
+        diagButton.isEnabled = enabled
+        diagButton.alpha = if (enabled) 1.0f else 0.5f
     }
 
     /** Settings window: debug logging toggle. */

@@ -28,6 +28,7 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
         const val CMD_READ: Byte = 0x04
         const val CMD_STATUS: Byte = 0x05
         const val CMD_CANCEL: Byte = 0x06
+        const val CMD_DIAG: Byte = 0x07
 
         // Response status
         const val RESP_OK: Byte = 0x00
@@ -184,6 +185,19 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
     fun cancel(): Boolean {
         sendRequest(CMD_CANCEL)
         return drainResponses() != null
+    }
+
+    /**
+     * Read-only eFuse / secure-boot diagnostics for a bootrom-stage device.
+     * Request payload is a single byte: the device index. The daemon replies
+     * with RESP_OK and the formatted diagnostics report as UTF-8 text.
+     * Returns the report on success, or null on RESP_ERROR (logged via callback).
+     */
+    fun diag(deviceIndex: Int): String? {
+        val payload = byteArrayOf(deviceIndex.toByte())
+        sendRequest(CMD_DIAG, payload)
+        val response = drainResponses() ?: return null
+        return String(response, Charsets.UTF_8)
     }
 
     // --- Private protocol helpers ---

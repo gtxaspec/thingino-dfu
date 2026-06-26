@@ -194,6 +194,17 @@
             style="@style/Widget.Material3.Button.TonalButton" />
     </LinearLayout>
 
+    <!-- Read-only diagnostics (eFuse / secure-boot). Remote (daemon) mode only. -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/diagButton"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginBottom="12dp"
+        android:text="@string/btn_diag"
+        android:textSize="14sp"
+        android:enabled="false"
+        style="@style/Widget.Material3.Button.OutlinedButton" />
+
     <!-- Progress -->
     <ProgressBar
         android:id="@+id/progressBar"
