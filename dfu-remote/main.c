@@ -691,12 +691,10 @@ static int handle_cancel(int client_fd) {
 /* Client connection handler                                           */
 /* ------------------------------------------------------------------ */
 
-/* Dispatch one already-parsed command. The high bit of `command` was the legacy
- * cloner-backend selector; it is now ignored (masked off) so an older client
- * that still sets it resolves to the DFU handler. */
+/* Dispatch one already-parsed command. */
 static int dispatch_command(int fd, uint8_t command, const uint8_t *payload, uint32_t payload_len,
                             const char *firmware_dir) {
-    switch (command & TDFU_CMD_MASK) {
+    switch (command) {
     case CMD_DISCOVER:
         return handle_discover(fd);
     case CMD_BOOTSTRAP:

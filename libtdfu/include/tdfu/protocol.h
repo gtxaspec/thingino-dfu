@@ -26,17 +26,12 @@
 /* Commands (client -> daemon) */
 enum {
     CMD_DISCOVER = 0x01,  /* list USB devices */
-    CMD_BOOTSTRAP = 0x02, /* bootstrap device (sends DDR+SPL+U-Boot) */
+    CMD_BOOTSTRAP = 0x02, /* bootstrap device into U-Boot DFU mode */
     CMD_WRITE = 0x03,     /* write firmware to device */
     CMD_READ = 0x04,      /* read firmware from device */
     CMD_STATUS = 0x05,    /* query device state */
     CMD_CANCEL = 0x06,    /* abort current operation */
 };
-
-/* The high bit of `command` selects the backend: clear = DFU (default), set =
- * legacy cloner. Mask it off to recover the CMD_* code. */
-#define TDFU_CMD_CLONER_FLAG 0x80
-#define TDFU_CMD_MASK        0x7F
 
 /* Response status */
 enum {
