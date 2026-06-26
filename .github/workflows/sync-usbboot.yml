@@ -36,7 +36,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write   # commit + push the refreshed loaders to the default branch
-      actions: write    # dispatch the Pages workflow after a sync
     env:
       GH_TOKEN: ${{ github.token }}
       SRC_REPO: gtxaspec/u-boot
@@ -118,8 +117,5 @@ jobs:
               -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
               commit -m "firmware: sync DFU loaders from gtxaspec/u-boot usbboot ($SRC_SHA)"
           git push origin "HEAD:$GITHUB_REF_NAME"
-          # A GITHUB_TOKEN push doesn't trigger the Pages workflow (recursion
-          # guard); workflow_dispatch is the exception, so redeploy Pages
-          # explicitly with the freshly synced loaders.
-          gh workflow run pages.yml --ref "$GITHUB_REF_NAME" \
-            || echo "::warning::Pages dispatch failed; redeploy Pages manually"
+          # The synced loaders reach the published flasher on the next release
+          # (Pages deploys on tags), so there is no Pages dispatch here.
