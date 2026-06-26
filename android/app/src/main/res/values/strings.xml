@@ -6,6 +6,12 @@
     <string name="btn_write">WRITE</string>
     <string name="btn_diag">Info / Diag</string>
     <string name="diag_title">Device Diagnostics</string>
+    <string name="custom_bootloader_title">Custom bootloader (SPL / U-Boot)</string>
+    <string name="btn_bootstrap">Bootstrap Device</string>
+    <string name="btn_sel_spl">SPL</string>
+    <string name="btn_sel_uboot">U-Boot</string>
+    <string name="btn_clear_custom">Clear</string>
+    <string name="custom_blob_bundled">SPL: bundled\nU-Boot: bundled</string>
     <string name="mode_local_usb">Local USB</string>
     <string name="mode_remote">Remote</string>
     <string name="hint_host">Host</string>

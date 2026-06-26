@@ -34,6 +34,7 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
         const val RESP_OK: Byte = 0x00
         const val RESP_ERROR: Byte = 0x01
         const val RESP_PROGRESS: Byte = 0x02
+        const val RESP_LOG: Byte = 0x03
 
         val VARIANT_NAMES = listOf(
             "t10", "t20", "t21", "t23", "t30", "t31", "t31x", "t31zx",
@@ -122,12 +123,45 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
         return devices
     }
 
-    fun bootstrap(deviceIndex: Int, variant: String): Boolean {
+    /**
+     * Bootstrap a device into the U-Boot DFU gadget.
+     *
+     * Wire format (matches the daemon's handle_bootstrap):
+     *   [1:device_index][1:variant_len][variant]
+     *   then OPTIONAL [4:spl_len][spl][4:uboot_len][uboot]  (big-endian lengths).
+     *
+     * When BOTH [spl] and [uboot] are supplied (non-null, non-empty) they are
+     * appended so the daemon stages them to temp files and uses them in place of
+     * the bundled firmware/dfu/<soc>/ blobs (and skips SoC detection). Both or
+     * neither — passing only one is treated as none.
+     */
+    fun bootstrap(
+        deviceIndex: Int,
+        variant: String,
+        spl: ByteArray? = null,
+        uboot: ByteArray? = null
+    ): Boolean {
         val variantBytes = variant.toByteArray(Charsets.UTF_8)
-        val payload = ByteArray(2 + variantBytes.size)
-        payload[0] = deviceIndex.toByte()
-        payload[1] = variantBytes.size.toByte()
-        System.arraycopy(variantBytes, 0, payload, 2, variantBytes.size)
+        val useCustom = spl != null && spl.isNotEmpty() && uboot != null && uboot.isNotEmpty()
+
+        val payload = if (useCustom) {
+            val buf = ByteBuffer.allocate(2 + variantBytes.size + 4 + spl!!.size + 4 + uboot!!.size)
+                .order(ByteOrder.BIG_ENDIAN)
+            buf.put(deviceIndex.toByte())
+            buf.put(variantBytes.size.toByte())
+            buf.put(variantBytes)
+            buf.putInt(spl.size)
+            buf.put(spl)
+            buf.putInt(uboot.size)
+            buf.put(uboot)
+            buf.array()
+        } else {
+            val p = ByteArray(2 + variantBytes.size)
+            p[0] = deviceIndex.toByte()
+            p[1] = variantBytes.size.toByte()
+            System.arraycopy(variantBytes, 0, p, 2, variantBytes.size)
+            p
+        }
 
         sendRequest(CMD_BOOTSTRAP, payload)
         return drainResponses() != null
@@ -250,6 +284,13 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
                             String(payload, 4, msgLen, Charsets.UTF_8) else ""
                         callback?.onProgress(percent, "remote", msg)
                     }
+                }
+                RESP_LOG -> {
+                    // Raw library log output forwarded by the daemon (same as
+                    // local stderr). Surface it and keep reading until the
+                    // terminal RESP_OK / RESP_ERROR arrives.
+                    if (payload.isNotEmpty())
+                        callback?.onLog(String(payload, Charsets.UTF_8))
                 }
                 RESP_OK -> return payload
                 RESP_ERROR -> {

@@ -443,6 +443,68 @@ Java_com_thingino_dfu_TdfuBridge_nativeBootstrap(
 }
 
 /* ========================================================================== */
+/* JNI: bootstrapFiles - custom SPL + U-Boot from caller-supplied file paths   */
+/* ========================================================================== */
+
+/* Like nativeBootstrap, but USB-boots a client-supplied SPL + U-Boot read from
+ * two file paths (the Kotlin side stages the user's blobs to cacheDir) instead
+ * of the bundled firmware/dfu/<soc>/ assets. The caller owns the temp files and
+ * deletes them; we only read them. */
+JNIEXPORT jint JNICALL
+Java_com_thingino_dfu_TdfuBridge_nativeBootstrapFiles(
+        JNIEnv *env, jclass clazz, jint fd, jstring spl_path_str, jstring uboot_path_str) {
+    (void)clazz;
+
+    const char *spl_path = (*env)->GetStringUTFChars(env, spl_path_str, NULL);
+    const char *uboot_path = (*env)->GetStringUTFChars(env, uboot_path_str, NULL);
+    if (!spl_path || !uboot_path) {
+        if (spl_path) (*env)->ReleaseStringUTFChars(env, spl_path_str, spl_path);
+        if (uboot_path) (*env)->ReleaseStringUTFChars(env, uboot_path_str, uboot_path);
+        return -1;
+    }
+
+    LOGI("nativeBootstrapFiles: fd=%d spl=%s uboot=%s", fd, spl_path, uboot_path);
+
+    char dmsg[512];
+    jni_log("DFU bootstrap with custom SPL/U-Boot (bootrom -> U-Boot DFU gadget)...\n");
+    jni_progress(10, "bootstrap", "Loading custom SPL/U-Boot...");
+
+    uint8_t *spl = NULL, *uboot = NULL;
+    size_t sl = 0, ul = 0;
+    tdfu_error_t dr = TDFU_ERROR_FILE_IO;
+
+    if (read_file_to_mem(spl_path, &spl, &sl) == 0 &&
+        read_file_to_mem(uboot_path, &uboot, &ul) == 0) {
+        usb_device_t *ddev = device_from_fd(fd);
+        if (ddev) {
+            jni_progress(40, "bootstrap", "USB-booting U-Boot...");
+            dr = tdfu_dfu_bootstrap_device(ddev, spl, sl, uboot, ul);
+            device_close_android(ddev);
+        } else {
+            dr = TDFU_ERROR_OPEN_FAILED;
+        }
+    } else {
+        snprintf(dmsg, sizeof(dmsg), "ERROR: cannot read custom SPL/U-Boot files\n");
+        jni_log(dmsg);
+    }
+
+    free(spl);
+    free(uboot);
+
+    if (dr == TDFU_SUCCESS) {
+        jni_progress(100, "bootstrap", "DFU U-Boot running");
+        jni_log("Device re-enumerating as a U-Boot DFU gadget.\n");
+    } else {
+        snprintf(dmsg, sizeof(dmsg), "ERROR: DFU bootstrap failed: %s\n", tdfu_error_to_string(dr));
+        jni_log(dmsg);
+    }
+
+    (*env)->ReleaseStringUTFChars(env, spl_path_str, spl_path);
+    (*env)->ReleaseStringUTFChars(env, uboot_path_str, uboot_path);
+    return (dr == TDFU_SUCCESS) ? 0 : -1;
+}
+
+/* ========================================================================== */
 /* JNI: readFirmware                                                          */
 /* ========================================================================== */
 

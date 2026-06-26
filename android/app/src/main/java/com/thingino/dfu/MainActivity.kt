@@ -24,6 +24,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -65,6 +66,13 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     private lateinit var portInput: EditText
     private lateinit var connectButton: Button
 
+    // Custom bootloader UI (custom SPL/U-Boot; shared by local + remote modes)
+    private lateinit var customBlobInfo: TextView
+    private lateinit var selectSplButton: Button
+    private lateinit var selectUbootButton: Button
+    private lateinit var clearCustomButton: Button
+    private lateinit var bootstrapButton: Button
+
     // State
     private var detectedSoc: String = ""
     private var operationRunning = false
@@ -79,6 +87,13 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     // the last readout to stay viewable. Cleared only on an explicit reconnect.
     private var lastDiagText: String? = null
 
+    // Optional custom SPL + U-Boot for REMOTE bootstrap (both-or-neither). When
+    // both are set, the daemon uses them in place of the bundled DFU U-Boot.
+    private var customSplBytes: ByteArray? = null
+    private var customSplName: String? = null
+    private var customUbootBytes: ByteArray? = null
+    private var customUbootName: String? = null
+
     // File picker result
     private val filePickerLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
@@ -89,6 +104,16 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             appendLog("File selection cancelled\n")
         }
     }
+
+    // Separate pickers for the two custom-bootloader slots, so we never have to
+    // track which slot a single picker is filling.
+    private val splPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> if (uri != null) loadCustomBlob(uri, isSpl = true) }
+
+    private val ubootPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> if (uri != null) loadCustomBlob(uri, isSpl = false) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,9 +144,15 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                 if (isRemoteMode && remoteDevices.isNotEmpty()) {
                     selectedDeviceIndex = pos
                     val dev = remoteDevices[pos]
-                    detectedSoc = dev.variantName
-                    socText.text = "SoC: ${dev.variantName.uppercase()} (${dev.stageName})"
+                    // A device past bootrom (DFU/firmware) only reports a
+                    // placeholder variant; keep the SoC detected at bootrom
+                    // rather than overwriting it (matches the daemon/web UX).
+                    if (dev.stage == 0 || detectedSoc.isEmpty()) {
+                        detectedSoc = dev.variantName
+                    }
+                    socText.text = "SoC: ${detectedSoc.uppercase()} (${dev.stageName})"
                     refreshDiagButton()
+                    refreshBootstrapButton()
                 }
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
@@ -133,6 +164,14 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         hostInput = findViewById(R.id.hostInput)
         portInput = findViewById(R.id.portInput)
         connectButton = findViewById(R.id.connectButton)
+
+        // Custom bootloader UI (shared by local + remote modes)
+        customBlobInfo = findViewById(R.id.customBlobInfo)
+        selectSplButton = findViewById(R.id.selectSplButton)
+        selectUbootButton = findViewById(R.id.selectUbootButton)
+        clearCustomButton = findViewById(R.id.clearCustomButton)
+        bootstrapButton = findViewById(R.id.bootstrapButton)
+        updateCustomBlobInfo()
 
         // Restore saved host/port
         hostInput.setText(prefs.getString(PREF_HOST, ""))
@@ -151,11 +190,19 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         readButton.setOnClickListener { startReadOperation() }
         writeButton.setOnClickListener { pickFileForWrite() }
         diagButton.setOnClickListener { startDiagOperation() }
+        selectSplButton.setOnClickListener { splPickerLauncher.launch("application/octet-stream") }
+        selectUbootButton.setOnClickListener { ubootPickerLauncher.launch("application/octet-stream") }
+        clearCustomButton.setOnClickListener { clearCustomBlobs() }
+        bootstrapButton.setOnClickListener { startRemoteBootstrap() }
 
         // Mode toggle
         modeRadioGroup.setOnCheckedChangeListener { _, checkedId ->
             isRemoteMode = checkedId == R.id.radioRemote
             remoteInputRow.visibility = if (isRemoteMode) View.VISIBLE else View.GONE
+            // The custom SPL/U-Boot card is shared by both modes; only the
+            // explicit "Bootstrap Device" button is remote-only (local USB
+            // bootstraps on Read/Write).
+            bootstrapButton.visibility = if (isRemoteMode) View.VISIBLE else View.GONE
             deviceSpinner.visibility = View.GONE
             setButtonsEnabled(false)
             detectedSoc = ""
@@ -463,7 +510,10 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
      */
     private fun bootstrapToDfu() {
         if (operationRunning) return
-        if (detectedSoc.isEmpty()) {
+        val useCustom = customSplBytes?.isNotEmpty() == true && customUbootBytes?.isNotEmpty() == true
+        // Custom blobs are explicit, so the SoC isn't needed to pick a bundled
+        // DFU U-Boot; only require detection for the bundled path.
+        if (!useCustom && detectedSoc.isEmpty()) {
             appendLog("ERROR: SoC not detected; cannot select DFU U-Boot\n")
             return
         }
@@ -480,7 +530,11 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         progressBar.progress = 0
 
         appendLog("\n--- DFU BOOTSTRAP ---\n")
-        appendLog("Loading U-Boot DFU gadget onto ${detectedSoc.uppercase()}...\n")
+        if (useCustom) {
+            appendLog("Loading custom U-Boot DFU gadget...\n")
+        } else {
+            appendLog("Loading U-Boot DFU gadget onto ${detectedSoc.uppercase()}...\n")
+        }
 
         val cacheDir = cacheDir.absolutePath
         val assetManager = assets
@@ -502,9 +556,28 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                 return@launch
             }
 
-            val result = TdfuBridge.nativeBootstrap(
-                newFd, detectedSoc, cacheDir, assetManager
-            )
+            // Custom SPL/U-Boot (both-or-neither): stage each ByteArray to a temp
+            // file and USB-boot them via nativeBootstrapFiles; otherwise use the
+            // bundled assets via nativeBootstrap.
+            val spl = customSplBytes
+            val uboot = customUbootBytes
+            val result = if (spl != null && spl.isNotEmpty() && uboot != null && uboot.isNotEmpty()) {
+                val splTmp = File(cacheDir, "custom_spl.bin")
+                val ubootTmp = File(cacheDir, "custom_uboot.bin")
+                try {
+                    splTmp.writeBytes(spl)
+                    ubootTmp.writeBytes(uboot)
+                    withContext(Dispatchers.Main) {
+                        appendLog("Using custom SPL (${spl.size} B) + U-Boot (${uboot.size} B)\n")
+                    }
+                    TdfuBridge.nativeBootstrapFiles(newFd, splTmp.absolutePath, ubootTmp.absolutePath)
+                } finally {
+                    splTmp.delete()
+                    ubootTmp.delete()
+                }
+            } else {
+                TdfuBridge.nativeBootstrap(newFd, detectedSoc, cacheDir, assetManager)
+            }
 
             withContext(Dispatchers.Main) {
                 if (result == 0) {
@@ -897,6 +970,178 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     }
 
     // ======================================================================
+    // Remote Bootstrap + custom SPL/U-Boot (remote/daemon mode only)
+    // ======================================================================
+
+    /** Read a picked SPL or U-Boot file into memory for the next remote bootstrap. */
+    private fun loadCustomBlob(uri: Uri, isSpl: Boolean) {
+        val label = if (isSpl) "SPL" else "U-Boot"
+        lifecycleScope.launch(Dispatchers.IO) {
+            val bytes = try {
+                contentResolver.openInputStream(uri)?.use { it.readBytes() }
+            } catch (e: Exception) {
+                null
+            }
+            val name = queryDisplayName(uri) ?: "file"
+            withContext(Dispatchers.Main) {
+                if (bytes == null || bytes.isEmpty()) {
+                    appendLog("ERROR: Failed to read custom $label\n")
+                    return@withContext
+                }
+                if (isSpl) {
+                    customSplBytes = bytes
+                    customSplName = name
+                } else {
+                    customUbootBytes = bytes
+                    customUbootName = name
+                }
+                appendLog("Custom $label selected: $name (${bytes.size} bytes)\n")
+                updateCustomBlobInfo()
+                if (customSplBytes != null && customUbootBytes != null) {
+                    val next = if (isRemoteMode) "Bootstrap" else "Read/Write"
+                    appendLog("Custom SPL + U-Boot ready — next $next will use them.\n")
+                }
+            }
+        }
+    }
+
+    private fun updateCustomBlobInfo() {
+        val spl = customSplName?.let { "SPL: $it (${customSplBytes?.size ?: 0} B)" } ?: "SPL: bundled"
+        val uboot = customUbootName?.let { "U-Boot: $it (${customUbootBytes?.size ?: 0} B)" }
+            ?: "U-Boot: bundled"
+        customBlobInfo.text = "$spl\n$uboot"
+    }
+
+    private fun clearCustomBlobs() {
+        customSplBytes = null
+        customSplName = null
+        customUbootBytes = null
+        customUbootName = null
+        updateCustomBlobInfo()
+        appendLog("Custom bootloader cleared — using bundled DFU U-Boot.\n")
+    }
+
+    /** Best-effort display name for a content Uri (for the chosen-file label). */
+    private fun queryDisplayName(uri: Uri): String? {
+        return try {
+            contentResolver.query(
+                uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null
+            )?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Bootstrap the selected remote (bootrom) device into the U-Boot DFU gadget
+     * via the daemon, optionally with a client-supplied SPL + U-Boot. After it
+     * succeeds the device re-enumerates bootrom -> DFU; poll discover() until it
+     * reappears so Read/Write/Info reflect the new stage (no manual reconnect).
+     */
+    private fun startRemoteBootstrap() {
+        if (operationRunning) return
+        val client = remoteClient ?: return
+        val dev = remoteDevices.getOrNull(selectedDeviceIndex)
+        if (dev == null) {
+            appendLog("ERROR: No remote device selected\n")
+            return
+        }
+        if (dev.stage != 0) {
+            appendLog("Device is not in bootrom stage — bootstrap not needed.\n")
+            return
+        }
+
+        val index = selectedDeviceIndex
+        val variant = detectedSoc
+        val spl = customSplBytes
+        val uboot = customUbootBytes
+        val useCustom = spl != null && spl.isNotEmpty() && uboot != null && uboot.isNotEmpty()
+
+        // Snapshot devices already past bootrom so we can pick out our own
+        // re-enumerated gadget afterwards (correct even with several connected).
+        val beforeDfu = remoteDevices.filter { it.stage != 0 }
+            .map { "${it.bus}:${it.address}" }.toSet()
+
+        operationRunning = true
+        setButtonsEnabled(false)
+        progressBar.visibility = View.VISIBLE
+        progressText.visibility = View.VISIBLE
+        progressBar.progress = 0
+
+        appendLog("\n--- REMOTE BOOTSTRAP ---\n")
+        if (useCustom) {
+            appendLog("Using custom SPL (${spl!!.size} B) + U-Boot (${uboot!!.size} B)\n")
+        }
+        updateStatus("Bootstrapping via daemon...")
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val ok = client.bootstrap(
+                index, variant,
+                if (useCustom) spl else null,
+                if (useCustom) uboot else null
+            )
+
+            if (!ok) {
+                withContext(Dispatchers.Main) {
+                    appendLog("Remote bootstrap failed\n")
+                    updateStatus("Bootstrap failed")
+                    finishOperation()
+                }
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                appendLog("Remote bootstrap complete; waiting for DFU gadget...\n")
+                updateStatus("Waiting for DFU gadget...")
+            }
+
+            // bootrom -> U-Boot DFU gadget takes a few seconds. The daemon owns
+            // the USB, so just poll discover() until our new gadget appears.
+            var found: RemoteClient.DeviceEntry? = null
+            var devs: List<RemoteClient.DeviceEntry> = emptyList()
+            for (i in 0 until 20) {
+                delay(700)
+                devs = try { client.discover() } catch (e: Exception) { emptyList() }
+                found = devs.firstOrNull {
+                    it.stage != 0 && "${it.bus}:${it.address}" !in beforeDfu
+                }
+                if (found != null) break
+            }
+
+            withContext(Dispatchers.Main) {
+                if (found != null) {
+                    remoteDevices = devs
+                    selectedDeviceIndex = devs.indexOf(found)
+                    // KEEP the bootrom-detected SoC (a DFU gadget reports only a
+                    // placeholder variant).
+                    socText.text = "SoC: ${detectedSoc.uppercase()} (DFU)"
+                    renderDeviceSpinner()
+                    appendLog("Device re-enumerated as DFU gadget — ready to Read/Write.\n")
+                    updateStatus("DFU gadget ready")
+                } else {
+                    appendLog("Timed out waiting for DFU gadget; reconnect if needed.\n")
+                    updateStatus("Bootstrap done (no re-enumeration seen)")
+                }
+                finishOperation()
+            }
+        }
+    }
+
+    /** (Re)build the multi-device spinner from remoteDevices + current selection. */
+    private fun renderDeviceSpinner() {
+        if (remoteDevices.size > 1) {
+            val names = remoteDevices.map { it.toString() }
+            deviceSpinner.adapter = ArrayAdapter(
+                this, android.R.layout.simple_spinner_dropdown_item, names
+            )
+            deviceSpinner.visibility = View.VISIBLE
+            deviceSpinner.setSelection(selectedDeviceIndex.coerceIn(0, remoteDevices.size - 1))
+        } else {
+            deviceSpinner.visibility = View.GONE
+        }
+    }
+
+    // ======================================================================
     // UI Helpers
     // ======================================================================
 
@@ -917,6 +1162,21 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         readButton.alpha = if (enabled) 1.0f else 0.5f
         writeButton.alpha = if (enabled) 1.0f else 0.5f
         refreshDiagButton()
+        refreshBootstrapButton()
+    }
+
+    /**
+     * Remote bootstrap is REMOTE-ONLY (the local JNI path auto-bootstraps with
+     * bundled firmware on Read/Write and takes no custom blobs). Enable it only
+     * when connected to the daemon with the selected device still in bootrom
+     * stage — once bootstrapped it becomes a DFU gadget (stage != 0).
+     */
+    private fun refreshBootstrapButton() {
+        val dev = remoteDevices.getOrNull(selectedDeviceIndex)
+        val enabled = isRemoteMode && !operationRunning &&
+            remoteClient?.isConnected() == true && dev?.stage == 0
+        bootstrapButton.isEnabled = enabled
+        bootstrapButton.alpha = if (enabled) 1.0f else 0.5f
     }
 
     /**

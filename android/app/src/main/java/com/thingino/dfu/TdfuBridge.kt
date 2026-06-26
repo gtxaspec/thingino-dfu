@@ -53,6 +53,22 @@ object TdfuBridge {
     ): Int
 
     /**
+     * Bootstrap a device using a caller-supplied SPL + U-Boot read from two file
+     * paths (instead of the bundled firmware assets). The caller owns and deletes
+     * the temp files; the native side only reads them.
+     * @param fd USB device file descriptor
+     * @param splPath path to the custom SPL/TPL blob
+     * @param ubootPath path to the custom U-Boot blob
+     * @return 0 on success, negative error code on failure
+     */
+    @JvmStatic
+    external fun nativeBootstrapFiles(
+        fd: Int,
+        splPath: String,
+        ubootPath: String
+    ): Int
+
+    /**
      * Read firmware from device flash to a file.
      * Handles bootstrap automatically if device is in bootrom stage.
      * @param fd USB device file descriptor

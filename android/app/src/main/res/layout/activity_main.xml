@@ -194,6 +194,94 @@
             style="@style/Widget.Material3.Button.TonalButton" />
     </LinearLayout>
 
+    <!-- Custom SPL/U-Boot (both modes). The blobs feed the daemon (remote) or the
+         JNI nativeBootstrapFiles (local USB). The explicit "Bootstrap Device"
+         button below is remote-only; local USB bootstraps on Read/Write. -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/remoteBootstrapCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        app:cardElevation="2dp"
+        app:cardCornerRadius="8dp"
+        xmlns:app="http://schemas.android.com/apk/res-auto">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/custom_bootloader_title"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/primary" />
+
+            <TextView
+                android:id="@+id/customBlobInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:fontFamily="monospace"
+                android:textSize="12sp"
+                android:textColor="@color/on_surface_variant" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/selectSplButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:text="@string/btn_sel_spl"
+                    android:textSize="12sp"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/selectUbootButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="4dp"
+                    android:text="@string/btn_sel_uboot"
+                    android:textSize="12sp"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/clearCustomButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/btn_clear_custom"
+                    android:textSize="12sp"
+                    style="@style/Widget.Material3.Button.TextButton" />
+            </LinearLayout>
+
+            <!-- Explicit bootstrap is remote-only (local USB bootstraps on
+                 Read/Write); shown only in remote mode. -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/bootstrapButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="8dp"
+                android:text="@string/btn_bootstrap"
+                android:textSize="14sp"
+                android:enabled="false"
+                android:visibility="gone"
+                style="@style/Widget.Material3.Button.TonalButton" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
     <!-- Read-only diagnostics (eFuse / secure-boot). Remote (daemon) mode only. -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/diagButton"
