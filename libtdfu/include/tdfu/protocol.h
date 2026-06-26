@@ -31,6 +31,7 @@ enum {
     CMD_READ = 0x04,      /* read firmware from device */
     CMD_STATUS = 0x05,    /* query device state */
     CMD_CANCEL = 0x06,    /* abort current operation */
+    CMD_DIAG = 0x07,      /* read-only eFuse/secure-boot diagnostics */
 };
 
 /* Response status */

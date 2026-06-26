@@ -2,6 +2,7 @@
 #include "tdfu/core.h"
 #include "tdfu/dfu.h"
 #include "tdfu/protocol.h"
+#include "tdfu/diag.h"
 #include "remote.h"
 #include <unistd.h>
 #ifdef _WIN32
@@ -27,6 +28,7 @@ typedef struct {
     bool bootstrap;
     bool read_firmware;
     bool write_firmware;
+    bool diag;
     int device_index;
     char *spl_file;
     char *uboot_file;
@@ -52,6 +54,7 @@ void print_usage(const char *program_name) {
     printf("  -b, --bootstrap           Bootstrap device to U-Boot DFU mode\n");
     printf("  -r, --read <file>         Read firmware from device to file\n");
     printf("  -w, --write <file>        Bootstrap (if needed) and write firmware to device\n");
+    printf("      --diag                Dump eFuse / serial / secure-boot state (read-only)\n");
     printf("      --cpu <variant>       CPU variant (a1, t31, t40, t41, etc.)\n");
     printf("      --spl <file>          Custom SPL file\n");
     printf("      --uboot <file>        Custom U-Boot file\n");
@@ -67,6 +70,7 @@ void print_usage(const char *program_name) {
     printf("  thingino-dfu -l                                 # List DFU alt-settings\n");
     printf("  thingino-dfu --alt rootfs -w rootfs.bin         # Flash an alt-setting via DFU\n");
     printf("  thingino-dfu --host 192.168.1.50 -w fw.bin      # Remote: bootstrap (if needed) + write\n");
+    printf("  thingino-dfu --diag                             # Dump eFuse/serial/secure-boot (bootrom)\n");
 }
 
 tdfu_error_t parse_arguments(int argc, char *argv[], cli_options_t *options) {
@@ -118,6 +122,8 @@ tdfu_error_t parse_arguments(int argc, char *argv[], cli_options_t *options) {
             options->firmware_dir = argv[++i];
         } else if (strcmp(argv[i], "--wait") == 0) {
             options->wait = true;
+        } else if (strcmp(argv[i], "--diag") == 0) {
+            options->diag = true;
         } else if (strcmp(argv[i], "--alt") == 0) {
             if (i + 1 >= argc) {
                 printf("Error: %s requires an alt setting (name or number)\n", argv[i]);
@@ -243,6 +249,13 @@ static void wait_for_device(usb_manager_t *manager, bool want_gadget) {
     }
 }
 
+/* Pretty-print the read-only eFuse diagnostics. */
+static void print_diag(const tdfu_diag_info_t *d) {
+    char report[8192];
+    tdfu_diag_format(d, report, sizeof(report));
+    printf("\n%s\n", report);
+}
+
 int main(int argc, char *argv[]) {
     fprintf(stderr, "thingino-dfu %s (%s)\n", VERSION, GIT_HASH);
 
@@ -285,7 +298,7 @@ int main(int argc, char *argv[]) {
      * (t31-usbboot.py ergonomics): USB-booting them is the only thing a
      * pair of boot blobs on its own can mean. Applies to local and remote. */
     if (!options.list_devices && !options.bootstrap && !options.read_firmware && !options.write_firmware &&
-        options.spl_file && options.uboot_file) {
+        !options.diag && options.spl_file && options.uboot_file) {
         options.bootstrap = true;
     }
 
@@ -351,6 +364,8 @@ int main(int argc, char *argv[]) {
                      : 0;
         } else if (options.read_firmware && options.output_file) {
             rc = remote_read_firmware(options.device_index, options.output_file, options.alt) < 0 ? EXIT_TRANSFER_ERROR : 0;
+        } else if (options.diag) {
+            rc = remote_diag(options.device_index) < 0 ? EXIT_DEVICE_ERROR : 0;
         } else {
             printf("Remote mode: specify -l, -b, -w, or -r\n");
             rc = 1;
@@ -361,7 +376,8 @@ int main(int argc, char *argv[]) {
     }
 
     // Local mode
-    if (!options.list_devices && !options.bootstrap && !options.read_firmware && !options.write_firmware) {
+    if (!options.list_devices && !options.bootstrap && !options.read_firmware && !options.write_firmware &&
+        !options.diag) {
         printf("No action specified. Use -h for help.\n");
         return 1;
     }
@@ -373,10 +389,23 @@ int main(int argc, char *argv[]) {
         return EXIT_DEVICE_ERROR;
     }
 
-    /* --wait: block until the needed device shows up. DFU bootstrap needs a
-     * bootrom device; DFU read/write/list needs the U-Boot gadget. */
+    /* --wait: block until the needed device shows up. DFU bootstrap and --diag
+     * need a bootrom device; DFU read/write/list needs the U-Boot gadget. */
     if (options.wait)
-        wait_for_device(&manager, !options.bootstrap);
+        wait_for_device(&manager, !options.bootstrap && !options.diag);
+
+    /* --diag: read-only eFuse / serial / secure-boot readout from a bootrom device */
+    if (options.diag) {
+        tdfu_diag_info_t di;
+        result = tdfu_diag(&manager, options.device_index, &di);
+        usb_manager_cleanup(&manager);
+        if (result != TDFU_SUCCESS) {
+            LOG_ERROR("Diag failed: %s\n", tdfu_error_to_string(result));
+            return EXIT_DEVICE_ERROR;
+        }
+        print_diag(&di);
+        return 0;
+    }
 
     /* -b: bootstrap a bootrom device into U-Boot DFU mode */
     if (options.bootstrap) {

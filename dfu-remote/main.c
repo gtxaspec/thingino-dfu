@@ -14,6 +14,7 @@
 #include "tdfu/tdfu.h"
 #include "tdfu/protocol.h"
 #include "tdfu/dfu.h"
+#include "tdfu/diag.h"
 #include "platform.h"
 #include "ws.h"
 
@@ -683,6 +684,26 @@ static int handle_cancel(int client_fd) {
     return send_ok(client_fd, "OK", 2);
 }
 
+/* Handle CMD_DIAG - read-only eFuse/secure-boot readout. Payload: [1:device_idx].
+ * Responds with the formatted diagnostics text (same as local --diag). */
+static int handle_diag(int client_fd, const uint8_t *payload, uint32_t len) {
+    uint8_t device_index = (len >= 1) ? payload[0] : 0;
+
+    usb_manager_t manager = {0};
+    if (usb_manager_init(&manager) != TDFU_SUCCESS)
+        return send_error(client_fd, "USB init failed");
+
+    tdfu_diag_info_t info;
+    tdfu_error_t r = tdfu_diag(&manager, device_index, &info);
+    usb_manager_cleanup(&manager);
+    if (r != TDFU_SUCCESS)
+        return send_error(client_fd, tdfu_error_to_string(r));
+
+    char report[8192];
+    tdfu_diag_format(&info, report, sizeof(report));
+    return send_ok(client_fd, report, (uint32_t)strlen(report));
+}
+
 /* ------------------------------------------------------------------ */
 /* Client connection handler                                           */
 /* ------------------------------------------------------------------ */
@@ -703,6 +724,8 @@ static int dispatch_command(int fd, uint8_t command, const uint8_t *payload, uin
         return handle_status(fd);
     case CMD_CANCEL:
         return handle_cancel(fd);
+    case CMD_DIAG:
+        return handle_diag(fd, payload, payload_len);
     default:
         return send_error(fd, "unknown command");
     }

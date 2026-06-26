@@ -312,6 +312,29 @@ int remote_list_devices(void) {
     return 0;
 }
 
+int remote_diag(int device_index) {
+    uint8_t idx = (uint8_t)device_index;
+    if (send_command(CMD_DIAG, &idx, 1) < 0)
+        return -1;
+
+    uint8_t status;
+    uint8_t *payload = NULL;
+    uint32_t payload_len = 0;
+    if (recv_response(&status, &payload, &payload_len) < 0)
+        return -1;
+
+    if (status != RESP_OK) {
+        fprintf(stderr, "Error: %s\n", payload ? (char *)payload : "unknown");
+        free(payload);
+        return -1;
+    }
+
+    /* payload is the formatted diagnostics text (not NUL-terminated on the wire). */
+    printf("\n%.*s\n", (int)payload_len, payload ? (char *)payload : "");
+    free(payload);
+    return 0;
+}
+
 const char *remote_detect_variant(int device_index) {
     if (send_command(CMD_DISCOVER, NULL, 0) < 0)
         return NULL;

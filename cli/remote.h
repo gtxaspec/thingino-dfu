@@ -6,6 +6,7 @@
 int remote_connect(const char *host, int port, const char *token);
 void remote_disconnect(void);
 int remote_list_devices(void);
+int remote_diag(int device_index);
 const char *remote_detect_variant(int device_index);
 int remote_device_stage(int device_index);
 int remote_bootstrap(int device_index, const char *cpu_variant, const char *firmware_dir, const char *spl_file,

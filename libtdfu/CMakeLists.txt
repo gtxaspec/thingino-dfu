@@ -8,6 +8,7 @@ set(LIBTDFU_SOURCES
     src/platform.c
     src/bootstrap.c
     src/utils.c
+    src/diag.c
     src/dfu/dfu.c
 )
 
