@@ -41,7 +41,8 @@ var remoteToken = localStorage.getItem('tdfu_remote_token') || '';
 /* Verbose [DEBUG]/[shim] diagnostics are gated behind ?debug in the URL. The
  * shim reads window.__tdfu_debug; the C side is toggled via tdfu_web_set_debug()
  * once the module loads. Normal info/warn/error always show. */
-var debugEnabled = new URLSearchParams(location.search).has('debug') || /\bdebug\b/.test(location.hash);
+var debugEnabled = localStorage.getItem('tdfu_debug') === '1' ||
+    new URLSearchParams(location.search).has('debug') || /\bdebug\b/.test(location.hash);
 window.__tdfu_debug = debugEnabled;
 
 /**
@@ -74,6 +75,7 @@ function dfuVariantDir(name) {
 
 function log(msg, level) {
     level = level || 'info';
+    if (level === 'debug' && !debugEnabled) return; // gated by the debug toggle
     var el = document.getElementById('log');
     var line = document.createElement('div');
     line.className = level;
@@ -801,6 +803,88 @@ function copyDiag() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Opt-in help balloons (the ? button / Settings toggle; off default) */
+/* ------------------------------------------------------------------ */
+
+var helpMode = localStorage.getItem('tdfu_help') === '1';
+var _helpBalloon = null, _helpHover = null;
+
+function applyHelpMode() {
+    document.body.classList.toggle('help-on', helpMode);
+    var b = document.getElementById('btn-help');
+    if (b) b.classList.toggle('help-active', helpMode);
+    var s = document.getElementById('setting-help');
+    if (s) s.checked = helpMode;
+    // Suppress native title tooltips while help mode is on so they don't double
+    // up with our balloons; restore them when it's off.
+    var els = document.querySelectorAll('[data-help]');
+    for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (helpMode && el.hasAttribute('title')) {
+            el.setAttribute('data-saved-title', el.getAttribute('title'));
+            el.removeAttribute('title');
+        } else if (!helpMode && el.hasAttribute('data-saved-title')) {
+            el.setAttribute('title', el.getAttribute('data-saved-title'));
+            el.removeAttribute('data-saved-title');
+        }
+    }
+    if (!helpMode) hideHelpBalloon();
+}
+function setHelp(on) {
+    helpMode = !!on;
+    localStorage.setItem('tdfu_help', helpMode ? '1' : '0');
+    applyHelpMode();
+}
+function toggleHelp() { setHelp(!helpMode); }
+
+/* Verbose diagnostics — Settings toggle, persisted (replaces the old ?debug). */
+function setDebug(on) {
+    debugEnabled = !!on;
+    window.__tdfu_debug = debugEnabled;
+    localStorage.setItem('tdfu_debug', debugEnabled ? '1' : '0');
+    var s = document.getElementById('setting-debug');
+    if (s) s.checked = debugEnabled;
+    if (window.Module && window.Module.ccall) {
+        try { window.Module.ccall('tdfu_web_set_debug', null, ['number'], [debugEnabled ? 1 : 0]); } catch (e) { /* not ready */ }
+    }
+    log('Debug logging ' + (debugEnabled ? 'enabled' : 'disabled'));
+}
+
+function hideHelpBalloon() {
+    _helpHover = null;
+    if (_helpBalloon) _helpBalloon.classList.remove('show');
+}
+function showHelpBalloon(el) {
+    if (!_helpBalloon) {
+        _helpBalloon = document.createElement('div');
+        _helpBalloon.className = 'help-balloon';
+        document.body.appendChild(_helpBalloon);
+    }
+    _helpBalloon.textContent = el.getAttribute('data-help');
+    _helpBalloon.classList.add('show');
+    var r = el.getBoundingClientRect();
+    var bw = _helpBalloon.offsetWidth, bh = _helpBalloon.offsetHeight;
+    var left = Math.min(Math.max(8, r.left), window.innerWidth - bw - 8);
+    var top = r.bottom + 9, above = false;
+    if (top + bh > window.innerHeight - 8) { top = r.top - bh - 9; above = true; } // flip above if it would overflow
+    if (top < 8) top = 8;
+    _helpBalloon.classList.toggle('above', above);
+    _helpBalloon.style.left = left + 'px';
+    _helpBalloon.style.top = top + 'px';
+}
+
+/* Track the topmost helpable element under the cursor. elementFromPoint respects
+ * z-order (a control inside the Settings modal wins over anything behind it) and
+ * still resolves disabled buttons, which don't emit their own hover events. */
+document.addEventListener('mousemove', function (e) {
+    if (!helpMode) return;
+    var top = document.elementFromPoint(e.clientX, e.clientY);
+    var el = top && top.closest ? top.closest('[data-help]') : null;
+    if (el) { if (el !== _helpHover) { _helpHover = el; showHelpBalloon(el); } }
+    else if (_helpHover) { hideHelpBalloon(); }
+});
+
+/* ------------------------------------------------------------------ */
 /*  Remote daemon backend (dfu-remote over WebSocket)                  */
 /* ------------------------------------------------------------------ */
 
@@ -1026,6 +1110,8 @@ function openSettings() {
     if (r) r.checked = true;
     var u = document.getElementById('remote-url'); if (u) u.value = remoteUrl;
     var t = document.getElementById('remote-token'); if (t) t.value = remoteToken;
+    var h = document.getElementById('setting-help'); if (h) h.checked = helpMode;
+    var d = document.getElementById('setting-debug'); if (d) d.checked = debugEnabled;
     toggleRemoteFields();
     document.getElementById('settings-overlay').classList.remove('d-none');
 }
@@ -1081,7 +1167,7 @@ function saveSettings() {
 
 // Expose handlers referenced by HTML onclick/onchange attributes
 Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSelected, doRead,
-                        doDiag, closeDiag, copyDiag,
+                        doDiag, closeDiag, copyDiag, toggleHelp, setHelp, setDebug,
                         openSettings, closeSettings, openWindowsHelp, closeWindowsHelp, saveSettings, toggleRemoteFields,
                         toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader,
                         selectRemoteDevice });
@@ -1114,5 +1200,6 @@ Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSele
         var winLink = document.getElementById('windows-help-link');
         if (winLink) winLink.classList.remove('d-none');
     }
+    applyHelpMode(); // restore the saved help-hints preference (default off)
     initModule();
 })();

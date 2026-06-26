@@ -95,6 +95,31 @@
             .card-footer .d-flex .btn { width: 100%; }
             #log { height: 200px; font-size: 0.7rem; }
         }
+
+        /* Opt-in help balloons (toggled by the ? button / Settings; off by default) */
+        #btn-help.help-active { color: #fff; background-color: #6c757d; border-color: #6c757d; }
+        body.help-on [data-help] { cursor: help; }
+        .help-balloon {
+            position: fixed; z-index: 1100; max-width: 260px;
+            background: #fffdf0; color: #1a1a1a;
+            border: 1px solid #c9bfa0; border-radius: 12px;
+            padding: 0.5rem 0.7rem; font-size: 0.8rem; line-height: 1.35;
+            box-shadow: 0 5px 16px rgba(0,0,0,0.28);
+            pointer-events: none; opacity: 0; transform: translateY(4px);
+            transition: opacity .12s ease, transform .12s ease;
+        }
+        .help-balloon.show { opacity: 1; transform: translateY(0); }
+        .help-balloon::before {
+            content: ""; position: absolute; top: -7px; left: 18px;
+            width: 12px; height: 12px; background: #fffdf0;
+            border-left: 1px solid #c9bfa0; border-top: 1px solid #c9bfa0;
+            transform: rotate(45deg);
+        }
+        .help-balloon.above::before {
+            top: auto; bottom: -7px;
+            border-left: 0; border-top: 0;
+            border-right: 1px solid #c9bfa0; border-bottom: 1px solid #c9bfa0;
+        }
     </style>
 </head>
 <body class="p-3">
@@ -106,9 +131,10 @@
             <h2 class="card-title mb-0 fs-5" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;">
                 <i class="bi bi-cpu me-1"></i><span class="d-none d-sm-inline"> Thingino Web Flasher for Ingenic</span><span class="d-sm-none"> Thingino Flasher</span>
             </h2>
-            <span id="status-badge" class="badge bg-secondary ms-auto">Idle</span>
-            <span id="mode-indicator" class="badge bg-info-subtle text-info border border-info-subtle" title="Active backend">DFU</span>
-            <button id="btn-settings" class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="openSettings()" title="Settings"><i class="bi bi-gear"></i></button>
+            <span id="status-badge" class="badge bg-secondary ms-auto" data-help="Current status: Idle, Connecting, Bootstrapping, Writing, Reading, Ready, or Error. It tracks what the flasher is doing right now.">Idle</span>
+            <span id="mode-indicator" class="badge bg-info-subtle text-info border border-info-subtle" title="Active backend" data-help="Active backend. DFU = flash straight from this browser over WebUSB. Remote = drive a dfu-remote daemon on another machine. Switch it in Settings.">DFU</span>
+            <button id="btn-help" class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="toggleHelp()" title="Toggle help balloons" data-help="Help mode. While it's on, hover any control for a balloon explaining it. Click again to turn it off, it stays off until you ask for it."><i class="bi bi-question-lg"></i></button>
+            <button id="btn-settings" class="btn btn-sm btn-outline-secondary py-0 px-1" onclick="openSettings()" title="Settings" data-help="Settings: pick the flashing backend (in-browser WebUSB or a remote dfu-remote daemon) and toggle these help hints."><i class="bi bi-gear"></i></button>
         </div>
 
         <div id="op-warning" class="card-header bg-danger bg-opacity-10 text-danger text-center py-1 d-none" style="animation: pulse-warn 1.5s infinite;">
@@ -120,7 +146,8 @@
         <div class="card-body">
             <div id="device-disconnected">
                 <button id="btn-connect" class="btn btn-outline-primary btn-sm" onclick="connectDevice()"
-                    data-bs-toggle="tooltip" title="Connect to a device in USB bootrom mode">
+                    data-bs-toggle="tooltip" title="Connect to a device in USB bootrom mode"
+                    data-help="Connects to a device sitting in USB-boot (bootrom) mode, it enumerates as a108:c309. Nothing here? The device probably isn't in bootrom yet (hold its boot pin / short, then power on).">
                     <i class="bi bi-usb-symbol me-1"></i> Connect Device
                 </button>
                 <a href="#" id="windows-help-link" class="small text-secondary text-decoration-none ms-2 d-none" onclick="openWindowsHelp(event)">
@@ -145,19 +172,23 @@
         <div class="card-footer">
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <button id="btn-bootstrap" class="btn btn-outline-success btn-sm" onclick="doBootstrap()" disabled
-                    data-bs-toggle="tooltip" title="Boot a device to the U-Boot burner prompt">
+                    data-bs-toggle="tooltip" title="Boot a device to the U-Boot burner prompt"
+                    data-help="Loads U-Boot onto the bootrom device over USB so it becomes a DFU flashing target. Do this once; afterward Write/Read light up.">
                     <i class="bi bi-arrow-repeat me-1"></i> Bootstrap
                 </button>
                 <button id="btn-write" class="btn btn-outline-warning btn-sm" onclick="selectFirmware()" disabled
-                    data-bs-toggle="tooltip" title="Write a firmware .bin file to the device's flash memory">
+                    data-bs-toggle="tooltip" title="Write a firmware .bin file to the device's flash memory"
+                    data-help="Writes a firmware .bin to the device's flash. The device must already be bootstrapped into DFU mode.">
                     <i class="bi bi-download me-1"></i> Write Firmware
                 </button>
                 <button id="btn-read" class="btn btn-outline-info btn-sm" onclick="doRead()" disabled
-                    data-bs-toggle="tooltip" title="Read the full flash contents and download as a .bin file">
+                    data-bs-toggle="tooltip" title="Read the full flash contents and download as a .bin file"
+                    data-help="Reads the device's full flash back to a .bin file you can save. Handy for backups before you write.">
                     <i class="bi bi-upload me-1"></i> Read Firmware
                 </button>
                 <button id="btn-diag" class="btn btn-outline-secondary btn-sm" onclick="doDiag()" disabled
-                    data-bs-toggle="tooltip" title="Read-only: eFuse, serial, secure-boot state (bootrom)">
+                    data-bs-toggle="tooltip" title="Read-only: eFuse, serial, secure-boot state (bootrom)"
+                    data-help="Read-only readout of the chip's eFuse: SoC, serial, and secure-boot state. Changes nothing. Stays viewable (cached) even after you bootstrap.">
                     <i class="bi bi-info-circle me-1"></i> Info
                 </button>
             </div>
@@ -210,7 +241,7 @@
             </h2>
         </div>
         <div class="card-body p-2">
-            <div id="log"></div>
+            <div id="log" data-help="Activity log: every step, byte count, SHA-256 and any errors land here. Check it first if something doesn't behave as expected."></div>
         </div>
     </div>
 </div>
@@ -223,18 +254,27 @@
         </div>
         <div class="card-body">
             <p class="small text-secondary mb-2">Flashing backend</p>
-            <div class="form-check">
+            <div class="form-check" data-help="DFU mode: flash directly from this browser over WebUSB, no extra software, but the device must be plugged into THIS computer (Chrome/Edge only).">
                 <input class="form-check-input" type="radio" name="backend-mode" id="setting-dfu" value="dfu" onchange="toggleRemoteFields()">
                 <label class="form-check-label" for="setting-dfu"><strong>DFU</strong> - U-Boot DFU mode (default)</label>
             </div>
-            <div class="form-check">
+            <div class="form-check" data-help="Remote mode: this page talks to a dfu-remote daemon running on another machine that has the device plugged in. Good for flashing from a phone or a box across the network.">
                 <input class="form-check-input" type="radio" name="backend-mode" id="setting-remote" value="remote" onchange="toggleRemoteFields()">
                 <label class="form-check-label" for="setting-remote">Remote daemon - dfu-remote (HTTP)</label>
             </div>
             <div id="remote-fields" class="mt-2 ms-4 d-none">
-                <input type="text" class="form-control form-control-sm mb-1" id="remote-url" placeholder="http://192.168.1.50:5050" autocomplete="off" spellcheck="false">
-                <input type="text" class="form-control form-control-sm" id="remote-token" placeholder="auth token (optional)" autocomplete="off" spellcheck="false">
+                <input type="text" class="form-control form-control-sm mb-1" id="remote-url" placeholder="http://192.168.1.50:5050" autocomplete="off" spellcheck="false" data-help="The dfu-remote daemon's address, e.g. http://192.168.1.50:5050. Chrome will ask once to allow local-network access.">
+                <input type="text" class="form-control form-control-sm" id="remote-token" placeholder="auth token (optional)" autocomplete="off" spellcheck="false" data-help="Optional auth token, only if the daemon was started with one. Leave blank otherwise.">
                 <div class="small text-secondary mt-1"><i class="bi bi-info-circle me-1"></i>Chrome will prompt once to allow local-network access.</div>
+            </div>
+            <hr class="my-2">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="setting-help" onchange="setHelp(this.checked)">
+                <label class="form-check-label" for="setting-help">Show help hints: hover any control for a balloon (or use the <i class="bi bi-question-lg"></i> button)</label>
+            </div>
+            <div class="form-check form-switch" data-help="Verbose diagnostics in the activity log, replaces the old ?debug URL flag. Leave off unless you're troubleshooting.">
+                <input class="form-check-input" type="checkbox" id="setting-debug" onchange="setDebug(this.checked)">
+                <label class="form-check-label" for="setting-debug">Debug logging (verbose diagnostics)</label>
             </div>
         </div>
         <div class="card-footer d-flex justify-content-end gap-2">
@@ -289,7 +329,7 @@
     </div>
 </div>
 
-<p class="mt-2 small text-center" id="version-text"><a href="https://github.com/wltechblog/thingino-dfu" target="_blank" class="text-secondary text-decoration-none">thingino-dfu</a> <span id="version-num"></span></p>
+<p class="mt-2 small text-center" id="version-text"><a href="https://github.com/wltechblog/thingino-dfu" target="_blank" class="text-secondary text-decoration-none" data-help="Source, releases and docs on GitHub for the thingino-dfu project. Grab the CLI/daemon builds or file an issue here.">thingino-dfu</a> <span id="version-num"></span></p>
 
 <div id="browser-warning" class="alert alert-danger flasher-card mt-3 text-center d-none">
     <i class="bi bi-exclamation-triangle me-1"></i>
