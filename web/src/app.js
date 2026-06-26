@@ -185,6 +185,9 @@ function setState(state) {
     document.getElementById('btn-bootstrap').disabled = !canBoot;
     document.getElementById('btn-write').disabled = !canRW;
     document.getElementById('btn-read').disabled = !canRW;
+    // Info/diag reads the eFuse on a bootrom device (same stage as Bootstrap);
+    // it also stays live post-bootstrap when there's a cached readout to show.
+    document.getElementById('btn-diag').disabled = !(canBoot || (lastDiagText && !busy));
 
     // Glow the single "next action" so it's obvious what to click. In local DFU
     // mode with a bootrom attached, that's Bootstrap. The remote flow sets its
@@ -382,6 +385,7 @@ async function initModule() {
 /* ------------------------------------------------------------------ */
 
 async function connectDevice() {
+    lastDiagText = null; // fresh session: drop any cached Info from a prior device
     if (backendMode === 'remote') return doRemoteConnect();
     if (!tdfuReady) {
         log('Module not ready', 'warn');
@@ -740,6 +744,63 @@ async function doDfuWrite() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Info / diagnostics (read-only eFuse + secure-boot)                 */
+/* ------------------------------------------------------------------ */
+
+/* Last successful readout, cached so the Info button still works after the
+ * device is bootstrapped out of bootrom (the eFuse can no longer be re-read).
+ * Cleared when a new device connection starts. */
+var lastDiagText = null;
+
+async function doDiag() {
+    // Already bootstrapped (DFU gadget): the eFuse can't be re-read, so show the
+    // cached readout captured before the bootstrap.
+    if (inDfuMode) {
+        if (lastDiagText) showDiagModal(lastDiagText, true);
+        else log('No cached info yet — click Info before bootstrapping.', 'warn');
+        return;
+    }
+    var text = null;
+    try {
+        if (backendMode === 'remote') {
+            if (!remoteReady()) { log('Connect to the daemon first', 'warn'); return; }
+            log('Reading device info (eFuse) via daemon...');
+            text = await remoteClient.diag(selectedRemoteIndex);
+        } else {
+            log('Reading device info (eFuse)...');
+            text = await wasmCall('tdfu_web_diag', 'string', ['number'], [0]);
+        }
+    } catch (e) {
+        log('Info error: ' + e.message, 'error'); console.error(e);
+    }
+    var ok = text && text.length && text.indexOf('Diag failed') !== 0;
+    if (ok) {
+        lastDiagText = text;
+        showDiagModal(text, false);
+    } else if (lastDiagText) {
+        showDiagModal(lastDiagText, true);
+    } else {
+        showDiagModal(text && text.length ? text : 'Diag failed — see log.', false);
+    }
+}
+
+function showDiagModal(text, cached) {
+    document.getElementById('diag-output').textContent =
+        cached ? text + '\n\n(cached — device is no longer in bootrom mode)' : text;
+    document.getElementById('diag-overlay').classList.remove('d-none');
+}
+
+function closeDiag() {
+    document.getElementById('diag-overlay').classList.add('d-none');
+}
+
+function copyDiag() {
+    var text = document.getElementById('diag-output').textContent || '';
+    if (navigator.clipboard)
+        navigator.clipboard.writeText(text).then(function () { log('Info copied to clipboard'); }, function () {});
+}
+
+/* ------------------------------------------------------------------ */
 /*  Remote daemon backend (dfu-remote over WebSocket)                  */
 /* ------------------------------------------------------------------ */
 
@@ -973,6 +1034,14 @@ function closeSettings() {
     document.getElementById('settings-overlay').classList.add('d-none');
 }
 
+/* Windows needs a WinUSB driver (via Zadig) before WebUSB can open the device,
+ * so the driver prompt is only relevant there. */
+function isWindows() {
+    if (navigator.userAgentData && navigator.userAgentData.platform)
+        return navigator.userAgentData.platform === 'Windows';
+    return /win/i.test(navigator.platform || navigator.userAgent || '');
+}
+
 function openWindowsHelp() {
     document.getElementById('windows-help-overlay').classList.remove('d-none');
 }
@@ -1012,6 +1081,7 @@ function saveSettings() {
 
 // Expose handlers referenced by HTML onclick/onchange attributes
 Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSelected, doRead,
+                        doDiag, closeDiag, copyDiag,
                         openSettings, closeSettings, openWindowsHelp, closeWindowsHelp, saveSettings, toggleRemoteFields,
                         toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader,
                         selectRemoteDevice });
@@ -1038,5 +1108,11 @@ Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSele
 
     applyBackendMode(backendMode);
     setState('idle');
+    // The Windows-driver prompt only matters on Windows (WinUSB via Zadig);
+    // the link is hidden by default and revealed here only on Windows.
+    if (isWindows()) {
+        var winLink = document.getElementById('windows-help-link');
+        if (winLink) winLink.classList.remove('d-none');
+    }
     initModule();
 })();

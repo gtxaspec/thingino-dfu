@@ -37,6 +37,7 @@ set(LIBTDFU_SOURCES
     ${LIBTDFU_DIR}/src/platform.c
     ${LIBTDFU_DIR}/src/bootstrap.c
     ${LIBTDFU_DIR}/src/utils.c
+    ${LIBTDFU_DIR}/src/diag.c
     ${LIBTDFU_DIR}/src/dfu/dfu.c
     # Web glue: provides g_debug_enabled and main()
     ${CMAKE_CURRENT_SOURCE_DIR}/src/web_main.c
@@ -71,6 +72,7 @@ set(EXPORTED_FUNCTIONS
     "_tdfu_web_dfu_bootstrap"
     "_tdfu_web_dfu_bootstrap_files"
     "_tdfu_web_detect_soc"
+    "_tdfu_web_diag"
     "_tdfu_web_dfu_download"
     "_tdfu_web_dfu_upload"
     "_malloc"

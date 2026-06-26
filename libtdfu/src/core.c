@@ -9,6 +9,7 @@
 #include "tdfu/constants.h"
 #include "tdfu/tdfu.h"
 #include "tdfu/dfu.h"
+#include "tdfu/diag.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -131,6 +132,21 @@ const char *tdfu_web_detect_soc(int device_index) {
         return "";
     g_devices[device_index].variant = v;
     return tdfu_variant_to_string(v);
+}
+
+/* Read-only eFuse / secure-boot diagnostics. Returns the formatted report text
+ * (static buffer, valid until the next call), or an error line on failure. The
+ * web app shows this verbatim in a dialog. */
+const char *tdfu_web_diag(int device_index) {
+    static char report[8192];
+    tdfu_diag_info_t info;
+    tdfu_error_t r = tdfu_diag(&g_manager, device_index, &info);
+    if (r != TDFU_SUCCESS) {
+        snprintf(report, sizeof(report), "Diag failed: %s\n", tdfu_error_to_string(r));
+        return report;
+    }
+    tdfu_diag_format(&info, report, sizeof(report));
+    return report;
 }
 
 static int web_dfu_resolve_alt(int device_index, const char *alt_name) {
