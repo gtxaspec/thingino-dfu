@@ -34,42 +34,9 @@ set(LIBTDFU_SOURCES
     ${LIBTDFU_DIR}/src/usb/manager.c
     ${LIBTDFU_DIR}/src/usb/device.c
     ${LIBTDFU_DIR}/src/usb/protocol.c
-    ${LIBTDFU_DIR}/src/firmware/loader.c
-    ${LIBTDFU_DIR}/src/firmware/reader.c
-    ${LIBTDFU_DIR}/src/firmware/writer.c
-    ${LIBTDFU_DIR}/src/firmware/handshake.c
-    ${LIBTDFU_DIR}/src/firmware/flash_descriptor.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_utils.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_controller.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_param_builder.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_phy.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_phy_ddr2.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_ctrl_txx.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_generator.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_binary_builder.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_rdd_ddr2.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_rdd_ddr3.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_fidb_xb1.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_fidb_xb2.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_rdd_xb2.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_config_database.c
-    ${LIBTDFU_DIR}/src/ddr/ddr_reg_compute.c
-    ${LIBTDFU_DIR}/src/flash/spi_nor_db.c
-    ${LIBTDFU_DIR}/src/flash/nand_db.c
-    ${LIBTDFU_DIR}/src/platforms/platform.c
-    ${LIBTDFU_DIR}/src/platforms/t10.c
-    ${LIBTDFU_DIR}/src/platforms/t20.c
-    ${LIBTDFU_DIR}/src/platforms/t21.c
-    ${LIBTDFU_DIR}/src/platforms/t30.c
-    ${LIBTDFU_DIR}/src/platforms/t31.c
-    ${LIBTDFU_DIR}/src/platforms/t31a.c
-    ${LIBTDFU_DIR}/src/platforms/t40.c
-    ${LIBTDFU_DIR}/src/platforms/t41.c
-    ${LIBTDFU_DIR}/src/platforms/a1.c
     ${LIBTDFU_DIR}/src/platform.c
     ${LIBTDFU_DIR}/src/bootstrap.c
     ${LIBTDFU_DIR}/src/utils.c
-    ${LIBTDFU_DIR}/src/operations.c
     ${LIBTDFU_DIR}/src/dfu/dfu.c
     # Web glue: provides g_debug_enabled and main()
     ${CMAKE_CURRENT_SOURCE_DIR}/src/web_main.c
@@ -81,9 +48,6 @@ target_include_directories(tdfu_web PRIVATE
     ${LIBUSB_INCLUDE_DIRS}
     ${LIBTDFU_DIR}/include
     ${LIBTDFU_DIR}/src
-    ${LIBTDFU_DIR}/src/ddr
-    ${LIBTDFU_DIR}/src/firmware
-    ${LIBTDFU_DIR}/src/flash
 )
 
 # Asyncify: write imports list to a JSON file to avoid shell quoting issues
@@ -99,11 +63,6 @@ set(EXPORTED_FUNCTIONS
     "_tdfu_cleanup"
     "_tdfu_discover_devices"
     "_tdfu_free_device_list"
-    "_tdfu_bootstrap"
-    "_tdfu_bootstrap_with_data"
-    "_tdfu_write_firmware"
-    "_tdfu_read_firmware"
-    "_tdfu_generate_ddr"
     "_tdfu_set_device_variant"
     "_tdfu_get_version"
     "_tdfu_web_set_debug"

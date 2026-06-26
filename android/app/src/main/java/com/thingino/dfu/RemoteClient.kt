@@ -29,10 +29,6 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
         const val CMD_STATUS: Byte = 0x05
         const val CMD_CANCEL: Byte = 0x06
 
-        // High bit of the command byte selects the legacy cloner backend.
-        // Clear (default) = DFU. Mirrors TDFU_CMD_CLONER_FLAG on the daemon.
-        const val CMD_CLONER_FLAG = 0x80
-
         // Response status
         const val RESP_OK: Byte = 0x00
         const val RESP_ERROR: Byte = 0x01
@@ -62,9 +58,6 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
     private var socket: Socket? = null
     private var input: InputStream? = null
     private var output: OutputStream? = null
-
-    /** When true, ask the daemon to use the legacy cloner backend. Default DFU. */
-    var useCloner: Boolean = false
 
     fun connect(host: String, port: Int = DEFAULT_PORT, token: String? = null): Boolean {
         return try {
@@ -197,14 +190,10 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
 
     private fun sendRequest(command: Byte, payload: ByteArray = ByteArray(0)) {
         val out = output ?: throw IllegalStateException("Not connected")
-        // The daemon masks off the high bit for dispatch and reads it as the
-        // cloner-backend selector; OR it in when the user picked cloner.
-        val wireCommand =
-            if (useCloner) (command.toInt() or CMD_CLONER_FLAG).toByte() else command
         val header = ByteBuffer.allocate(10).order(ByteOrder.BIG_ENDIAN)
         header.putInt(MAGIC)
         header.put(VERSION)
-        header.put(wireCommand)
+        header.put(command)
         header.putInt(payload.size)
         out.write(header.array())
         if (payload.isNotEmpty()) {

@@ -2,46 +2,24 @@
 
 > 💡 **Just want to use it?** Visit [https://webflash.thingino.com/](https://webflash.thingino.com/) — no install required.
 
-USB flashing tool for Ingenic SoC devices (T10-T41, A1). It boots a device from its USB bootrom into U-Boot, then reads or writes the on-board SPI flash. The SoC variant is auto-detected - no manual configuration needed.
+USB flashing tool for Ingenic SoC devices (T10-T41, A1). It boots a device from its USB bootrom into U-Boot's standard USB DFU mode, then reads or writes the on-board flash. The SoC variant is auto-detected - no manual configuration needed.
 
-Two backends are supported:
+## How it works
 
-- **DFU (default, preferred)** - drives mainline U-Boot's standard USB DFU mode.
-- **Cloner (legacy)** - reimplements Ingenic's vendor USB-boot flash protocol.
-
-> **Why DFU is the preferred method**
->
-> DFU is a real USB standard - the [USB Device Firmware Upgrade 1.1](https://www.usb.org/sites/default/files/DFU_1.1.pdf) class - and mainline (and thingino) U-Boot implements it natively through the `dfu` command. The device exposes its flash as named partitions (DFU alt-settings, defined by U-Boot's `dfu_alt_info`), and the host simply moves bytes to or from them. The **device side owns** the medium (SPI NOR / NAND / MMC / MTD), the DDR bring-up, and the partition layout.
->
-> That makes DFU portable (any DFU host works, including `dfu-util`), future-proof, and free of reverse-engineered, per-SoC flash protocols. The **cloner** backend is the older reverse-engineered vendor path - the host does DDR init, JEDEC flash detection, and drives the raw read/write protocol itself. It's kept for bring-up and for devices that don't yet run a DFU-capable U-Boot.
-
-## Backends
-
-### DFU (default)
-
-The device runs U-Boot's `dfu` command and enumerates as a standard USB DFU 1.1 gadget. The host does two things:
+The device runs mainline (and thingino) U-Boot's `dfu` command and enumerates as a standard [USB DFU 1.1](https://www.usb.org/sites/default/files/DFU_1.1.pdf) gadget. The host does two things:
 
 1. **Bootstrap** (`-b`): USB-boots a DFU-capable SPL + U-Boot onto the device from its bootrom. The device then re-enumerates as a DFU gadget.
-2. **Transfer**: lists the alt-settings (partitions named by `dfu_alt_info`) and uploads (reads) or downloads (writes) to them.
+2. **Transfer**: lists the alt-settings (partitions named by U-Boot's `dfu_alt_info`) and uploads (reads) or downloads (writes) to them.
 
-Plain DFU 1.1, no DfuSe (ST) extension. Because it's standard DFU, the medium and partition layout are entirely a device-side concern - the host only moves bytes.
-
-### Cloner (legacy)
-
-`--cloner` selects the reverse-engineered Ingenic vendor protocol. The host performs DDR init (generated dynamically from a compiled-in chip database - no vendor `ddr.bin` needed), auto-detects the flash chip via JEDEC ID, and drives the raw read/write protocol itself. Useful for bring-up or where a DFU U-Boot isn't available.
+It's plain DFU 1.1 (no DfuSe/ST extension), so the **device side owns** the medium (SPI NOR / NAND / MMC / MTD), the DDR bring-up, and the partition layout — the host only moves bytes. That makes it portable (any DFU host works, including `dfu-util`), future-proof, and free of reverse-engineered, per-SoC flash protocols.
 
 ## Usage
 
 ```
-# DFU (default) - device runs U-Boot's `dfu` command:
 thingino-dfu -b                              # Bootrom -> U-Boot DFU mode (auto-detect SoC)
 thingino-dfu -l                              # List DFU alt-settings (partitions)
 thingino-dfu --alt rootfs -w rootfs.bin      # Write a partition via DFU
 thingino-dfu --alt u-boot -r uboot.bin       # Read a partition via DFU
-
-# Cloner (legacy) - vendor USB-boot flash protocol:
-thingino-dfu --cloner -i 0 -b -w firmware.bin   # Bootstrap + write whole flash
-thingino-dfu --list-cpus                     # Show supported CPU targets
 ```
 
 The SoC is auto-detected by reading hardware ID registers from the bootrom. Use `--cpu <variant>` to override if needed.
@@ -52,20 +30,16 @@ The SoC is auto-detected by reading hardware ID registers from the bootrom. Use 
 |--------|-------------|
 | `-l, --list` | List connected Ingenic USB devices (or DFU alt-settings, in DFU mode) |
 | `-i, --index <n>` | Device index (default: 0) |
-| `-b, --bootstrap` | Bootstrap device (bootrom -> U-Boot) |
-| `-w, --write <file>` | Write firmware to flash |
-| `-r, --read <file>` | Read firmware from flash |
+| `-b, --bootstrap` | Bootstrap device (bootrom -> U-Boot DFU mode) |
+| `-w, --write <file>` | Write firmware to a DFU alt-setting |
+| `-r, --read <file>` | Read firmware from a DFU alt-setting |
 | `--alt <name/num>` | DFU alt-setting (partition) to target |
-| `--cloner` | Use the legacy cloner backend (default: DFU) |
 | `--cpu <variant>` | Override SoC variant (default: auto-detect) |
 | `--spl <file>` / `--uboot <file>` | Use a specific SPL / U-Boot for bootstrap (skips SoC detection) |
 | `--firmware-dir <dir>` | Firmware root directory (default: `./firmware`) |
 | `--wait` | Wait for the device to appear before acting |
 | `--host <addr>` | Connect to a remote `dfu-remote` daemon |
-| `-v, --verbose` | Verbose output |
 | `-d, --debug` | Debug output |
-
-Cloner-only options: `--flash-chip <name>` (override JEDEC auto-detect), `--chunk-size <bytes>`, `--erase`, `--reboot`, `--skip-ddr`.
 
 ## Supported Platforms
 
@@ -86,9 +60,9 @@ Cloner-only options: `--flash-chip <name>` (override JEDEC auto-detect), `--chun
 
 ## SoC Auto-Detection
 
-Both backends auto-detect the SoC during bootstrap: the tool uploads a tiny MIPS program to the device's bootrom that reads hardware ID registers (SoC ID, EFUSE sub-type) and returns the exact chip variant. For DFU this selects the right DFU-capable U-Boot; for cloner it also drives DDR type selection (DDR2 vs DDR3).
+The tool auto-detects the SoC during bootstrap: it uploads a tiny MIPS program to the device's bootrom that reads hardware ID registers (SoC ID, EFUSE sub-type) and returns the exact chip variant, which selects the right DFU-capable U-Boot.
 
-Every sub-variant is resolved automatically - steppings, DDR2/DDR3 parts, and EFUSE sub-types are all detected, so there's no need to enumerate them and you never pick one by hand. `--cpu <variant>` is only an override; run `thingino-dfu --list-cpus` for the full set of recognized targets.
+Every sub-variant is resolved automatically - steppings, DDR2/DDR3 parts, and EFUSE sub-types are all detected, so there's no need to enumerate them and you never pick one by hand. `--cpu <variant>` is only an override.
 
 ## Build
 
@@ -126,7 +100,7 @@ cd web
 bash build.sh
 ```
 
-Output: `web/dist/`. Serve it with any HTTPS server and open in Chrome/Edge (WebUSB requires a secure context). The web flasher compiles the entire C library to WebAssembly and replaces libusb with a WebUSB shim, so detect, bootstrap, read, and write all run in the browser - no install required. DFU is the default backend; an Advanced panel lets you supply a custom SPL + U-Boot for the bootstrap.
+Output: `web/dist/`. Serve it with any HTTPS server and open in Chrome/Edge (WebUSB requires a secure context). The web flasher compiles the C library to WebAssembly and replaces libusb with a WebUSB shim, so detect, bootstrap, read, and write all run in the browser - no install required. An Advanced panel lets you supply a custom SPL + U-Boot for the bootstrap, and a Remote mode connects to a `dfu-remote` daemon.
 
 ### Android
 
@@ -137,7 +111,7 @@ cd android
 ./gradlew assembleRelease
 ```
 
-APK: `android/app/build/outputs/apk/release/app-release.apk`. The app supports local USB (via USB OTG) and remote mode (connecting to a `dfu-remote` daemon over TCP); the backend (DFU / cloner) is chosen in Settings.
+APK: `android/app/build/outputs/apk/release/app-release.apk`. The app supports local USB (via USB OTG) and remote mode (connecting to a `dfu-remote` daemon over TCP).
 
 ### Install
 
@@ -161,7 +135,7 @@ For headless setups (e.g. an Orange Pi connected to devices via USB):
 1. Run `dfu-remote` on the USB host machine.
 2. Use `--host <addr>` from anywhere on the network.
 
-Remote defaults to DFU as well (`--cloner` for the legacy backend). Protocol uses TCP port 5050. Both the daemon and client work on all platforms (Linux, macOS, Windows, Android).
+Protocol uses TCP port 5050. Both the daemon and client work on all platforms (Linux, macOS, Windows, Android).
 
 ## Windows Setup
 
@@ -174,13 +148,9 @@ Remote defaults to DFU as well (`--cloner` for the legacy backend). Protocol use
 
 ## Firmware
 
-SPL + U-Boot binaries used for bootstrap live under `firmware/`:
+The DFU-capable SPL + U-Boot binaries USB-booted during bootstrap live under `firmware/dfu/<variant>/{tpl,spl,uboot}.bin`. They are built from [gtxaspec/u-boot](https://github.com/gtxaspec/u-boot) (the `isvp_<soc>_usbboot` defconfigs) and refreshed by the `sync-usbboot` workflow.
 
-- **DFU:** `firmware/dfu/<family>/{spl,uboot}.bin` - DFU-capable mainline U-Boot (the device runs `dfu` after boot).
-- **Cloner:** `firmware/cloner/<platform>/{spl,uboot}.bin` - the vendor burner loader.
+## Documentation
 
-The DFU images are built from [gtxaspec/u-boot](https://github.com/gtxaspec/u-boot) (the `isvp_<soc>_usbboot` defconfigs).
-
-## Technical Details
-
-See [docs/CLONER_ENGINEERING.md](docs/CLONER_ENGINEERING.md) for the cloner backend internals - USB protocol, flash descriptor formats, DDR binary layout, the compiled-in hardware databases (DDR / SPI-NOR / NAND / platform configs), and platform-specific behavior.
+- [docs/ADDING_HARDWARE.md](docs/ADDING_HARDWARE.md) - adding support for a new SoC variant.
+- [docs/dfu-to-sd.md](docs/dfu-to-sd.md) - provisioning an SD card over DFU.

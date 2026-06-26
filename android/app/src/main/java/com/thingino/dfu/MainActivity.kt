@@ -40,7 +40,6 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         private const val PREFS_NAME = "tdfu_prefs"
         private const val PREF_HOST = "remote_host"
         private const val PREF_PORT = "remote_port"
-        private const val PREF_USE_DFU = "use_dfu"
         private const val PREF_DEBUG = "debug_logging"
     }
 
@@ -69,8 +68,6 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     private var detectedSoc: String = ""
     private var operationRunning = false
     private var isRemoteMode = false
-    // DFU is the default backend; cloner is legacy (mirrors CLI/daemon).
-    private var useDfu = true
     // True when the connected local USB device is already a U-Boot DFU gadget.
     private var isDfuGadget = false
     private var remoteClient: RemoteClient? = null
@@ -135,9 +132,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         val savedPort = prefs.getInt(PREF_PORT, 0)
         if (savedPort > 0) portInput.setText(savedPort.toString())
 
-        // Restore backend + debug choices (DFU default, debug off). Both live in
-        // the Settings dialog now; apply the saved debug level to native.
-        useDfu = prefs.getBoolean(PREF_USE_DFU, true)
+        // Apply the saved debug level to native (the Settings dialog persists it).
         TdfuBridge.nativeSetDebug(prefs.getBoolean(PREF_DEBUG, false))
 
         findViewById<android.widget.ImageButton>(R.id.settingsButton).setOnClickListener {
@@ -270,7 +265,6 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
         lifecycleScope.launch(Dispatchers.IO) {
             val client = RemoteClient(this@MainActivity)
-            client.useCloner = !useDfu
             val connected = client.connect(host, port)
 
             if (!connected) {
@@ -496,7 +490,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             }
 
             val result = TdfuBridge.nativeBootstrap(
-                newFd, detectedSoc, cacheDir, assetManager, true
+                newFd, detectedSoc, cacheDir, assetManager
             )
 
             withContext(Dispatchers.Main) {
@@ -531,9 +525,9 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             return
         }
 
-        // DFU mode on a device still in bootrom: load the DFU U-Boot first.
-        // The device re-enumerates as a gadget, then the read is retried.
-        if (useDfu && !isDfuGadget) {
+        // Device still in bootrom: load the DFU U-Boot first. The device
+        // re-enumerates as a gadget, then the read is retried.
+        if (!isDfuGadget) {
             bootstrapToDfu()
             return
         }
@@ -564,7 +558,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                 // A U-Boot DFU gadget's connection is already open and stable.
                 // Reopening it (close+open) disturbs the device's USB controller
                 // and can wedge EP0 so DFU control transfers hang forever. Reuse
-                // the existing fd. The cloner path still reopens for a fresh fd
+                // the existing fd; a bootrom device is reopened for a fresh fd
                 // after its bootrom->firmware transition.
                 if (isDfuGadget) {
                     usbHelper.getFileDescriptor()
@@ -586,8 +580,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             }
 
             val result = TdfuBridge.nativeReadFirmware(
-                newFd, detectedSoc, outputFile.absolutePath, cacheDir, assetManager,
-                useDfu || isDfuGadget
+                newFd, detectedSoc, outputFile.absolutePath, cacheDir, assetManager
             )
             val hash = if (result == 0) runCatching { sha256Hex(outputFile) }.getOrNull() else null
 
@@ -650,9 +643,9 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
     private fun pickFileForWrite() {
         if (operationRunning) return
-        // DFU mode on a bootrom device: load the DFU U-Boot first; the user
-        // retries the write once it re-enumerates as a gadget.
-        if (!isRemoteMode && useDfu && !isDfuGadget) {
+        // Bootrom device: load the DFU U-Boot first; the user retries the
+        // write once it re-enumerates as a gadget.
+        if (!isRemoteMode && !isDfuGadget) {
             bootstrapToDfu()
             return
         }
@@ -708,7 +701,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                 // A U-Boot DFU gadget's connection is already open and stable.
                 // Reopening it (close+open) disturbs the device's USB controller
                 // and can wedge EP0 so DFU control transfers hang forever. Reuse
-                // the existing fd. The cloner path still reopens for a fresh fd
+                // the existing fd; a bootrom device is reopened for a fresh fd
                 // after its bootrom->firmware transition.
                 if (isDfuGadget) {
                     usbHelper.getFileDescriptor()
@@ -731,8 +724,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             }
 
             val result = TdfuBridge.nativeWriteFirmware(
-                newFd, detectedSoc, tempFile.absolutePath, cacheDir, assetManager,
-                useDfu || isDfuGadget
+                newFd, detectedSoc, tempFile.absolutePath, cacheDir, assetManager
             )
 
             tempFile.delete()
@@ -821,13 +813,11 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         writeButton.alpha = if (enabled) 1.0f else 0.5f
     }
 
-    /** Settings window: flashing backend (DFU/cloner) + debug logging toggle. */
+    /** Settings window: debug logging toggle. */
     private fun showSettingsDialog() {
         val view = layoutInflater.inflate(R.layout.dialog_settings, null)
-        val backendGroup = view.findViewById<RadioGroup>(R.id.dlgBackendGroup)
         val debugSwitch = view.findViewById<MaterialSwitch>(R.id.dlgDebugSwitch)
 
-        backendGroup.check(if (useDfu) R.id.dlgRadioDfu else R.id.dlgRadioCloner)
         val debugWas = prefs.getBoolean(PREF_DEBUG, false)
         debugSwitch.isChecked = debugWas
 
@@ -836,13 +826,6 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             .setView(view)
             .setNegativeButton(R.string.btn_cancel, null)
             .setPositiveButton(R.string.btn_save) { _, _ ->
-                val newUseDfu = backendGroup.checkedRadioButtonId == R.id.dlgRadioDfu
-                if (newUseDfu != useDfu) {
-                    useDfu = newUseDfu
-                    prefs.edit().putBoolean(PREF_USE_DFU, useDfu).apply()
-                    remoteClient?.useCloner = !useDfu
-                    appendLog("Backend: ${if (useDfu) "DFU" else "cloner (legacy)"}\n")
-                }
                 val newDebug = debugSwitch.isChecked
                 if (newDebug != debugWas) {
                     prefs.edit().putBoolean(PREF_DEBUG, newDebug).apply()

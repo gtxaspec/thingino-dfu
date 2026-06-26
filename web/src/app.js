@@ -26,8 +26,8 @@ var wasmBusy = false;
 var customSpl = null;
 var customUboot = null;
 
-/* Backend: 'dfu' (default) drives U-Boot DFU; 'cloner' is the legacy Ingenic
- * USB-boot flash protocol. Persisted across reloads. */
+/* Backend: 'dfu' (default) drives the on-device U-Boot DFU gadget; 'remote'
+ * proxies to a dfu-remote daemon. Persisted across reloads. */
 var backendMode = localStorage.getItem('tdfu_backend') || 'dfu';
 var inDfuMode = false; /* connected device is a U-Boot DFU gadget (a108:4d44) */
 
@@ -57,19 +57,6 @@ async function wasmCall(name, returnType, argTypes, args) {
     } finally {
         wasmBusy = false;
     }
-}
-
-/* Variant→firmware directory mapping (mirrors loader.c variant_to_firmware_dir) */
-var TDFU_VARIANT_DIR_MAP = {
-    'a1': 'a1_n_ne_x',
-    't31zx': 't31x',
-    't31al': 't31x',
-    't23dl': 't23',
-    't40xp': 't40',
-};
-
-function variantToFirmwareDir(name) {
-    return TDFU_VARIANT_DIR_MAP[name] || name;
 }
 
 /* DFU firmware directory mapping (mirrors dfu_variant_dir in dfu.c) */
@@ -185,18 +172,15 @@ function setState(state) {
     //  - DFU backend: a bootrom must be BOOTSTRAPPED into the U-Boot DFU gadget
     //    before Read/Write work, so only Bootstrap is live with a bootrom, and
     //    only Read/Write are live once we're in DFU mode.
-    //  - Cloner backend: Read/Write/Bootstrap all act on the connected device.
     //  - Remote backend: the daemon owns the bootstrap/flash flow, so once a
     //    device is discovered, Bootstrap/Read/Write are all live.
     var hasDevice = state === 'done';
     var dfu = backendMode === 'dfu';
     var remote = backendMode === 'remote';
     // Bootstrap only acts on a bootrom (a108:c309); Read/Write only once the
-    // device is the DFU gadget. DFU and remote both gate on inDfuMode; the cloner
-    // backend drives all three on the connected device.
-    var cloner = backendMode === 'cloner';
-    var canBoot = hasDevice && !busy && (cloner ? true : !inDfuMode);
-    var canRW = hasDevice && !busy && (cloner ? true : inDfuMode);
+    // device is the DFU gadget. DFU and remote both gate on inDfuMode.
+    var canBoot = hasDevice && !busy && !inDfuMode;
+    var canRW = hasDevice && !busy && inDfuMode;
 
     document.getElementById('btn-connect').disabled = busy;
     document.getElementById('btn-bootstrap').disabled = !canBoot;
@@ -229,37 +213,6 @@ function showDeviceInfo(soc, stage, vid, pid) {
 /* ------------------------------------------------------------------ */
 /*  MEMFS Firmware Loading                                             */
 /* ------------------------------------------------------------------ */
-
-/**
- * Fetch a firmware binary from the web server and write it into
- * Emscripten's virtual filesystem so the C code can fopen() it.
- */
-async function loadFirmwareFileToMemFS(variant) {
-    var dir = variantToFirmwareDir(variant);
-    var basePath = './firmware/cloner/' + dir;
-
-    // Create directories in MEMFS
-    try { Module.FS.mkdir('./firmware'); } catch (e) { /* exists */ }
-    try { Module.FS.mkdir('./firmware/cloner'); } catch (e) { /* exists */ }
-    try { Module.FS.mkdir(basePath); } catch (e) { /* exists */ }
-
-    var files = ['spl.bin', 'uboot.bin'];
-    for (var i = 0; i < files.length; i++) {
-        var url = 'firmware/cloner/' + dir + '/' + files[i];
-        var memPath = basePath + '/' + files[i];
-
-        console.log('Fetching ' + url + '...');
-        var response = await fetch(url);
-        if (!response.ok) {
-            throw new Error('Failed to fetch ' + url + ': ' + response.status);
-        }
-        var data = new Uint8Array(await response.arrayBuffer());
-        Module.FS.writeFile(memPath, data);
-        console.log('Loaded ' + files[i] + ': ' + data.length + ' bytes');
-    }
-
-    // ddr.bin not fetched — always generated dynamically by the C DDR system
-}
 
 /**
  * Fetch the DFU-capable SPL + U-Boot for a variant into MEMFS at
@@ -475,7 +428,7 @@ async function connectDevice() {
             ' PID=0x' + device.productId.toString(16));
 
         // A U-Boot DFU gadget (a108:4d44) is ready to flash directly; it isn't
-        // an Ingenic bootrom, so skip the cloner detect path.
+        // an Ingenic bootrom, so skip the SoC detect path.
         if (device.productId === 0x4D44) {
             inDfuMode = true;
             showDeviceInfo(detectedVariantName ? detectedVariantName.toUpperCase() : '—', 'U-Boot DFU',
@@ -579,60 +532,7 @@ async function autoAttachDevice(device) {
 async function doBootstrap() {
     if (backendMode === 'remote') return doRemoteBootstrap();
     if (!tdfuReady) return;
-    // DFU bootstrap handles its own variant/custom-file check (custom SPL+U-Boot
-    // need no detected variant); the cloner path below requires a variant.
-    if (backendMode === 'dfu') return doDfuBootstrap();
-    if (detectedVariant < 0) return;
-
-    setState('bootstrapping');
-    showProgress(10, 'Loading firmware files...');
-    log('Starting bootstrap for ' + detectedVariantName.toUpperCase() + '...');
-
-    try {
-        // Load firmware into MEMFS
-        await loadFirmwareFileToMemFS(detectedVariantName);
-        showProgress(30, 'Bootstrapping device...');
-
-        // Call tdfu_bootstrap(device_index=0, variant, firmware_dir=NULL, progress=NULL, user_data=NULL)
-        // firmware_dir NULL means default "./firmware"
-        var result = await wasmCall('tdfu_bootstrap', 'number',
-            ['number', 'number', 'number', 'number', 'number'],
-            [0, detectedVariant, 0, 0, 0]);
-
-        if (result !== 0) {
-            log('Bootstrap failed: error ' + result, 'error');
-            hideProgress();
-            setState('error');
-            return;
-        }
-
-        showProgress(80, 'Re-discovering device...');
-        console.log('Bootstrap complete, re-discovering device...');
-
-        // Re-discover to update device state (now in firmware stage)
-        var info = await discoverDevices();
-        if (info) {
-            // Restore the original variant — re-enumeration defaults to T31X
-            Module.ccall('tdfu_set_device_variant', 'number',
-                ['number', 'number'], [0, detectedVariant]);
-            info.variant = detectedVariant;
-            info.variantName = detectedVariantName;
-
-            var stageName = info.stage === 0 ? 'Bootrom' : 'Firmware';
-            showDeviceInfo(detectedVariantName.toUpperCase(), stageName, info.vid, info.pid);
-            log('Device now in ' + stageName + ' stage');
-        }
-
-        showProgress(100, 'Bootstrap complete');
-        log('Bootstrap completed successfully');
-        setTimeout(hideProgress, 1500);
-        setState('done');
-    } catch (e) {
-        log('Bootstrap error: ' + e.message, 'error');
-        console.error(e);
-        hideProgress();
-        setState('error');
-    }
+    return doDfuBootstrap();
 }
 
 /* ------------------------------------------------------------------ */
@@ -666,72 +566,7 @@ function firmwareSelected(input) {
 async function doWrite() {
     if (backendMode === 'remote') { if (firmwareData) return doRemoteWrite(firmwareData); return; }
     if (!tdfuReady || !firmwareData) return;
-    if (backendMode === 'dfu') return doDfuWrite();
-
-    // Always bootstrap from JS if device is in bootrom — the internal
-    // bootstrap in tdfu_op_write_firmware doesn't handle WebUSB re-enumeration
-    var info = await discoverDevices();
-    if (!info) {
-        log('No device found', 'error');
-        setState('error');
-        return;
-    }
-    if (info.stage === 0) {
-        log('Device in bootrom stage — bootstrapping first...');
-        await doBootstrap();
-
-        info = await discoverDevices();
-        if (!info || info.stage === 0) {
-            log('Bootstrap failed — device still in bootrom', 'error');
-            setState('error');
-            return;
-        }
-    }
-
-    setState('writing');
-    showProgress(10, 'Preparing firmware write...');
-
-    // Preload bootstrap firmware to MEMFS in case ops layer needs it
-    await loadFirmwareFileToMemFS(detectedVariantName);
-
-    log('Writing ' + firmwareFileName + ' (' + firmwareData.length + ' bytes)...');
-
-    try {
-        // Allocate WASM memory for firmware data
-        var dataPtr = Module._malloc(firmwareData.length);
-        if (!dataPtr) {
-            log('Failed to allocate WASM memory', 'error');
-            setState('error');
-            return;
-        }
-        Module.HEAPU8.set(firmwareData, dataPtr);
-
-        showProgress(30, 'Writing to flash...');
-
-        // tdfu_write_firmware(device_index=0, firmware, len, progress=NULL, user_data=NULL)
-        var result = await wasmCall('tdfu_write_firmware', 'number',
-            ['number', 'number', 'number', 'number', 'number'],
-            [0, dataPtr, firmwareData.length, 0, 0]);
-
-        Module._free(dataPtr);
-
-        if (result !== 0) {
-            log('Write failed: error ' + result, 'error');
-            hideProgress();
-            setState('error');
-            return;
-        }
-
-        showProgress(100, 'Write complete');
-        log('Firmware written successfully!');
-        setTimeout(hideProgress, 1500);
-        setState('done');
-    } catch (e) {
-        log('Write error: ' + e.message, 'error');
-        console.error(e);
-        hideProgress();
-        setState('error');
-    }
+    return doDfuWrite();
 }
 
 /* ------------------------------------------------------------------ */
@@ -741,97 +576,7 @@ async function doWrite() {
 async function doRead() {
     if (backendMode === 'remote') return doRemoteRead();
     if (!tdfuReady) return;
-    if (backendMode === 'dfu') return doDfuRead();
-
-    // Always bootstrap from JS if device is in bootrom
-    var info = await discoverDevices();
-    if (!info) {
-        log('No device found', 'error');
-        setState('error');
-        return;
-    }
-    if (info.stage === 0) {
-        log('Device in bootrom stage — bootstrapping first...');
-        await doBootstrap();
-    }
-
-    setState('reading');
-    showProgress(10, 'Preparing firmware read...');
-    log('Reading firmware from flash...');
-
-    try {
-        // Re-discover to ensure fresh device state
-        var readInfo = await discoverDevices();
-        if (!readInfo) {
-            log('No device found for read', 'error');
-            hideProgress();
-            setState('error');
-            return;
-        }
-        // Set correct variant after re-discovery
-        Module.ccall('tdfu_set_device_variant', 'number',
-            ['number', 'number'], [0, detectedVariant]);
-        console.log('Read target: ' + detectedVariantName + ' (' + (readInfo.stage === 0 ? 'Bootrom' : 'Firmware') + ')');
-
-        // Preload firmware to MEMFS — tdfu_op_read_firmware may bootstrap internally
-        await loadFirmwareFileToMemFS(detectedVariantName);
-
-        // Allocate output pointers
-        var fwPtrPtr = Module._malloc(4);  // uint8_t**
-        var lenPtr = Module._malloc(4);    // size_t*
-        Module.HEAPU32[fwPtrPtr >> 2] = 0;
-        Module.HEAPU32[lenPtr >> 2] = 0;
-
-        showProgress(30, 'Reading from flash...');
-        console.log('tdfu_read_firmware args: idx=0 fwPtrPtr=' + fwPtrPtr + ' lenPtr=' + lenPtr);
-
-        // tdfu_read_firmware(device_index=0, &firmware, &len, progress=NULL, user_data=NULL)
-        var result = await wasmCall('tdfu_read_firmware', 'number',
-            ['number', 'number', 'number', 'number', 'number'],
-            [0, fwPtrPtr, lenPtr, 0, 0]);
-        console.log('tdfu_read_firmware returned:', result);
-
-        if (result !== 0) {
-            log('Read failed: error ' + result, 'error');
-            Module._free(fwPtrPtr);
-            Module._free(lenPtr);
-            hideProgress();
-            setState('error');
-            return;
-        }
-
-        var dataPtr = Module.HEAPU32[fwPtrPtr >> 2];
-        var dataLen = Module.HEAPU32[lenPtr >> 2];
-
-        log('Read ' + dataLen + ' bytes from flash');
-
-        // Copy from WASM heap and trigger download
-        var data = Module.HEAPU8.slice(dataPtr, dataPtr + dataLen);
-        Module._free(dataPtr);
-        Module._free(fwPtrPtr);
-        Module._free(lenPtr);
-
-        // Create download
-        var blob = new Blob([data], { type: 'application/octet-stream' });
-        var url = URL.createObjectURL(blob);
-        var fname = readFilename();
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = fname;
-        a.click();
-        URL.revokeObjectURL(url);
-
-        showProgress(100, 'Read complete');
-        log('Firmware saved as ' + fname);
-        await logSha256(data);
-        setTimeout(hideProgress, 1500);
-        setState('done');
-    } catch (e) {
-        log('Read error: ' + e.message, 'error');
-        console.error(e);
-        hideProgress();
-        setState('error');
-    }
+    return doDfuRead();
 }
 
 /* ------------------------------------------------------------------ */
@@ -1066,7 +811,6 @@ async function doRemoteConnect() {
         },
         function(p, msg) { showProgress(p, msg || ''); }
     );
-    client.useCloner = false; // remote = DFU
     try {
         await client.connect(remoteUrl, remoteToken || null);
     } catch (e) {
@@ -1191,10 +935,10 @@ async function doRemoteWrite(data) {
 /* ------------------------------------------------------------------ */
 
 function applyBackendMode(mode) {
-    backendMode = (mode === 'cloner' || mode === 'remote') ? mode : 'dfu';
+    backendMode = (mode === 'remote') ? mode : 'dfu';
     localStorage.setItem('tdfu_backend', backendMode);
     var ind = document.getElementById('mode-indicator');
-    if (ind) ind.textContent = backendMode === 'cloner' ? 'Cloner' : backendMode === 'remote' ? 'Remote' : 'DFU';
+    if (ind) ind.textContent = backendMode === 'remote' ? 'Remote' : 'DFU';
     // The custom SPL/U-Boot override is a DFU-bootstrap feature; hide it otherwise.
     var adv = document.getElementById('adv-wrap');
     if (adv) adv.classList.toggle('d-none', backendMode !== 'dfu');
@@ -1251,8 +995,7 @@ function saveSettings() {
     }
     var changed = mode !== backendMode;
     applyBackendMode(mode);
-    log('Backend: ' + (backendMode === 'cloner' ? 'Cloner (legacy)'
-        : backendMode === 'remote' ? 'Remote daemon (' + (remoteUrl || 'no URL set') + ')' : 'DFU'));
+    log('Backend: ' + (backendMode === 'remote' ? 'Remote daemon (' + (remoteUrl || 'no URL set') + ')' : 'DFU'));
     if (changed) {
         detectedVariant = -1;
         detectedVariantName = '';

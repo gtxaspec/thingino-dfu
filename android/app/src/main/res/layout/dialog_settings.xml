@@ -9,41 +9,6 @@
     android:paddingTop="8dp"
     android:paddingBottom="8dp">
 
-    <!-- Flashing backend -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/settings_backend"
-        android:textStyle="bold"
-        android:textColor="@color/on_surface"
-        android:layout_marginBottom="4dp" />
-
-    <RadioGroup
-        android:id="@+id/dlgBackendGroup"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical">
-
-        <RadioButton
-            android:id="@+id/dlgRadioDfu"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/settings_backend_dfu" />
-
-        <RadioButton
-            android:id="@+id/dlgRadioCloner"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/settings_backend_cloner" />
-    </RadioGroup>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="12dp"
-        android:layout_marginBottom="12dp"
-        android:background="@color/outline" />
-
     <!-- Debug logging -->
     <LinearLayout
         android:layout_width="match_parent"

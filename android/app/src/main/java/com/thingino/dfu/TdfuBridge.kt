@@ -49,8 +49,7 @@ object TdfuBridge {
         fd: Int,
         variant: String,
         firmwareDir: String,
-        assetManager: AssetManager,
-        useDfu: Boolean
+        assetManager: AssetManager
     ): Int
 
     /**
@@ -69,8 +68,7 @@ object TdfuBridge {
         variant: String,
         outputFile: String,
         firmwareDir: String,
-        assetManager: AssetManager,
-        useDfu: Boolean
+        assetManager: AssetManager
     ): Int
 
     /**
@@ -89,8 +87,7 @@ object TdfuBridge {
         variant: String,
         inputFile: String,
         firmwareDir: String,
-        assetManager: AssetManager,
-        useDfu: Boolean
+        assetManager: AssetManager
     ): Int
 
     /**

@@ -17,7 +17,6 @@ const CMD_DISCOVER = 0x01;
 const CMD_BOOTSTRAP = 0x02;
 const CMD_WRITE = 0x03;
 const CMD_READ = 0x04;
-const CMD_CLONER_FLAG = 0x80;
 
 const RESP_OK = 0x00;
 const RESP_ERROR = 0x01;
@@ -55,7 +54,6 @@ export class RemoteClient {
         this.token = '';
         this.onLog = onLog || function () {};
         this.onProgress = onProgress || function () {};
-        this.useCloner = false;
         this.connected = false;
     }
 
@@ -72,7 +70,7 @@ export class RemoteClient {
     /* POST a CLNR command and parse the streamed CLNR responses, surfacing
      * PROGRESS/LOG, returning the OK payload (or null on ERROR). */
     async _command(command, payload) {
-        const cmd = this.useCloner ? (command | CMD_CLONER_FLAG) : command;
+        const cmd = command;
         const pl = payload || new Uint8Array(0);
         const frame = new Uint8Array(10 + pl.length);
         const dv = new DataView(frame.buffer);

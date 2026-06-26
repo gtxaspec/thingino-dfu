@@ -1,15 +1,7 @@
 build/
-build-arm64/
-build-release/
-build-win/
-__pycache__
 firmware.bin
 .zencoder
 build*/
-build-test/
-references/
-old/
-tools/
 *.bin
 third_party/libusb/windows/
 android/app/.cxx/

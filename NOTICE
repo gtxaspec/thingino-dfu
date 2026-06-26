@@ -6,33 +6,35 @@ This file documents the origins of components in this project.
 1. Original Code
 ================================================================================
 
-All source code in this repository (libtdfu/, cli/, dfu-remote/, android/,
+All source code in this repository (libtdfu/, cli/, dfu-remote/, web/, android/,
 tests/, scripts/) was written independently by the thingino project contributors.
-No source code was copied from Ingenic's proprietary cloner tool or any other
+No source code was copied from Ingenic's proprietary tools or any other
 proprietary software.
 
 ================================================================================
-2. USB Protocol
+2. USB Boot Protocol
 ================================================================================
 
-The Ingenic USB boot protocol used by this tool was determined through clean-room
-reverse engineering of USB traffic between Ingenic devices and the vendor tool,
-using standard USB analysis tools (Wireshark, USBPcap). This was done for the
-purpose of hardware interoperability, which is permitted under:
+The Ingenic USB boot protocol used to USB-boot U-Boot onto a device was
+determined through clean-room reverse engineering of USB traffic between Ingenic
+devices and the vendor tool, using standard USB analysis tools (Wireshark,
+USBPcap). This was done for the purpose of hardware interoperability, which is
+permitted under:
 
   - U.S. Copyright Act §117 and DMCA §1201(f) (interoperability exception)
   - EU Software Directive 2009/24/EC, Article 6 (decompilation for interoperability)
 
-The USB vendor request codes (0x00-0x26) and bulk transfer protocol are
-functional interfaces required to communicate with Ingenic SoC hardware.
-Functional interfaces are not copyrightable (Lotus v. Borland, Oracle v. Google).
+The USB vendor request codes and bulk transfer protocol are functional
+interfaces required to communicate with Ingenic SoC hardware. Functional
+interfaces are not copyrightable (Lotus v. Borland, Oracle v. Google). Flashing
+itself uses the standard USB DFU 1.1 class implemented by mainline U-Boot.
 
 ================================================================================
-3. Firmware Binaries (firmware/cloner/)
+3. Firmware Binaries (firmware/dfu/)
 ================================================================================
 
-The SPL (Secondary Program Loader) and U-Boot binaries in the firmware/cloner/
-directory are compiled from Ingenic's fork of Das U-Boot, which is licensed
+The SPL/TPL and U-Boot binaries in the firmware/dfu/ directory are compiled from
+Das U-Boot (the gtxaspec/u-boot isvp_<soc>_usbboot defconfigs), which is licensed
 under the GNU General Public License version 2 (GPL-2.0). These binaries are
 redistributed under the terms of GPL-2.0.
 
@@ -40,24 +42,7 @@ These binaries run on the target Ingenic SoC during the bootstrap process.
 They are not executed on the host computer.
 
 ================================================================================
-4. DDR Configuration
-================================================================================
-
-DDR timing parameters are derived from publicly available DDR chip datasheets
-(ESMT, Winbond, Samsung, etc.) and are functional hardware specifications.
-The DDR binary format was determined through analysis of USB traffic to
-understand the register layout required by Ingenic's DDR controller hardware.
-
-================================================================================
-5. Flash Chip Database
-================================================================================
-
-SPI NOR and NAND flash chip parameters (JEDEC IDs, timing, commands) are
-derived from publicly available chip datasheets. JEDEC IDs are industry-standard
-identifiers defined by JEDEC Solid State Technology Association.
-
-================================================================================
-6. Trademarks
+4. Trademarks
 ================================================================================
 
 "Ingenic" is a trademark of Ingenic Semiconductor Co., Ltd. The thingino
@@ -66,7 +51,7 @@ Semiconductor. Use of the Ingenic name is solely for identification of
 compatible hardware.
 
 ================================================================================
-7. License
+5. License
 ================================================================================
 
 This project is licensed under the GNU General Public License version 2

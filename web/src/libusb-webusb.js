@@ -281,9 +281,9 @@ mergeInto(LibraryManager.library, {
         if (!device) return -4;
 
         var isIn = (bmRequestType & 0x80) !== 0;
-        // Decode bmRequestType: bits 6-5 = type, bits 4-0 = recipient. The
-        // cloner uses vendor/device; DFU uses class/interface; GET_DESCRIPTOR /
-        // SET_INTERFACE use standard.
+        // Decode bmRequestType: bits 6-5 = type, bits 4-0 = recipient. Bootrom
+        // vendor requests use vendor/device; DFU uses class/interface;
+        // GET_DESCRIPTOR / SET_INTERFACE use standard.
         var typeBits = (bmRequestType >> 5) & 0x3;
         var recipBits = bmRequestType & 0x1f;
         var setup = {
