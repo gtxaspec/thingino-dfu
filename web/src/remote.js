@@ -187,8 +187,22 @@ export class RemoteClient {
         return p;
     }
 
-    async bootstrap(deviceIndex, variant) {
-        return (await this._command(CMD_BOOTSTRAP, this._variantPayload(deviceIndex, variant))) !== null;
+    async bootstrap(deviceIndex, variant, splData, ubootData) {
+        var base = this._variantPayload(deviceIndex, variant);
+        // Optional custom SPL + U-Boot (both-or-neither), appended as the daemon
+        // expects: [4:spl_len][spl][4:uboot_len][uboot], big-endian lengths.
+        if (splData && ubootData) {
+            var buf = new Uint8Array(base.length + 4 + splData.length + 4 + ubootData.length);
+            buf.set(base, 0);
+            var dv = new DataView(buf.buffer);
+            var off = base.length;
+            dv.setUint32(off, splData.length); off += 4;
+            buf.set(splData, off); off += splData.length;
+            dv.setUint32(off, ubootData.length); off += 4;
+            buf.set(ubootData, off);
+            return (await this._command(CMD_BOOTSTRAP, buf)) !== null;
+        }
+        return (await this._command(CMD_BOOTSTRAP, base)) !== null;
     }
 
     async readFirmware(deviceIndex, variant) {
@@ -202,12 +216,17 @@ export class RemoteClient {
 
     async writeFirmware(deviceIndex, variant, firmwareData) {
         const vb = new TextEncoder().encode(variant || '');
-        const buf = new Uint8Array(2 + vb.length + 4 + firmwareData.length + 4);
+        // Wire format the daemon parses:
+        //   [idx][variant_len][variant][alt_len][alt][fw_len][fw][crc]
+        // alt is empty here (alt_len = 0 => daemon's default alt 0 = flash).
+        const buf = new Uint8Array(2 + vb.length + 1 + 4 + firmwareData.length + 4);
         const dv = new DataView(buf.buffer);
         buf[0] = deviceIndex & 0xff;
         buf[1] = vb.length;
         buf.set(vb, 2);
         let off = 2 + vb.length;
+        buf[off] = 0; // alt_len = 0
+        off += 1;
         dv.setUint32(off, firmwareData.length);
         off += 4;
         buf.set(firmwareData, off);

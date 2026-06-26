@@ -997,7 +997,11 @@ async function doRemoteBootstrap() {
     showProgressBusy('Bootstrapping via daemon...');
     log('Remote bootstrap for ' + (detectedVariantName || '').toUpperCase() + '...');
     try {
-        var ok = await remoteClient.bootstrap(selectedRemoteIndex, detectedVariantName);
+        var custom = !!(customSpl && customUboot);
+        if (custom)
+            log('Using custom SPL (' + customSpl.data.length + ' B) + U-Boot (' + customUboot.data.length + ' B)');
+        var ok = await remoteClient.bootstrap(selectedRemoteIndex, detectedVariantName,
+                                              custom ? customSpl.data : null, custom ? customUboot.data : null);
         if (!ok) { log('Remote bootstrap failed.', 'error'); hideProgress(); setState('error'); return; }
         log('Remote bootstrap complete.');
         // The device re-enumerates bootrom -> U-Boot DFU gadget, which takes a
@@ -1085,7 +1089,7 @@ function applyBackendMode(mode) {
     if (ind) ind.textContent = backendMode === 'remote' ? 'Remote' : 'DFU';
     // The custom SPL/U-Boot override is a DFU-bootstrap feature; hide it otherwise.
     var adv = document.getElementById('adv-wrap');
-    if (adv) adv.classList.toggle('d-none', backendMode !== 'dfu');
+    if (adv) adv.classList.remove('d-none'); // custom SPL/U-Boot works in DFU and remote now
     // Leaving remote mode drops any open daemon connection.
     if (backendMode !== 'remote' && remoteClient) {
         remoteClient.disconnect();

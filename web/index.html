@@ -3,6 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Don't cache the page shell so a redeploy is picked up without a hard reload.
+         (Hashed /assets/* are still cached immutably; only this HTML is no-store.) -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>thingino · Web Flasher</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
@@ -12,7 +17,7 @@
         .flasher-card { width: 100%; max-width: 720px; }
         .card-title { color: darkorange !important; }
         #log {
-            height: 260px;
+            height: 406px;
             overflow-y: auto;
             font-family: 'Courier New', monospace;
             font-size: 0.78rem;
@@ -93,7 +98,7 @@
             #device-info .row { flex-direction: column; gap: 0.15rem !important; }
             .card-footer .d-flex { flex-direction: column; }
             .card-footer .d-flex .btn { width: 100%; }
-            #log { height: 200px; font-size: 0.7rem; }
+            #log { height: 313px; font-size: 0.7rem; }
         }
 
         /* Opt-in help balloons (toggled by the ? button / Settings; off by default) */
@@ -197,7 +202,7 @@
 
             <!-- Advanced: optional custom DFU bootloader (DFU backend only) -->
             <div id="adv-wrap" class="mt-2">
-                <a href="#" id="adv-toggle" class="small text-secondary text-decoration-none" onclick="toggleAdvanced(event)">
+                <a href="#" id="adv-toggle" class="small text-secondary text-decoration-none" onclick="toggleAdvanced(event)" data-help="Advanced. Supply your own DFU-capable SPL and U-Boot to USB-boot on the next Bootstrap instead of the bundled images. Both are required, and SoC detection is skipped.">
                     <i class="bi bi-chevron-right" id="adv-chevron"></i> Advanced: custom SPL / U-Boot
                 </a>
                 <div id="adv-controls" class="d-none mt-2 p-2 border rounded" style="border-color: #30363d !important;">
@@ -207,13 +212,13 @@
                         detection is skipped.
                     </p>
                     <div class="d-flex flex-wrap gap-2">
-                        <button id="btn-sel-spl" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('custom-spl-file').click()">
+                        <button id="btn-sel-spl" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('custom-spl-file').click()" data-help="Pick your own SPL (stage1) .bin. Used with a custom U-Boot for the next Bootstrap, in place of the bundled loader.">
                             <i class="bi bi-file-earmark-binary me-1"></i> Select SPL
                         </button>
-                        <button id="btn-sel-uboot" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('custom-uboot-file').click()">
+                        <button id="btn-sel-uboot" class="btn btn-outline-primary btn-sm" onclick="document.getElementById('custom-uboot-file').click()" data-help="Pick your own U-Boot .bin. Used together with the custom SPL for the next Bootstrap.">
                             <i class="bi bi-file-earmark-binary me-1"></i> Select U-Boot
                         </button>
-                        <button id="btn-clear-custom" class="btn btn-outline-danger btn-sm" onclick="clearCustomBootloader()">
+                        <button id="btn-clear-custom" class="btn btn-outline-danger btn-sm" onclick="clearCustomBootloader()" data-help="Clears the custom SPL/U-Boot selection and goes back to the bundled loaders for the detected SoC.">
                             <i class="bi bi-x-lg me-1"></i> Clear
                         </button>
                     </div>
