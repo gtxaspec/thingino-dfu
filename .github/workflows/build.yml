@@ -229,6 +229,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write   # dispatch the Pages deploy after publishing
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -247,3 +248,10 @@ jobs:
             artifacts/thingino-dfu-android/*.apk \
             artifacts/thingino-dfu-web/*.tar.gz \
             --generate-notes
+
+      - name: Deploy the flasher to Pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Dispatch the Pages workflow on main (the github-pages environment only
+        # allows the main branch, so a tag-triggered deploy is rejected).
+        run: gh workflow run pages.yml --repo "${{ github.repository }}" --ref main

@@ -15,11 +15,11 @@
 
 name: Pages
 
-# Deploys on a release tag (v*) so the public flasher tracks releases, not every
-# push to main. Use "Run workflow" (workflow_dispatch) for an ad-hoc redeploy.
+# Release-only deploy: the release build (build.yml) dispatches this on the main
+# ref after publishing a tag. Direct tag-triggered deploys are blocked by the
+# github-pages environment (it permits only the main branch). Also runnable
+# manually via "Run workflow".
 on:
-  push:
-    tags: ['v*']
   workflow_dispatch:
 
 permissions:
