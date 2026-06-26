@@ -113,6 +113,35 @@ const char *tdfu_variant_to_string(tdfu_variant_t variant) {
         return "t41zl";
     case TDFU_VARIANT_T41ZX:
         return "t41zx";
+    /* Per-variant loaders (1:1 with firmware/dfu/<dir>). */
+    case TDFU_VARIANT_T10N: return "t10n";
+    case TDFU_VARIANT_T10L: return "t10l";
+    case TDFU_VARIANT_T20N: return "t20n";
+    case TDFU_VARIANT_T20X: return "t20x";
+    case TDFU_VARIANT_T20L: return "t20l";
+    case TDFU_VARIANT_T21N: return "t21n";
+    case TDFU_VARIANT_T21HP: return "t21hp";
+    case TDFU_VARIANT_T23N: return "t23n";
+    case TDFU_VARIANT_T23DN: return "t23dn";
+    case TDFU_VARIANT_T23NHP: return "t23nhp";
+    case TDFU_VARIANT_T23NLP: return "t23nlp";
+    case TDFU_VARIANT_T23X: return "t23x";
+    case TDFU_VARIANT_T23ZN: return "t23zn";
+    case TDFU_VARIANT_T30N: return "t30n";
+    case TDFU_VARIANT_T30X: return "t30x";
+    case TDFU_VARIANT_T30L: return "t30l";
+    case TDFU_VARIANT_T30A: return "t30a";
+    case TDFU_VARIANT_T31N: return "t31n";
+    case TDFU_VARIANT_T31L: return "t31l";
+    case TDFU_VARIANT_T32LQ: return "t32lq";
+    case TDFU_VARIANT_T32NQ: return "t32nq";
+    case TDFU_VARIANT_T32VN: return "t32vn";
+    case TDFU_VARIANT_T32VNP: return "t32vnp";
+    case TDFU_VARIANT_T32VX: return "t32vx";
+    case TDFU_VARIANT_T32XQ: return "t32xq";
+    case TDFU_VARIANT_T33: return "t33";
+    case TDFU_VARIANT_T40N: return "t40n";
+    case TDFU_VARIANT_A1N: return "a1n";
     default:
         return "unknown";
     }
@@ -179,8 +208,8 @@ tdfu_variant_t tdfu_variant_from_string(const char *str) {
         return TDFU_VARIANT_T41ZX;
     if (strcmp(lower, "t41zn") == 0)
         return TDFU_VARIANT_T41_DDR3;
-    if (strcmp(lower, "t40n") == 0 || strcmp(lower, "t40nn") == 0)
-        return TDFU_VARIANT_T40;
+    if (strcmp(lower, "t40nn") == 0)
+        return TDFU_VARIANT_T40N;
     if (strcmp(lower, "t32") == 0)
         return TDFU_VARIANT_T32;
     if (strcmp(lower, "t32_ddr3") == 0)
@@ -197,6 +226,35 @@ tdfu_variant_t tdfu_variant_from_string(const char *str) {
         return TDFU_VARIANT_X2100;
     if (strcmp(lower, "x2600") == 0)
         return TDFU_VARIANT_X2600;
+    /* Per-variant loaders (--cpu / web selection -> the exact loader). */
+    if (strcmp(lower, "t10n") == 0) return TDFU_VARIANT_T10N;
+    if (strcmp(lower, "t10l") == 0) return TDFU_VARIANT_T10L;
+    if (strcmp(lower, "t20n") == 0) return TDFU_VARIANT_T20N;
+    if (strcmp(lower, "t20x") == 0) return TDFU_VARIANT_T20X;
+    if (strcmp(lower, "t20l") == 0) return TDFU_VARIANT_T20L;
+    if (strcmp(lower, "t21n") == 0) return TDFU_VARIANT_T21N;
+    if (strcmp(lower, "t21hp") == 0) return TDFU_VARIANT_T21HP;
+    if (strcmp(lower, "t23n") == 0) return TDFU_VARIANT_T23N;
+    if (strcmp(lower, "t23dn") == 0) return TDFU_VARIANT_T23DN;
+    if (strcmp(lower, "t23nhp") == 0) return TDFU_VARIANT_T23NHP;
+    if (strcmp(lower, "t23nlp") == 0) return TDFU_VARIANT_T23NLP;
+    if (strcmp(lower, "t23x") == 0) return TDFU_VARIANT_T23X;
+    if (strcmp(lower, "t23zn") == 0) return TDFU_VARIANT_T23ZN;
+    if (strcmp(lower, "t30n") == 0) return TDFU_VARIANT_T30N;
+    if (strcmp(lower, "t30x") == 0) return TDFU_VARIANT_T30X;
+    if (strcmp(lower, "t30l") == 0) return TDFU_VARIANT_T30L;
+    if (strcmp(lower, "t30a") == 0) return TDFU_VARIANT_T30A;
+    if (strcmp(lower, "t31n") == 0) return TDFU_VARIANT_T31N;
+    if (strcmp(lower, "t31l") == 0) return TDFU_VARIANT_T31L;
+    if (strcmp(lower, "t32lq") == 0) return TDFU_VARIANT_T32LQ;
+    if (strcmp(lower, "t32nq") == 0) return TDFU_VARIANT_T32NQ;
+    if (strcmp(lower, "t32vn") == 0) return TDFU_VARIANT_T32VN;
+    if (strcmp(lower, "t32vnp") == 0) return TDFU_VARIANT_T32VNP;
+    if (strcmp(lower, "t32vx") == 0) return TDFU_VARIANT_T32VX;
+    if (strcmp(lower, "t32xq") == 0) return TDFU_VARIANT_T32XQ;
+    if (strcmp(lower, "t33") == 0) return TDFU_VARIANT_T33;
+    if (strcmp(lower, "t40n") == 0) return TDFU_VARIANT_T40N;
+    if (strcmp(lower, "a1n") == 0) return TDFU_VARIANT_A1N;
 
     // Default to T31X if unknown
     return TDFU_VARIANT_T31X;

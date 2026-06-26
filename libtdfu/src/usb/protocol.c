@@ -738,31 +738,49 @@ tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant) 
     /* Match CPU family */
     switch (cpu_id) {
     case 0x0005:
-        *variant = TDFU_VARIANT_T10;
+        *variant = TDFU_VARIANT_T10N; /* `soc -m`: 0x0000 -> t10 (base = t10n) */
         break;
     case 0x2000:
-        *variant = TDFU_VARIANT_T20;
+        if (subtype1 == 0x2222)
+            *variant = TDFU_VARIANT_T20X; /* 128 MB */
+        else if (subtype1 == 0x3333)
+            *variant = TDFU_VARIANT_T20L;
+        else
+            *variant = TDFU_VARIANT_T20N; /* 64 MB (incl 0x1111, ax, z) */
         break;
     case 0x0021:
-        *variant = TDFU_VARIANT_T21;
+        *variant = TDFU_VARIANT_T21N; /* `soc -m` n/l/z all -> t21n loader */
         break;
     case 0x0023:
         if (subtype1 == 0x3333)
-            *variant = TDFU_VARIANT_T23DL; /* DDR2, 32MB */
+            *variant = TDFU_VARIANT_T23DL; /* DDR2, 32 MB */
+        else if (subtype1 == 0x2222)
+            *variant = TDFU_VARIANT_T23X;
+        else if (subtype1 == 0x7777)
+            *variant = TDFU_VARIANT_T23ZN;
         else
-            *variant = TDFU_VARIANT_T23; /* DDR2, 64MB (T23N/T23X/T23ZN) */
+            *variant = TDFU_VARIANT_T23N; /* DDR2 64 MB base (incl 0x1111) */
         break;
     case 0x0030:
-        *variant = TDFU_VARIANT_T30;
+        if (subtype1 == 0x2222)
+            *variant = TDFU_VARIANT_T30X; /* 128 MB */
+        else if (subtype1 == 0x3333)
+            *variant = TDFU_VARIANT_T30L;
+        else if (subtype1 == 0x4444)
+            *variant = TDFU_VARIANT_T30A; /* 128 MB */
+        else
+            *variant = TDFU_VARIANT_T30N; /* 64 MB base (incl 0x1111, z) */
         break;
     case 0x0032:
         /* T32: the sub1 grade code selects the DDR type (mirrors the T41 LQ/NQ
          * split). DDR2: T32LQ (0x9999) -> "t32". DDR3: T32NQ (0xAAAA) + T32VN/VX/XQ
          * -> "t32_ddr3" (the conservative @350 t32vn profile underclocks them all). */
         if (subtype1 == 0x9999)
-            *variant = TDFU_VARIANT_T32; /* DDR2 (T32LQ) */
+            *variant = TDFU_VARIANT_T32LQ; /* DDR2 */
+        else if (subtype1 == 0xAAAA)
+            *variant = TDFU_VARIANT_T32NQ; /* DDR3 */
         else
-            *variant = TDFU_VARIANT_T32_DDR3; /* DDR3 (T32NQ et al.) */
+            *variant = TDFU_VARIANT_T32_DDR3; /* other DDR3 -> conservative t32vn */
         break;
     case 0x0031:
         /* T31 family — DDR type depends on sub-variant:
@@ -771,13 +789,19 @@ tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant) 
          *   DDR2: T31X (0x2222), T31N (0x1111), T31L (0x3333),
          *         T31ZX (0x6666), T31ZL (0x5555), T31ZC (0xDDDD), T31LC (0xEEEE) */
         if (subtype1 == 0x4444)
-            *variant = TDFU_VARIANT_T31A; /* DDR3 */
+            *variant = TDFU_VARIANT_T31A; /* DDR3 -> t31a */
         else if (subtype1 == 0xCCCC)
-            *variant = TDFU_VARIANT_T31AL; /* DDR2 */
+            *variant = TDFU_VARIANT_T31AL; /* DDR2 128M -> t31x */
         else if (subtype1 == 0x6666)
-            *variant = TDFU_VARIANT_T31ZX; /* DDR2, USB re-enumerate after SPL */
+            *variant = TDFU_VARIANT_T31ZX; /* DDR2 128M -> t31x */
+        else if (subtype1 == 0x1111)
+            *variant = TDFU_VARIANT_T31N; /* DDR2 64M -> t31n */
+        else if (subtype1 == 0x3333 || subtype1 == 0x5555)
+            *variant = TDFU_VARIANT_T31L; /* DDR2 64M lite (L/ZL) -> t31l */
+        else if (subtype1 == 0xDDDD || subtype1 == 0xEEEE)
+            *variant = TDFU_VARIANT_T31N; /* ZC/LC 64M -> t31n */
         else
-            *variant = TDFU_VARIANT_T31X; /* DDR2 (covers T31X/N/L/ZL/ZC/LC) */
+            *variant = TDFU_VARIANT_T31X; /* incl 0x2222 -> t31x */
         break;
     case 0x0040:
         /* T40/T41 family. subsoctype2 (EFUSE) is the ONLY reliable discriminator:

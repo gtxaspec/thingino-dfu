@@ -673,51 +673,44 @@ tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, 
 #define DFU_SPL_ENTRY  0x80001800u /* SPL entry (past the 0x800 signature) */
 #define DFU_UBOOT_ADDR 0x80100000u /* U-Boot load + entry address */
 
-/* Map a detected SoC variant to its firmware/dfu/<dir> name. The mainline DFU
- * images are keyed by SoC family + DDR type (t31, t31_ddr3, t40, t40_ddr3,
- * ...), which differs from the cloner firmware naming. */
+/* Map a detected SoC variant to its firmware/dfu/<dir> name. Loaders are now
+ * per-variant (t20n, t20x, t40xp, ...), so the dir == the variant string for
+ * every variant except the family/grade enum values that have no 1:1 loader -
+ * those fall back to the closest per-variant loader below. */
 static const char *dfu_variant_dir(tdfu_variant_t v) {
     switch (v) {
     case TDFU_VARIANT_T10:
-        return "t10";
+        return "t10n";
     case TDFU_VARIANT_T20:
-        return "t20";
+        return "t20n";
     case TDFU_VARIANT_T21:
-        return "t21";
+        return "t21n";
     case TDFU_VARIANT_T23:
-        return "t23";
-    case TDFU_VARIANT_T23DL:
-        return "t23_32mb"; /* 32 MB M14D2561616A; the t23 loader is 64 MB */
+        return "t23n";
     case TDFU_VARIANT_T30:
-        return "t30";
+        return "t30n";
     case TDFU_VARIANT_T31:
-    case TDFU_VARIANT_T31X:
+        return "t31n";
     case TDFU_VARIANT_T31ZX:
-    case TDFU_VARIANT_T31AL: /* T31AL is DDR2 */
-        return "t31";
-    case TDFU_VARIANT_T31A: /* T31A is DDR3 */
-        return "t31_ddr3";
+    case TDFU_VARIANT_T31AL:
+        return "t31x"; /* DDR2 128 MB */
     case TDFU_VARIANT_T32:
-        return "t32";
+        return "t32lq";
     case TDFU_VARIANT_T32_DDR3:
-        return "t32_ddr3";
+        return "t32vn"; /* conservative @350 DDR3 profile covers nq/vn/vx/xq */
     case TDFU_VARIANT_T40:
-        return "t40";
-    case TDFU_VARIANT_T40XP: /* T40XP is DDR3 */
-        return "t40_ddr3";
-    case TDFU_VARIANT_T41: /* generic + DDR2 grades */
+        return "t40n";
+    case TDFU_VARIANT_T41:
     case TDFU_VARIANT_T41L:
-    case TDFU_VARIANT_T41LQ:
-        return "t41"; /* DDR2 */
-    case TDFU_VARIANT_T41_DDR3: /* DDR3 grades */
+        return "t41lq"; /* DDR2 */
+    case TDFU_VARIANT_T41_DDR3:
     case TDFU_VARIANT_T41N:
-    case TDFU_VARIANT_T41NQ:
     case TDFU_VARIANT_T41A:
     case TDFU_VARIANT_T41ZL:
     case TDFU_VARIANT_T41ZX:
-        return "t41_ddr3"; /* DDR3 */
+        return "t41nq"; /* DDR3 */
     case TDFU_VARIANT_A1:
-        return "a1";
+        return "a1n";
     default:
         return tdfu_variant_to_string(v);
     }

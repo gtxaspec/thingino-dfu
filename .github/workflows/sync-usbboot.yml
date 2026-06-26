@@ -9,10 +9,11 @@
 # (`gh release download`); this repo is a plain token-authed `git clone` + push.
 # Only this job is granted contents:write.
 #
-# Mapping: the release packs <defconfig>-u-boot.bin plus a stage1 loader per SoC -
-# -u-boot-spl.bin for the big-SPL SoCs, -u-boot-tpl.bin for the capped TPL SoCs
-# (T10/T20/T21/T30) - where defconfig = isvp_<soc>_usbboot[_ddr3]. They map to
-# firmware/dfu/<soc>[_ddr3]/{spl|tpl,uboot}.bin.
+# Mapping: the release packs <defconfig>-u-boot.bin plus a stage1 loader per
+# variant - -u-boot-spl.bin for the big-SPL SoCs, -u-boot-tpl.bin for the TPL
+# SoCs (T10/T20/T21/T23/T30/T32) - where defconfig = isvp_<variant>_usbboot.
+# They map to firmware/dfu/<variant>/{spl|tpl,uboot}.bin; the daemon picks the
+# dir from the detected variant (libtdfu dfu_variant_dir).
 #
 # Change detection is by SOURCE COMMIT (firmware/dfu/.usbboot-source), not bytes:
 # the binaries embed their build timestamp, so a release recreated from the same
