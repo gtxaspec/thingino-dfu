@@ -125,7 +125,7 @@ add_library(tdfu_jni SHARED
 # - LIBUSB_COMPAT_DIR provides <libusb-1.0/libusb.h>
 # - LIBUSB_SRC_DIR provides "libusbi.h" (internal, needed by libusb itself)
 # - LIBTDFU_DIR/include provides <tdfu/...> and <tdfu.h>
-# - LIBTDFU_DIR/src/* provide internal headers (ddr, firmware, flash, platform)
+# - LIBTDFU_DIR/src provides internal headers (platform.h)
 target_include_directories(tdfu_jni PRIVATE
     "${LIBUSB_COMPAT_DIR}"
     "${LIBUSB_SRC_DIR}"

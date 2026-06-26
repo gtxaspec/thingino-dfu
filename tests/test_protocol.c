@@ -36,8 +36,8 @@ static void test_byte_order(void) {
     /* Test magic constant encoding */
     uint32_t magic_net = tdfu_htonl(TDFU_PROTO_MAGIC);
     uint8_t *bytes = (uint8_t *)&magic_net;
-    TEST(bytes[0] == 'C' && bytes[1] == 'L' && bytes[2] == 'N' && bytes[3] == 'R',
-        "TDFU_PROTO_MAGIC encodes to 'CLNR' in network order");
+    TEST(bytes[0] == 'T' && bytes[1] == 'D' && bytes[2] == 'F' && bytes[3] == 'U',
+        "TDFU_PROTO_MAGIC encodes to 'TDFU' in network order");
 
     /* Test zero and max values */
     TEST(tdfu_htonl(0) == 0, "htonl(0) == 0");
@@ -62,7 +62,7 @@ static void test_message_header(void) {
     };
 
     uint8_t *raw = (uint8_t *)&req;
-    TEST(raw[0] == 'C' && raw[1] == 'L' && raw[2] == 'N' && raw[3] == 'R',
+    TEST(raw[0] == 'T' && raw[1] == 'D' && raw[2] == 'F' && raw[3] == 'U',
         "request magic at offset 0");
     TEST(raw[4] == TDFU_PROTO_VERSION, "version at offset 4");
     TEST(raw[5] == CMD_DISCOVER, "command at offset 5");
@@ -110,7 +110,7 @@ static void test_command_values(void) {
 static void test_constants(void) {
     printf("\nProtocol constants:\n");
 
-    TEST(TDFU_PROTO_MAGIC == 0x434C4E52, "magic = 0x434C4E52 (CLNR)");
+    TEST(TDFU_PROTO_MAGIC == 0x54444655, "magic = 0x54444655 (TDFU)");
     TEST(TDFU_PROTO_VERSION == 1, "version = 1");
     TEST(TDFU_DEFAULT_PORT == 5050, "default port = 5050");
     TEST(TDFU_MAX_PAYLOAD == 64 * 1024 * 1024, "max payload = 64MB");

@@ -11,7 +11,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define TDFU_PROTO_MAGIC   0x434C4E52 /* "CLNR" */
+#define TDFU_PROTO_MAGIC   0x54444655 /* "TDFU" */
 #define TDFU_PROTO_VERSION 1
 #define TDFU_DEFAULT_PORT  5050
 

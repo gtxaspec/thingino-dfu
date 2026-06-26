@@ -15,7 +15,7 @@ import java.util.zip.CRC32
 class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
 
     companion object {
-        const val MAGIC = 0x434C4E52 // "CLNR"
+        const val MAGIC = 0x54444655 // "TDFU"
         const val VERSION: Byte = 1
         const val DEFAULT_PORT = 5050
         const val CONNECT_TIMEOUT_MS = 5000

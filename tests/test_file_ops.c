@@ -1,8 +1,8 @@
 /**
  * File Operations Tests
  *
- * Tests firmware file readability checks used to validate
- * firmware files before erase operations.
+ * Tests the firmware-file readability checks (load_file /
+ * firmware_file_check_readable) used before a flash operation.
  */
 
 #include <stdio.h>

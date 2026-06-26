@@ -5,7 +5,7 @@
  * plain ws:// connection - browsers can't open raw TCP, and Chrome's Local
  * Network Access permission exempts ws:// to a local/LAN host from mixed-content
  * blocking, so no TLS is needed. This only does the transport (RFC 6455
- * handshake + frame codec); the daemon's existing CLNR command protocol rides on
+ * handshake + frame codec); the daemon's existing TDFU command protocol rides on
  * top unchanged, treating the WebSocket as a byte stream.
  */
 

@@ -39,6 +39,8 @@ The SoC is auto-detected by reading hardware ID registers from the bootrom. Use 
 | `--firmware-dir <dir>` | Firmware root directory (default: `./firmware`) |
 | `--wait` | Wait for the device to appear before acting |
 | `--host <addr>` | Connect to a remote `dfu-remote` daemon |
+| `--port <n>` | Remote daemon port (default: 5050) |
+| `--token <secret>` | Auth token for the remote daemon |
 | `-d, --debug` | Debug output |
 
 ## Supported Platforms

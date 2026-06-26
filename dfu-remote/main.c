@@ -54,10 +54,6 @@ static uint32_t remote_crc32(const uint8_t *data, size_t len) {
     return ~crc;
 }
 
-#ifndef _WIN32
-#include <zlib.h>
-#endif
-
 static volatile int g_running = 1;
 static volatile int g_cancel = 0;
 bool g_debug_enabled = false;
@@ -75,8 +71,8 @@ static int g_log_client_fd = -1; /* client fd for log forwarding */
 static ws_conn_t *g_ws = NULL;
 
 /* When non-NULL, the current client is an HTTP POST (the fetch() transport: the
- * request body holds one CLNR command, the chunked response body streams the
- * CLNR reply). net_recv_all reads from the buffered body, net_send_all writes
+ * request body holds one TDFU command, the chunked response body streams the
+ * TDFU reply). net_recv_all reads from the buffered body, net_send_all writes
  * HTTP chunks. This is the path the browser flasher uses - Chrome's Local
  * Network Access exempts fetch({targetAddressSpace:'local'}) from mixed content,
  * which WebSocket can't do yet. */
@@ -712,7 +708,7 @@ static int dispatch_command(int fd, uint8_t command, const uint8_t *payload, uin
     }
 }
 
-/* Read one CLNR command (header + payload) via net_recv_all (works over raw TCP,
+/* Read one TDFU command (header + payload) via net_recv_all (works over raw TCP,
  * WebSocket, or the HTTP body buffer) and dispatch it. Returns the handler rc
  * (0 ok, <0 stop) or -2 when the stream is exhausted. */
 static int process_one_command(int fd, const char *firmware_dir) {
@@ -803,8 +799,8 @@ static void handle_client(int client_fd, const char *firmware_dir) {
     printf("Client disconnected\n");
 }
 
-/* Handle one HTTP POST request: the body carries a single CLNR command, and the
- * chunked response streams the CLNR reply (progress/log frames then OK/ERROR).
+/* Handle one HTTP POST request: the body carries a single TDFU command, and the
+ * chunked response streams the TDFU reply (progress/log frames then OK/ERROR).
  * This is the path the browser flasher uses via fetch({targetAddressSpace}). */
 static void handle_http(int client_fd, const char *firmware_dir) {
     printf("HTTP client\n");
@@ -1012,8 +1008,8 @@ int main(int argc, char **argv) {
         printf("Connection from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
         /* Peek the first byte to tell a browser WebSocket client (HTTP "GET" /
-         * "OPTIONS" preflight) from a raw-TCP CLI/Android client (CLNR magic,
-         * starts with 'C'). */
+         * "OPTIONS" preflight) from a raw-TCP CLI/Android client (TDFU magic,
+         * starts with 'T'). */
         char peek[8] = {0};
         int pn = (int)recv(client_fd, peek, sizeof(peek) - 1, MSG_PEEK);
         if (pn >= 1 && peek[0] == 'G') {

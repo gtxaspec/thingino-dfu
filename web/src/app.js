@@ -176,7 +176,6 @@ function setState(state) {
     //    device is discovered, Bootstrap/Read/Write are all live.
     var hasDevice = state === 'done';
     var dfu = backendMode === 'dfu';
-    var remote = backendMode === 'remote';
     // Bootstrap only acts on a bootrom (a108:c309); Read/Write only once the
     // device is the DFU gadget. DFU and remote both gate on inDfuMode.
     var canBoot = hasDevice && !busy && !inDfuMode;

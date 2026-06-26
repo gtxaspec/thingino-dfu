@@ -1,8 +1,8 @@
 /**
  * tdfu Core API Implementation
  *
- * Wraps the internal USB manager, bootstrap, and firmware functions
- * behind a clean public interface.
+ * Wraps the internal USB manager and DFU functions behind a clean
+ * public interface.
  */
 
 #include "tdfu/core.h"

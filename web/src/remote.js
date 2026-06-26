@@ -1,15 +1,15 @@
 /**
- * HTTP client for the dfu-remote daemon (CLNR binary protocol over fetch()).
+ * HTTP client for the dfu-remote daemon (TDFU binary protocol over fetch()).
  *
- * Each command is one POST whose body is the CLNR command frame; the daemon
- * replies with a chunked stream of CLNR response frames (progress/log then
+ * Each command is one POST whose body is the TDFU command frame; the daemon
+ * replies with a chunked stream of TDFU response frames (progress/log then
  * OK/ERROR), which we parse as a byte stream. fetch() is used (not WebSocket)
  * because Chrome's Local Network Access only exempts fetch({targetAddressSpace:
  * 'local'}) from mixed-content blocking - so the HTTPS flasher can reach a
  * local/LAN daemon over plain http:// with a one-time permission, no TLS.
  */
 
-const MAGIC = 0x434c4e52; // "CLNR"
+const MAGIC = 0x54444655; // "TDFU"
 const VERSION = 1;
 export const DEFAULT_PORT = 5050;
 
@@ -67,7 +67,7 @@ export class RemoteClient {
     disconnect() { this.connected = false; }
     isConnected() { return this.connected; }
 
-    /* POST a CLNR command and parse the streamed CLNR responses, surfacing
+    /* POST a TDFU command and parse the streamed TDFU responses, surfacing
      * PROGRESS/LOG, returning the OK payload (or null on ERROR). */
     async _command(command, payload) {
         const cmd = command;
