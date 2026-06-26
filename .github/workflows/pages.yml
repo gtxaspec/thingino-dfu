@@ -1,0 +1,97 @@
+# Build the WebUSB flasher (web/) and publish it to GitHub Pages.
+#
+# Same build as build.yml's `build-web` job: Emscripten compiles libusb -> WASM
+# (web/build via emcmake/emmake), then Vite bundles web/ into web/dist (which
+# also carries the firmware/ blobs the flasher USB-boots, via web/public/firmware).
+#
+# Base href: configure-pages reports the deploy path - '/thingino-dfu' for the
+# wltechblog.github.io/thingino-dfu/ project site, '/' if a custom domain
+# (e.g. webflash.thingino.com) is later set in Settings -> Pages. We normalize
+# it to a leading+trailing-slash PAGES_BASE for Vite. The app fetches firmware
+# with relative URLs, so it works under either base with no code change.
+#
+# `enablement: true` flips the Pages build source from "Deploy from a branch"
+# to "GitHub Actions" on the first run, so this workflow becomes the source.
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'firmware/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; let an in-progress production deploy finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # full history + tags so `git describe` resolves the version
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true  # switch the Pages build source to GitHub Actions
+
+      - name: Setup Emscripten
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git /tmp/emsdk
+          /tmp/emsdk/emsdk install latest
+          /tmp/emsdk/emsdk activate latest
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Build WASM + Vite
+        env:
+          # '/thingino-dfu' (project site) or '/' (custom domain); Vite wants a
+          # leading+trailing slash, so normalize either form.
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: |
+          source /tmp/emsdk/emsdk_env.sh
+          mkdir -p web/build && cd web/build
+          emcmake cmake .. -DCMAKE_BUILD_TYPE=Release
+          emmake make -j$(nproc)
+          cd ../../web
+          npm ci
+          base="${PAGES_BASE_PATH:-/}"
+          case "$base" in /*) ;; *) base="/$base" ;; esac
+          case "$base" in */) ;; *) base="$base/" ;; esac
+          echo "Vite base: $base"
+          PAGES_BASE="$base" npm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
