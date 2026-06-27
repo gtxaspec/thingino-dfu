@@ -50,8 +50,17 @@ uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/dfu-remote
 	rm -rf $(DESTDIR)$(LIBDIR)
 
+# 'clean' removes all generated build output:
+#   - native / cross C build dirs and the web bundle outputs
+#   - Android Gradle + NDK (.cxx) build caches. Deliberately keeps
+#     android/local.properties and android/thingino-release.jks (local SDK
+#     config and the release signing keystore - local state, not build junk).
+#   - the Emscripten SDK (gitignored; web/build.sh re-clones + installs it on
+#     the next 'make web'). ~1 GB, so this re-downloads on the following build.
 clean:
 	rm -rf $(BUILD_DIR) $(BUILD_ARM64) $(BUILD_WIN64) build-arm64 web/build web/dist web/public/wasm
+	rm -rf android/build android/app/build android/.gradle android/app/.cxx android/.kotlin
+	rm -rf emsdk
 
 help:
 	@echo "make          - build native (Linux/macOS)"
@@ -61,4 +70,4 @@ help:
 	@echo "make web      - build WebAssembly (requires emsdk)"
 	@echo "make install  - install to PREFIX (default: /usr/local)"
 	@echo "make uninstall - remove installed files"
-	@echo "make clean    - remove build directories"
+	@echo "make clean    - remove all build output (C, web, Android, emsdk)"
