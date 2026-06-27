@@ -9,6 +9,15 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>thingino · Web Flasher</title>
+    <script>
+        // Network-first page shell (via /sw.js) so a redeploy shows up on a normal
+        // reload — GitHub Pages caches the HTML for 10 min and ignores the meta above.
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('sw.js').catch(function () {});
+            });
+        }
+    </script>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <style>
