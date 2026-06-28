@@ -527,7 +527,8 @@ Java_com_thingino_dfu_TdfuBridge_nativeReadFirmware(
     LOGI("nativeReadFirmware: fd=%d variant=%s output=%s", fd, variant_cstr, output_cstr);
 
     /* DFU read: the device is already a running U-Boot DFU gadget - no bootstrap
-     * or flash protocol, just a DFU upload of the (single) alt setting. */
+     * or flash protocol, just a DFU upload. alt -1 -> the first alt setting,
+     * which is the boot flash (our loaders expose flash + sdcard). */
     char dmsg[256];
     jni_log("DFU read (U-Boot gadget)...\n");
     jni_progress(0, "read", "Opening DFU gadget...");
@@ -576,7 +577,8 @@ Java_com_thingino_dfu_TdfuBridge_nativeWriteFirmware(
     LOGI("nativeWriteFirmware: fd=%d variant=%s input=%s", fd, variant_cstr, input_cstr);
 
     /* DFU write: the device is a running U-Boot DFU gadget - just DFU-download
-     * the file to the (single) alt setting. */
+     * the file. alt -1 -> the first alt setting = the boot flash (our loaders
+     * expose flash + sdcard). */
     char dmsg[256];
     jni_log("DFU write (U-Boot gadget)...\n");
     jni_progress(0, "write", "Opening DFU gadget...");

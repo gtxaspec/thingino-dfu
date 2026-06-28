@@ -167,10 +167,16 @@ static int web_dfu_resolve_alt(int device_index, const char *alt_name) {
             LOG_ERROR("DFU alt \"%s\" not found\n", alt_name);
         return a;
     }
-    if (info.alt_count == 1)
-        return info.alts[0].alt;
-    LOG_ERROR("Device exposes %d alt settings - select one in Settings\n", info.alt_count);
-    return -1;
+    /* No explicit selection: default to the first alt-setting. The thingino DFU
+     * loaders build dfu_alt_info as "<flash>=flash raw 0x0 0x<size>&mmc 0=sdcard
+     * raw 0x0 0", so alt 0 is always the on-board boot flash and any later alt
+     * (the SD card) is secondary. This matches the CLI / dfu-remote default of
+     * alt 0 = flash - the web UI only ever writes the boot-flash image. (WebUSB
+     * can't read the iInterface strings, so the names log as "".) */
+    if (info.alt_count > 1)
+        LOG_INFO("Device exposes %d alt settings; using alt %d (boot flash)\n",
+                 info.alt_count, info.alts[0].alt);
+    return info.alts[0].alt;
 }
 
 tdfu_error_t tdfu_web_dfu_download(int device_index, const char *alt_name, const char *path) {
