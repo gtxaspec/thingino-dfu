@@ -141,12 +141,15 @@ Protocol uses TCP port 5050. Both the daemon and client work on all platforms (L
 
 ## Windows Setup
 
-1. If the Ingenic vendor USB driver is installed, remove it first via Device Manager.
-2. Connect the device in USB boot mode.
-3. Install the WinUSB driver using [Zadig](https://zadig.akeo.ie/): select the "Ingenic USB Boot Device" and install WinUSB.
-4. Run `thingino-dfu.exe -i 0 -b`.
+Windows has no built-in driver that `libusb` (and therefore `thingino-dfu`) can claim, so you install the **WinUSB** driver with [Zadig](https://zadig.akeo.ie/). The catch: over one flash cycle the device appears as **two different USB devices** — the bootrom *before* bootstrap and the U-Boot DFU gadget *after* — and **each one needs WinUSB installed separately**. Zadig only assigns a driver to the device that's plugged in right now, so you run it twice (once per machine; Windows then remembers each).
 
-**Important:** The Ingenic vendor driver (`libusb0.sys`) is not compatible and must be removed before installing WinUSB via Zadig.
+1. If the Ingenic vendor USB driver (`libusb0.sys`) is installed, remove it first via Device Manager — it is **not** compatible with this tool.
+2. **Bootrom driver.** Put the device in USB-boot mode, open Zadig (enable *Options → List All Devices* if it isn't shown), select **Ingenic USB Boot Device** (USB ID `A108:C309`) and install **WinUSB**.
+3. Bootstrap into DFU mode: `thingino-dfu.exe -b`. The device disconnects and re-enumerates as a *new* USB device.
+4. **DFU-gadget driver.** That new device — **USB download gadget** (USB ID `A108:4D44`) — is distinct from the bootrom, so Windows has no driver for it. Run Zadig again, select it, and install **WinUSB**.
+5. Read or write: `thingino-dfu.exe -w firmware.bin` (or `-r firmware.bin`).
+
+**Why twice:** WinUSB is bound per USB device (VID:PID), and the bootrom (`A108:C309`) and the DFU gadget (`A108:4D44`) are different devices — the driver for one does not cover the other. Skip the DFU-gadget step and bootstrap succeeds but the following read/write fails to open the device. It's a one-time setup: once both drivers are installed, a plain `thingino-dfu.exe -w firmware.bin` does bootstrap-and-write in one shot.
 
 ## Firmware
 
