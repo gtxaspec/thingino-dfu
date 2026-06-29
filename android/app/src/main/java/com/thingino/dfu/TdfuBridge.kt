@@ -37,6 +37,15 @@ object TdfuBridge {
     external fun nativeDetectSoc(fd: Int): String
 
     /**
+     * Map a tdfu_variant_t enum index (as sent by the dfu-remote daemon's
+     * discovery) to its canonical variant name, via the C tdfu_variant_to_string
+     * so the Kotlin side keeps no variant table of its own to drift from the enum.
+     * @return e.g. "t23n", "t41nq", or "unknown" for an unmapped index
+     */
+    @JvmStatic
+    external fun nativeVariantToString(variant: Int): String
+
+    /**
      * Bootstrap a device: load DDR config, SPL, and U-Boot into SDRAM.
      * @param fd USB device file descriptor
      * @param variant SoC variant name (e.g., "t31x")

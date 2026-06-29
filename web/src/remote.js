@@ -24,10 +24,10 @@ const RESP_ERROR = 0x01;
 const RESP_PROGRESS = 0x02;
 const RESP_LOG = 0x03;
 
-const VARIANT_NAMES = ['t10', 't20', 't21', 't23', 't30', 't31', 't31x', 't31zx',
-    't31a', 'a1', 't40', 't41', 't32', 'x1000', 'x1600', 'x1700', 'x2000',
-    'x2100', 'x2600', 't31al', 't40xp', 't23dl', 't41_ddr3',
-    't41n', 't41nq', 't41l', 't41lq', 't41a', 't41zl', 't41zx'];
+/* No hardcoded variant-name table here: the daemon sends the tdfu_variant_t enum
+ * index, and that index space grows as per-variant loaders are added, so the names
+ * are resolved through the C tdfu_variant_to_string (passed in as variantResolver)
+ * - the single source of truth - rather than a JS copy that silently drifts. */
 
 /* CRC-32 (IEEE, reflected) - matches the daemon's remote_crc32 / zlib crc32. */
 function crc32(bytes) {
@@ -50,11 +50,15 @@ function normalizeUrl(url) {
 }
 
 export class RemoteClient {
-    constructor(onLog, onProgress) {
+    constructor(onLog, onProgress, variantResolver) {
         this.url = '';
         this.token = '';
         this.onLog = onLog || function () {};
         this.onProgress = onProgress || function () {};
+        // Resolve a variant index -> name. The caller wires this to the C
+        // tdfu_variant_to_string (via the WASM) so there is no hardcoded variant
+        // table on the JS side to drift from the enum.
+        this.variantResolver = variantResolver || function () { return 'unknown'; };
         this.connected = false;
     }
 
@@ -165,7 +169,7 @@ export class RemoteClient {
                 bus: dv.getUint8(off), address: dv.getUint8(off + 1),
                 vendor: dv.getUint16(off + 2), product: dv.getUint16(off + 4),
                 stage, variant,
-                variantName: VARIANT_NAMES[variant] || 'unknown',
+                variantName: this.variantResolver(variant),
                 stageName: stage === 0 ? 'bootrom' : (stage === 2 ? 'dfu' : 'firmware'),
             });
         }

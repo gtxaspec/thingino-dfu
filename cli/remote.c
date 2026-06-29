@@ -304,8 +304,9 @@ int remote_list_devices(void) {
     for (int i = 0; i < count; i++) {
         /* wire stage: 0=bootrom, 1=firmware, 2=DFU gadget */
         const char *stage = entries[i].stage == 1 ? "firmware" : entries[i].stage == 2 ? "dfu" : "bootrom";
-        printf("  %3d | %3d | %4d | 0x%04X  | 0x%04X  | %-8s | %d\n", i, entries[i].bus, entries[i].address,
-               tdfu_ntohs(entries[i].vendor), tdfu_ntohs(entries[i].product), stage, entries[i].variant);
+        printf("  %3d | %3d | %4d | 0x%04X  | 0x%04X  | %-8s | %s\n", i, entries[i].bus, entries[i].address,
+               tdfu_ntohs(entries[i].vendor), tdfu_ntohs(entries[i].product), stage,
+               tdfu_variant_to_string((tdfu_variant_t)entries[i].variant));
     }
 
     free(payload);

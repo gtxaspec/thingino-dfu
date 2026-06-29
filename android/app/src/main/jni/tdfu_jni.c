@@ -368,6 +368,19 @@ Java_com_thingino_dfu_TdfuBridge_nativeDetectSoc(
 }
 
 /* ========================================================================== */
+/* JNI: variantToString - map a tdfu_variant_t index to its canonical name.   */
+/* No device/USB needed; resolves via the C enum (single source of truth) so  */
+/* the Kotlin side never hardcodes a variant table that drifts from the enum. */
+/* ========================================================================== */
+
+JNIEXPORT jstring JNICALL
+Java_com_thingino_dfu_TdfuBridge_nativeVariantToString(
+        JNIEnv *env, jclass clazz, jint variant) {
+    (void)clazz;
+    return (*env)->NewStringUTF(env, tdfu_variant_to_string((tdfu_variant_t)variant));
+}
+
+/* ========================================================================== */
 /* JNI: bootstrap                                                             */
 /* ========================================================================== */
 

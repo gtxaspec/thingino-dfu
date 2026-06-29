@@ -9,8 +9,10 @@ import java.nio.ByteOrder
 import java.util.zip.CRC32
 
 /**
- * TCP client for the dfu-remote daemon binary protocol.
- * Pure Kotlin — no JNI or USB dependency.
+ * TCP client for the dfu-remote daemon binary protocol. Pure-Kotlin transport;
+ * variant indices from discovery are resolved to names via
+ * TdfuBridge.nativeVariantToString (the C tdfu_variant_t enum, the single source
+ * of truth) rather than a local table that drifts as per-variant loaders grow.
  */
 class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
 
@@ -36,11 +38,9 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
         const val RESP_PROGRESS: Byte = 0x02
         const val RESP_LOG: Byte = 0x03
 
-        val VARIANT_NAMES = listOf(
-            "t10", "t20", "t21", "t23", "t30", "t31", "t31x", "t31zx",
-            "t31a", "a1", "t40", "t41", "t32", "x1000", "x1600", "x1700",
-            "x2000", "x2100", "x2600", "t31al", "t40xp", "t23dl"
-        )
+        // No hardcoded variant table: the daemon sends the tdfu_variant_t enum
+        // index, resolved via TdfuBridge.nativeVariantToString (the C enum is the
+        // single source of truth) so this can't drift as per-variant loaders grow.
     }
 
     data class DeviceEntry(
@@ -52,7 +52,7 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
         val variant: Int
     ) {
         val stageName: String get() = if (stage == 0) "bootrom" else "firmware"
-        val variantName: String get() = VARIANT_NAMES.getOrElse(variant) { "unknown" }
+        val variantName: String get() = TdfuBridge.nativeVariantToString(variant)
         override fun toString(): String =
             "${variantName.uppercase()} $stageName (Bus $bus Addr $address)"
     }

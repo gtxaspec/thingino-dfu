@@ -953,7 +953,16 @@ async function doRemoteConnect() {
             }
             log(m.replace(/\n+$/, ''), 'info');
         },
-        function(p, msg) { showProgress(p, msg || ''); }
+        function(p, msg) { showProgress(p, msg || ''); },
+        // Resolve a variant index to its name via the WASM (the C tdfu_variant_t
+        // enum is the single source of truth). Never a hardcoded JS table: that
+        // drifts as per-variant loaders are added and mis-bootstraps the SoC.
+        function(v) {
+            try {
+                var ptr = Module.ccall('tdfu_variant_to_string', 'number', ['number'], [v]);
+                return (ptr ? Module.UTF8ToString(ptr) : '') || 'unknown';
+            } catch (e) { return 'unknown'; }
+        }
     );
     try {
         await client.connect(remoteUrl, remoteToken || null);
