@@ -22,7 +22,11 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     <style>
         :root { --bs-font-sans-serif: "Montserrat", sans-serif; }
-        body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; background: #0d1117; }
+        /* `html body` (specificity 0,0,2) so this beats Bootstrap reboot's
+           `body { background-color: var(--bs-body-bg) }` (#212529), which the
+           bundled CSS loads AFTER this inline block. Overriding the page bg only
+           - NOT --bs-body-bg - keeps the cards at the Bootstrap gray (#212529). */
+        html body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; background: #0d1117; }
         .flasher-card { width: 100%; max-width: 720px; }
         .card-title { color: darkorange !important; }
         #log {
