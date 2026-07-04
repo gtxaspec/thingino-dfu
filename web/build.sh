@@ -13,10 +13,14 @@ if [ ! -f "$EMSDK_DIR/emsdk" ]; then
     git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$EMSDK_DIR"
 fi
 
-# Install/activate the latest upstream SDK if emcc is not yet available
+# Install/activate a PINNED upstream SDK if emcc is not yet available.
+# Pinned (not "latest") for reproducible glue: the post-link TextDecoder patch
+# in CMakeLists.txt depends on the shape of Emscripten's generated output. Keep
+# this in sync with EMSDK_VERSION in .github/workflows/build.yml.
+EMSDK_VERSION=6.0.1
 if [ ! -f "$EMSDK_DIR/upstream/emscripten/emcc" ]; then
-    "$EMSDK_DIR/emsdk" install latest
-    "$EMSDK_DIR/emsdk" activate latest
+    "$EMSDK_DIR/emsdk" install "$EMSDK_VERSION"
+    "$EMSDK_DIR/emsdk" activate "$EMSDK_VERSION"
 fi
 
 source "$EMSDK_DIR/emsdk_env.sh"
