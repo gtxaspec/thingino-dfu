@@ -14,9 +14,8 @@ if [ ! -f "$EMSDK_DIR/emsdk" ]; then
 fi
 
 # Install/activate a PINNED upstream SDK if emcc is not yet available.
-# Pinned (not "latest") for reproducible glue: the post-link TextDecoder patch
-# in CMakeLists.txt depends on the shape of Emscripten's generated output. Keep
-# this in sync with EMSDK_VERSION in .github/workflows/build.yml.
+# Pinned (not "latest") for reproducible builds. Keep this in sync with the
+# emsdk version in .github/workflows/build.yml.
 EMSDK_VERSION=6.0.1
 if [ ! -f "$EMSDK_DIR/upstream/emscripten/emcc" ]; then
     "$EMSDK_DIR/emsdk" install "$EMSDK_VERSION"

@@ -156,9 +156,8 @@ jobs:
           fetch-depth: 0  # full history + tags so `git describe` resolves the version
 
       - name: Setup Emscripten
-        # Pinned (not "latest") for reproducible glue: the post-link TextDecoder
-        # patch in web/CMakeLists.txt depends on the shape of Emscripten's
-        # generated output. Keep in sync with EMSDK_VERSION in web/build.sh.
+        # Pinned (not "latest") for reproducible builds. Keep in sync with the
+        # EMSDK_VERSION in web/build.sh.
         run: |
           git clone https://github.com/emscripten-core/emsdk.git /tmp/emsdk
           /tmp/emsdk/emsdk install 6.0.1
