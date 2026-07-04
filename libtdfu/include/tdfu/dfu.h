@@ -84,4 +84,10 @@ tdfu_error_t tdfu_dfu_write_device(usb_device_t *dev, int alt, const char *path)
 tdfu_error_t tdfu_dfu_bootstrap_device(usb_device_t *dev, const uint8_t *spl, size_t spl_len, const uint8_t *uboot,
                                        size_t uboot_len);
 
+/* firmware/dfu/<dir> name for a detected SoC variant (dir == variant string for
+ * per-variant loaders; family/grade enums fall back to the closest loader).
+ * The bootstrap uses this to locate the loader; the web build calls it too so
+ * the JS fetch path matches - single source of truth. */
+const char *tdfu_dfu_variant_dir(tdfu_variant_t v);
+
 #endif /* TDFU_DFU_H */

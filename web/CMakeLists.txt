@@ -69,6 +69,7 @@ set(EXPORTED_FUNCTIONS
     "_tdfu_web_set_debug"
     "_tdfu_variant_to_string"
     "_tdfu_variant_from_string"
+    "_tdfu_web_dfu_dir"
     "_tdfu_web_dfu_bootstrap"
     "_tdfu_web_dfu_bootstrap_files"
     "_tdfu_web_detect_soc"

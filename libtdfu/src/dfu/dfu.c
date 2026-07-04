@@ -676,8 +676,10 @@ tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, 
 /* Map a detected SoC variant to its firmware/dfu/<dir> name. Loaders are now
  * per-variant (t20n, t20x, t40xp, ...), so the dir == the variant string for
  * every variant except the family/grade enum values that have no 1:1 loader -
- * those fall back to the closest per-variant loader below. */
-static const char *dfu_variant_dir(tdfu_variant_t v) {
+ * those fall back to the closest per-variant loader below. Public so the web
+ * build can resolve the same dir the bootstrap will read from MEMFS (the JS
+ * side must fetch the loader there first) - one source of truth, no drift. */
+const char *tdfu_dfu_variant_dir(tdfu_variant_t v) {
     switch (v) {
     case TDFU_VARIANT_T10:
         return "t10n";
@@ -787,7 +789,7 @@ tdfu_error_t tdfu_dfu_bootstrap(usb_manager_t *manager, int device_index, const 
                 return r;
             }
         }
-        const char *name = dfu_variant_dir(variant);
+        const char *name = tdfu_dfu_variant_dir(variant);
         LOG_INFO("DFU bootstrap: SoC %s\n", name);
         /* Capped XBurst1 SoCs (T10/T20/T21/T30) USB-boot a TPL as stage1: it
          * brings up DDR in cache-as-RAM and returns to the bootrom, just like a

@@ -60,13 +60,12 @@ async function wasmCall(name, returnType, argTypes, args) {
     }
 }
 
-/* DFU firmware directory mapping (mirrors dfu_variant_dir in dfu.c) */
-var TDFU_DFU_DIR_MAP = {
-    't23dl': 't23', 't31x': 't31', 't31zx': 't31', 't31al': 't31',
-    't31a': 't31_ddr3', 't40xp': 't40_ddr3',
-};
+/* firmware/dfu/<dir> for a detected variant. Resolved by the C
+ * tdfu_dfu_variant_dir (via the tdfu_web_dfu_dir export), the same function the
+ * bootstrap uses to read the loader from MEMFS - so the fetch path can't drift
+ * from what the C side expects (it used to, as a hand-kept JS map). */
 function dfuVariantDir(name) {
-    return TDFU_DFU_DIR_MAP[name] || name;
+    return Module.ccall('tdfu_web_dfu_dir', 'string', ['string'], [name]) || name;
 }
 
 /* ------------------------------------------------------------------ */
