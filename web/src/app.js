@@ -860,7 +860,8 @@ function showHelpBalloon(el) {
         _helpBalloon.className = 'help-balloon';
         document.body.appendChild(_helpBalloon);
     }
-    _helpBalloon.textContent = el.getAttribute('data-help');
+    // data-help now holds an i18n key; resolve it (fall back to the raw value).
+    _helpBalloon.textContent = window.I18N ? I18N.t(el.getAttribute('data-help')) : el.getAttribute('data-help');
     _helpBalloon.classList.add('show');
     var r = el.getBoundingClientRect();
     var bw = _helpBalloon.offsetWidth, bh = _helpBalloon.offsetHeight;
@@ -1212,6 +1213,14 @@ Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSele
     if (isWindows()) {
         var winLink = document.getElementById('windows-help-link');
         if (winLink) winLink.classList.remove('d-none');
+    }
+    // i18n: translate the static UI, build the language picker (in Settings), and
+    // re-translate on a language switch. Help balloons resolve their key lazily in
+    // showHelpBalloon(), so they pick up the new language on the next hover.
+    if (window.I18N) {
+        I18N.apply();
+        I18N.selector('lang-slot');
+        window.addEventListener('i18nchange', function () { I18N.apply(); });
     }
     applyHelpMode(); // restore the saved help-hints preference (default off)
     initModule();

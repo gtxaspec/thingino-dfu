@@ -1,0 +1,99 @@
+// Portuguese (pt) strings for the web flasher - mirrors i18n-dfu-en.js keys.
+I18N.add("pt", {
+  // <head> / header
+  app_title: "thingino · Gravador Web",
+  header_full: " Gravador Web Thingino para Ingenic",
+  header_short: " Gravador Thingino",
+  title_mode: "Backend ativo",
+  title_help_toggle: "Alternar balões de ajuda",
+  title_settings: "Definições",
+  op_warning: "Não desligue o dispositivo nem saia da página durante esta operação",
+
+  // device / connect
+  title_connect: "Ligar a um dispositivo em modo USB bootrom",
+  btn_connect: "Ligar Dispositivo",
+  windows_help_link: "Windows? Precisa primeiro de um controlador",
+  label_device: "Dispositivo:",
+  label_soc: "SoC:",
+  label_stage: "Fase:",
+  label_vidpid: "VID:PID:",
+
+  // actions
+  title_bootstrap: "Arrancar um dispositivo para a linha de comandos de gravação do U-Boot",
+  btn_bootstrap: "Inicializar",
+  title_write: "Gravar um ficheiro de firmware .bin na memória flash do dispositivo",
+  btn_write: "Gravar Firmware",
+  title_read: "Ler todo o conteúdo da flash e transferir como ficheiro .bin",
+  btn_read: "Ler Firmware",
+  title_diag: "Só de leitura: eFuse, número de série, estado de secure-boot (bootrom)",
+  btn_diag: "Info",
+
+  // advanced: custom SPL / U-Boot
+  adv_toggle: "Avançado: SPL / U-Boot personalizados",
+  adv_desc: "Opcional. Forneça o seu próprio <strong>SPL</strong> e <strong>U-Boot</strong> compatíveis com DFU para utilizar no próximo <strong>Inicializar</strong> em vez das imagens incluídas. Ambos são necessários; a deteção do SoC é ignorada.",
+  btn_sel_spl: "Selecionar SPL",
+  btn_sel_uboot: "Selecionar U-Boot",
+  btn_clear: "Limpar",
+  custom_spl_bundled: "SPL: incluído",
+  custom_uboot_bundled: "U-Boot: incluído",
+  progress_init: "A inicializar...",
+
+  // log
+  log_title: "Registo",
+
+  // settings
+  settings_title: "Definições",
+  settings_lang: "Idioma",
+  settings_backend: "Backend de gravação",
+  setting_dfu_label: "<strong>DFU</strong> - modo DFU do U-Boot (predefinição)",
+  setting_remote_label: "Daemon remoto - dfu-remote (HTTP)",
+  ph_remote_token: "token de autenticação (opcional)",
+  remote_lna_note: "O Chrome irá pedir uma vez autorização para aceder à rede local.",
+  setting_help_label: 'Mostrar dicas de ajuda: passe o cursor sobre qualquer controlo para ver um balão (ou utilize o botão <i class="bi bi-question-lg"></i>)',
+  setting_debug_label: "Registo de depuração (diagnósticos detalhados)",
+  btn_cancel: "Cancelar",
+  btn_save: "Guardar",
+
+  // diagnostics (Info) dialog
+  diag_title: "Informações do Dispositivo",
+  title_close: "Fechar",
+  btn_copy: "Copiar",
+  btn_close: "Fechar",
+
+  // Windows driver help dialog
+  win_title: "Configuração do Controlador do Windows",
+  win_intro: "O Windows precisa de um controlador WinUSB instalado antes de o gravador Web poder comunicar com o dispositivo. Siga estes passos:",
+  win_step1: "Se o controlador USB do fabricante Ingenic estiver instalado, remova-o primeiro através do <strong>Gestor de Dispositivos</strong>.",
+  win_step2: "Ligue o dispositivo em modo de arranque USB.",
+  win_step3: 'Transfira e execute o <a href="https://zadig.akeo.ie/" target="_blank" class="text-warning">Zadig <i class="bi bi-box-arrow-up-right" style="font-size:0.7rem"></i></a>.',
+  win_step4: "No Zadig, selecione <strong>Ingenic USB Boot Device</strong> na lista pendente.",
+  win_step5: "Defina o controlador de destino como <strong>WinUSB</strong> e clique em <strong>Install</strong> (ou <strong>Replace Driver</strong>).",
+  win_step6: "Volte a esta página e clique em <strong>Ligar Dispositivo</strong>.",
+  win_important: "<strong>Importante:</strong> O controlador do fabricante Ingenic (<code>libusb0.sys</code>) não é compatível e tem de ser removido antes de instalar o WinUSB através do Zadig.",
+  btn_got_it: "Percebi",
+
+  // footer / misc
+  browser_warning: "O WebUSB requer <strong>HTTPS</strong> (ou localhost) e <strong>Chrome</strong> ou <strong>Edge</strong>.",
+
+  // help balloons (data-help keys)
+  help_status_badge: "Estado atual: Inativo, A ligar, A inicializar, A gravar, A ler, Pronto ou Erro. Mostra o que o gravador está a fazer neste momento.",
+  help_mode_indicator: "Backend ativo. DFU = gravar diretamente a partir deste navegador através de WebUSB. Remoto = controlar um daemon dfu-remote noutra máquina. Altere nas Definições.",
+  help_help_button: "Modo de ajuda. Enquanto estiver ativo, passe o cursor sobre qualquer controlo para ver um balão explicativo. Clique novamente para o desativar; permanece desativado até voltar a ativá-lo.",
+  help_settings_button: "Definições: escolha o backend de gravação (WebUSB no navegador ou um daemon dfu-remote remoto) e ative ou desative estas dicas de ajuda.",
+  help_connect: "Liga-se a um dispositivo em modo USB-boot (bootrom); é enumerado como a108:c309. Não aparece nada? Provavelmente o dispositivo ainda não está em bootrom (mantenha premido o pino de arranque ou faça um curto-circuito e depois ligue a alimentação).",
+  help_bootstrap: "Carrega o U-Boot no dispositivo em bootrom através de USB para que se torne um alvo de gravação DFU. Faça isto uma vez; depois Gravar/Ler ficam ativos.",
+  help_write: "Grava um firmware .bin na flash do dispositivo. O dispositivo já tem de estar inicializado em modo DFU.",
+  help_read: "Lê toda a flash do dispositivo para um ficheiro .bin que pode guardar. Útil para cópias de segurança antes de gravar.",
+  help_diag: "Consulta só de leitura da eFuse do chip: SoC, número de série e estado de secure-boot. Não altera nada. Continua visível (em cache) mesmo depois de inicializar.",
+  help_advanced: "Avançado. Forneça o seu próprio SPL e U-Boot compatíveis com DFU para arrancar por USB no próximo Inicializar em vez das imagens incluídas. Ambos são necessários e a deteção do SoC é ignorada.",
+  help_sel_spl: "Escolha o seu próprio SPL (stage1) .bin. Utilizado com um U-Boot personalizado no próximo Inicializar, em vez do carregador incluído.",
+  help_sel_uboot: "Escolha o seu próprio U-Boot .bin. Utilizado em conjunto com o SPL personalizado no próximo Inicializar.",
+  help_clear_custom: "Limpa a seleção de SPL/U-Boot personalizados e volta aos carregadores incluídos para o SoC detetado.",
+  help_log: "Registo de atividade: cada passo, contagem de bytes, SHA-256 e quaisquer erros aparecem aqui. Verifique-o primeiro se algo não se comportar como esperado.",
+  help_setting_dfu: "Modo DFU: grave diretamente a partir deste navegador através de WebUSB, sem software adicional, mas o dispositivo tem de estar ligado a ESTE computador (apenas Chrome/Edge).",
+  help_setting_remote: "Modo remoto: esta página comunica com um daemon dfu-remote em execução noutra máquina que tem o dispositivo ligado. Ideal para gravar a partir de um telemóvel ou de um equipamento na rede.",
+  help_remote_url: "O endereço do daemon dfu-remote, por exemplo http://192.168.1.50:5050. O Chrome irá pedir uma vez autorização para aceder à rede local.",
+  help_remote_token: "Token de autenticação opcional, apenas se o daemon tiver sido iniciado com um. Caso contrário, deixe em branco.",
+  help_setting_debug: "Diagnósticos detalhados no registo de atividade; substitui a antiga opção de URL ?debug. Deixe desativado a menos que esteja a resolver problemas.",
+  help_version: "Código-fonte, versões e documentação no GitHub do projeto thingino-dfu. Obtenha as compilações da CLI/daemon ou comunique um problema aqui.",
+});

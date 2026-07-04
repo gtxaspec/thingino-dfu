@@ -1,0 +1,99 @@
+// German (de) strings for the web flasher - mirrors i18n-dfu-en.js keys.
+I18N.add("de", {
+  // <head> / header
+  app_title: "thingino · Web Flasher",
+  header_full: " Thingino Web Flasher für Ingenic",
+  header_short: " Thingino Flasher",
+  title_mode: "Aktives Backend",
+  title_help_toggle: "Hilfe-Sprechblasen umschalten",
+  title_settings: "Einstellungen",
+  op_warning: "Das Gerät während dieses Vorgangs nicht trennen und die Seite nicht verlassen",
+
+  // device / connect
+  title_connect: "Mit einem Gerät im USB-bootrom-Modus verbinden",
+  btn_connect: "Gerät verbinden",
+  windows_help_link: "Windows? Sie brauchen zuerst einen Treiber",
+  label_device: "Gerät:",
+  label_soc: "SoC:",
+  label_stage: "Stufe:",
+  label_vidpid: "VID:PID:",
+
+  // actions
+  title_bootstrap: "Ein Gerät zur U-Boot-Burner-Eingabeaufforderung booten",
+  btn_bootstrap: "Initialisieren",
+  title_write: "Eine Firmware-.bin-Datei in den Flash-Speicher des Geräts schreiben",
+  btn_write: "Firmware schreiben",
+  title_read: "Den gesamten Flash-Inhalt auslesen und als .bin-Datei herunterladen",
+  btn_read: "Firmware auslesen",
+  title_diag: "Nur lesen: eFuse, Seriennummer, Secure-Boot-Status (bootrom)",
+  btn_diag: "Info",
+
+  // advanced: custom SPL / U-Boot
+  adv_toggle: "Erweitert: eigenes SPL / U-Boot",
+  adv_desc: "Optional. Stellen Sie Ihr eigenes DFU-fähiges <strong>SPL</strong> und <strong>U-Boot</strong> bereit, um sie beim nächsten <strong>Initialisieren</strong> anstelle der mitgelieferten Images zu verwenden. Beide sind erforderlich; die SoC-Erkennung wird übersprungen.",
+  btn_sel_spl: "SPL auswählen",
+  btn_sel_uboot: "U-Boot auswählen",
+  btn_clear: "Zurücksetzen",
+  custom_spl_bundled: "SPL: mitgeliefert",
+  custom_uboot_bundled: "U-Boot: mitgeliefert",
+  progress_init: "Wird initialisiert...",
+
+  // log
+  log_title: "Protokoll",
+
+  // settings
+  settings_title: "Einstellungen",
+  settings_lang: "Sprache",
+  settings_backend: "Flash-Backend",
+  setting_dfu_label: "<strong>DFU</strong> - U-Boot-DFU-Modus (Standard)",
+  setting_remote_label: "Remote-Daemon - dfu-remote (HTTP)",
+  ph_remote_token: "Auth-Token (optional)",
+  remote_lna_note: "Chrome fragt einmalig nach der Erlaubnis für den Zugriff auf das lokale Netzwerk.",
+  setting_help_label: 'Hilfehinweise anzeigen: für eine Sprechblase mit dem Mauszeiger über ein beliebiges Bedienelement fahren (oder die Schaltfläche <i class="bi bi-question-lg"></i> verwenden)',
+  setting_debug_label: "Debug-Protokollierung (ausführliche Diagnose)",
+  btn_cancel: "Abbrechen",
+  btn_save: "Speichern",
+
+  // diagnostics (Info) dialog
+  diag_title: "Geräte-Info",
+  title_close: "Schließen",
+  btn_copy: "Kopieren",
+  btn_close: "Schließen",
+
+  // Windows driver help dialog
+  win_title: "Windows-Treiber einrichten",
+  win_intro: "Windows benötigt einen installierten WinUSB-Treiber, bevor der Web-Flasher mit dem Gerät kommunizieren kann. Führen Sie diese Schritte aus:",
+  win_step1: "Falls der herstellereigene Ingenic-USB-Treiber installiert ist, entfernen Sie ihn zuerst über den <strong>Geräte-Manager</strong>.",
+  win_step2: "Schließen Sie das Gerät im USB-Boot-Modus an.",
+  win_step3: 'Laden Sie <a href="https://zadig.akeo.ie/" target="_blank" class="text-warning">Zadig <i class="bi bi-box-arrow-up-right" style="font-size:0.7rem"></i></a> herunter und führen Sie es aus.',
+  win_step4: "Wählen Sie in Zadig <strong>Ingenic USB Boot Device</strong> aus der Dropdown-Liste aus.",
+  win_step5: "Setzen Sie den Zieltreiber auf <strong>WinUSB</strong> und klicken Sie auf <strong>Install</strong> (oder <strong>Replace Driver</strong>).",
+  win_step6: "Kehren Sie zu dieser Seite zurück und klicken Sie auf <strong>Gerät verbinden</strong>.",
+  win_important: "<strong>Wichtig:</strong> Der herstellereigene Ingenic-Treiber (<code>libusb0.sys</code>) ist nicht kompatibel und muss entfernt werden, bevor WinUSB über Zadig installiert wird.",
+  btn_got_it: "Verstanden",
+
+  // footer / misc
+  browser_warning: "WebUSB erfordert <strong>HTTPS</strong> (oder localhost) und <strong>Chrome</strong> oder <strong>Edge</strong>.",
+
+  // help balloons (data-help keys)
+  help_status_badge: "Aktueller Status: Leerlauf, Verbinden, Initialisieren, Schreiben, Lesen, Bereit oder Fehler. Er gibt an, was der Flasher gerade tut.",
+  help_mode_indicator: "Aktives Backend. DFU = direkt aus diesem Browser über WebUSB flashen. Remote = einen dfu-remote-Daemon auf einem anderen Rechner steuern. Umschaltbar in den Einstellungen.",
+  help_help_button: "Hilfemodus. Wenn er aktiv ist, fahren Sie mit dem Mauszeiger über ein beliebiges Bedienelement, um eine erklärende Sprechblase zu sehen. Erneut klicken, um ihn auszuschalten; er bleibt aus, bis Sie ihn wieder einschalten.",
+  help_settings_button: "Einstellungen: Wählen Sie das Flash-Backend (WebUSB im Browser oder einen entfernten dfu-remote-Daemon) und schalten Sie diese Hilfehinweise ein oder aus.",
+  help_connect: "Verbindet sich mit einem Gerät im USB-Boot-Modus (bootrom); es wird als a108:c309 erkannt. Nichts zu sehen? Dann ist das Gerät wahrscheinlich noch nicht im bootrom (Boot-Pin gedrückt halten / kurzschließen, dann einschalten).",
+  help_bootstrap: "Lädt U-Boot über USB auf das bootrom-Gerät, sodass es zu einem DFU-Flash-Ziel wird. Einmal ausführen; danach werden Schreiben und Auslesen verfügbar.",
+  help_write: "Schreibt eine Firmware-.bin in den Flash-Speicher des Geräts. Das Gerät muss bereits initialisiert und im DFU-Modus sein.",
+  help_read: "Liest den gesamten Flash-Speicher des Geräts in eine .bin-Datei zurück, die Sie speichern können. Praktisch für Backups, bevor Sie schreiben.",
+  help_diag: "Schreibgeschütztes Auslesen der eFuse des Chips: SoC, Seriennummer und Secure-Boot-Status. Ändert nichts. Bleibt (zwischengespeichert) sichtbar, auch nach dem Initialisieren.",
+  help_advanced: "Erweitert. Stellen Sie Ihr eigenes DFU-fähiges SPL und U-Boot bereit, um sie beim nächsten Initialisieren anstelle der mitgelieferten Images per USB zu booten. Beide sind erforderlich, und die SoC-Erkennung wird übersprungen.",
+  help_sel_spl: "Wählen Sie Ihre eigene SPL-.bin-Datei (stage1). Wird zusammen mit einem eigenen U-Boot beim nächsten Initialisieren anstelle des mitgelieferten Loaders verwendet.",
+  help_sel_uboot: "Wählen Sie Ihre eigene U-Boot-.bin-Datei. Wird zusammen mit dem eigenen SPL beim nächsten Initialisieren verwendet.",
+  help_clear_custom: "Setzt die eigene SPL-/U-Boot-Auswahl zurück und verwendet wieder die mitgelieferten Loader für den erkannten SoC.",
+  help_log: "Aktivitätsprotokoll: Jeder Schritt, die Byte-Anzahl, SHA-256 und alle Fehler landen hier. Schauen Sie zuerst hier nach, wenn sich etwas nicht wie erwartet verhält.",
+  help_setting_dfu: "DFU-Modus: direkt aus diesem Browser über WebUSB flashen, ohne zusätzliche Software, aber das Gerät muss an DIESEM Computer angeschlossen sein (nur Chrome/Edge).",
+  help_setting_remote: "Remote-Modus: Diese Seite kommuniziert mit einem dfu-remote-Daemon, der auf einem anderen Rechner läuft, an dem das Gerät angeschlossen ist. Praktisch zum Flashen von einem Smartphone oder einem anderen Rechner im Netzwerk aus.",
+  help_remote_url: "Die Adresse des dfu-remote-Daemons, z. B. http://192.168.1.50:5050. Chrome fragt einmalig nach der Erlaubnis für den Zugriff auf das lokale Netzwerk.",
+  help_remote_token: "Optionales Auth-Token, nur falls der Daemon mit einem gestartet wurde. Andernfalls leer lassen.",
+  help_setting_debug: "Ausführliche Diagnose im Aktivitätsprotokoll, ersetzt das alte URL-Flag ?debug. Lassen Sie es ausgeschaltet, sofern Sie keine Fehler suchen.",
+  help_version: "Quellcode, Releases und Dokumentation zum thingino-dfu-Projekt auf GitHub. Hier erhalten Sie die CLI-/Daemon-Builds oder können ein Issue melden.",
+});

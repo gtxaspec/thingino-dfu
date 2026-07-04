@@ -1,0 +1,99 @@
+// Simplified Chinese (zh-CN) strings for the web flasher - mirrors i18n-dfu-en.js keys.
+I18N.add("zh-CN", {
+  // <head> / header
+  app_title: "thingino · 网页烧录工具",
+  header_full: " 适用于 Ingenic 的 Thingino 网页烧录工具",
+  header_short: " Thingino 烧录工具",
+  title_mode: "当前后端",
+  title_help_toggle: "切换帮助气泡",
+  title_settings: "设置",
+  op_warning: "操作进行期间，请勿断开设备连接或离开此页面",
+
+  // device / connect
+  title_connect: "连接处于 USB bootrom 模式的设备",
+  btn_connect: "连接设备",
+  windows_help_link: "使用 Windows？需要先安装驱动",
+  label_device: "设备：",
+  label_soc: "SoC：",
+  label_stage: "阶段：",
+  label_vidpid: "VID:PID：",
+
+  // actions
+  title_bootstrap: "将设备引导至 U-Boot 烧录提示符",
+  btn_bootstrap: "引导启动",
+  title_write: "将固件 .bin 文件写入设备的闪存",
+  btn_write: "写入固件",
+  title_read: "读取完整的闪存内容并下载为 .bin 文件",
+  btn_read: "读取固件",
+  title_diag: "只读：eFuse、序列号、安全启动状态（bootrom）",
+  btn_diag: "信息",
+
+  // advanced: custom SPL / U-Boot
+  adv_toggle: "高级：自定义 SPL / U-Boot",
+  adv_desc: "可选。提供你自己的、支持 DFU 的 <strong>SPL</strong> 和 <strong>U-Boot</strong>，在下次<strong>引导启动</strong>时使用，以替代内置镜像。两者均为必填；将跳过 SoC 检测。",
+  btn_sel_spl: "选择 SPL",
+  btn_sel_uboot: "选择 U-Boot",
+  btn_clear: "清除",
+  custom_spl_bundled: "SPL：内置",
+  custom_uboot_bundled: "U-Boot：内置",
+  progress_init: "正在初始化...",
+
+  // log
+  log_title: "日志",
+
+  // settings
+  settings_title: "设置",
+  settings_lang: "语言",
+  settings_backend: "烧录后端",
+  setting_dfu_label: "<strong>DFU</strong> - U-Boot DFU 模式（默认）",
+  setting_remote_label: "远程守护进程 - dfu-remote（HTTP）",
+  ph_remote_token: "认证令牌（可选）",
+  remote_lna_note: "Chrome 会弹出一次提示，以允许访问本地网络。",
+  setting_help_label: '显示帮助提示：将鼠标悬停在任意控件上即可显示气泡（或使用 <i class="bi bi-question-lg"></i> 按钮）',
+  setting_debug_label: "调试日志（详细诊断信息）",
+  btn_cancel: "取消",
+  btn_save: "保存",
+
+  // diagnostics (Info) dialog
+  diag_title: "设备信息",
+  title_close: "关闭",
+  btn_copy: "复制",
+  btn_close: "关闭",
+
+  // Windows driver help dialog
+  win_title: "Windows 驱动安装",
+  win_intro: "在网页烧录工具能与设备通信之前，Windows 需要先安装 WinUSB 驱动。请按以下步骤操作：",
+  win_step1: "如果已安装 Ingenic 厂商的 USB 驱动，请先通过<strong>设备管理器</strong>将其卸载。",
+  win_step2: "在 USB 启动模式下连接设备。",
+  win_step3: '下载并运行 <a href="https://zadig.akeo.ie/" target="_blank" class="text-warning">Zadig <i class="bi bi-box-arrow-up-right" style="font-size:0.7rem"></i></a>。',
+  win_step4: "在 Zadig 中，从下拉列表里选择 <strong>Ingenic USB Boot Device</strong>。",
+  win_step5: "将目标驱动设置为 <strong>WinUSB</strong>，然后点击<strong>安装</strong>（或<strong>替换驱动</strong>）。",
+  win_step6: "返回本页面，然后点击<strong>连接设备</strong>。",
+  win_important: "<strong>重要：</strong>Ingenic 厂商驱动（<code>libusb0.sys</code>）不兼容，必须先将其卸载，然后再通过 Zadig 安装 WinUSB。",
+  btn_got_it: "知道了",
+
+  // footer / misc
+  browser_warning: "WebUSB 需要 <strong>HTTPS</strong>（或 localhost），以及 <strong>Chrome</strong> 或 <strong>Edge</strong>。",
+
+  // help balloons (data-help keys)
+  help_status_badge: "当前状态：空闲、正在连接、正在引导、正在写入、正在读取、就绪或错误。它会实时跟踪烧录工具当前正在执行的操作。",
+  help_mode_indicator: "当前后端。DFU = 直接通过 WebUSB 从本浏览器烧录。远程 = 驱动另一台机器上的 dfu-remote 守护进程。可在“设置”中切换。",
+  help_help_button: "帮助模式。开启后，将鼠标悬停在任意控件上即可显示解释气泡。再次点击即可关闭；在你再次开启之前，它会一直保持关闭。",
+  help_settings_button: "设置：选择烧录后端（浏览器内的 WebUSB 或远程的 dfu-remote 守护进程），并切换这些帮助提示。",
+  help_connect: "连接处于 USB 启动（bootrom）模式的设备，它会枚举为 a108:c309。这里没有任何设备？设备可能还未进入 bootrom（按住其启动引脚 / 短接，然后再上电）。",
+  help_bootstrap: "通过 USB 将 U-Boot 加载到 bootrom 设备上，使其成为 DFU 烧录目标。只需执行一次；之后“写入固件”和“读取固件”按钮就会变为可用。",
+  help_write: "将固件 .bin 写入设备的闪存。设备必须已经引导进入 DFU 模式。",
+  help_read: "将设备的完整闪存读回为可保存的 .bin 文件。在写入之前做备份很方便。",
+  help_diag: "以只读方式读取芯片的 eFuse 信息：SoC、序列号和安全启动状态。不会做任何更改。即使在引导之后仍可查看（已缓存）。",
+  help_advanced: "高级功能。提供你自己的、支持 DFU 的 SPL 和 U-Boot，在下次引导启动时用于 USB 启动，以替代内置镜像。两者均为必填，并且会跳过 SoC 检测。",
+  help_sel_spl: "选择你自己的 SPL（stage1）.bin 文件。在下次引导启动时与自定义 U-Boot 一起使用，以替代内置加载器。",
+  help_sel_uboot: "选择你自己的 U-Boot .bin 文件。在下次引导启动时与自定义 SPL 一起使用。",
+  help_clear_custom: "清除自定义 SPL/U-Boot 选择，恢复使用所检测到的 SoC 对应的内置加载器。",
+  help_log: "活动日志：每一个步骤、字节数、SHA-256 以及任何错误都会显示在这里。如果出现异常情况，请先查看此处。",
+  help_setting_dfu: "DFU 模式：直接通过 WebUSB 从本浏览器烧录，无需额外软件，但设备必须连接到这台电脑（仅支持 Chrome/Edge）。",
+  help_setting_remote: "远程模式：本页面与运行在另一台已连接设备的机器上的 dfu-remote 守护进程通信。适合从手机或网络中的另一台主机进行烧录。",
+  help_remote_url: "dfu-remote 守护进程的地址，例如 http://192.168.1.50:5050。Chrome 会询问一次以允许访问本地网络。",
+  help_remote_token: "可选的认证令牌，仅当守护进程启动时设置了令牌才需要填写。否则请留空。",
+  help_setting_debug: "在活动日志中输出详细诊断信息，取代旧的 ?debug URL 参数。除非在排查问题，否则请保持关闭。",
+  help_version: "thingino-dfu 项目的源代码、发布版本和文档都在 GitHub 上。可在此获取 CLI/守护进程的构建版本或提交问题。",
+});
