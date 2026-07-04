@@ -14,6 +14,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.Spinner
@@ -41,6 +42,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         private const val PREFS_NAME = "tdfu_prefs"
         private const val PREF_HOST = "remote_host"
         private const val PREF_PORT = "remote_port"
+        private const val PREF_REMOTE = "remote_mode"
         private const val PREF_DEBUG = "debug_logging"
     }
 
@@ -60,11 +62,6 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     private lateinit var deviceSpinner: Spinner
 
     // Mode selection UI
-    private lateinit var modeRadioGroup: RadioGroup
-    private lateinit var remoteInputRow: LinearLayout
-    private lateinit var hostInput: EditText
-    private lateinit var portInput: EditText
-    private lateinit var connectButton: Button
 
     // Custom bootloader UI (custom SPL/U-Boot; shared by local + remote modes)
     private lateinit var customBlobInfo: TextView
@@ -158,14 +155,10 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
-        // Mode selection UI
-        modeRadioGroup = findViewById(R.id.modeRadioGroup)
-        remoteInputRow = findViewById(R.id.remoteInputRow)
-        hostInput = findViewById(R.id.hostInput)
-        portInput = findViewById(R.id.portInput)
-        connectButton = findViewById(R.id.connectButton)
+        // Backend mode (Local USB vs remote) is chosen in Settings; restore it.
+        isRemoteMode = prefs.getBoolean(PREF_REMOTE, false)
 
-        // Custom bootloader UI (shared by local + remote modes)
+        // Custom bootloader UI (shared by local + remote modes), collapsed by default.
         customBlobInfo = findViewById(R.id.customBlobInfo)
         selectSplButton = findViewById(R.id.selectSplButton)
         selectUbootButton = findViewById(R.id.selectUbootButton)
@@ -173,10 +166,15 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         bootstrapButton = findViewById(R.id.bootstrapButton)
         updateCustomBlobInfo()
 
-        // Restore saved host/port
-        hostInput.setText(prefs.getString(PREF_HOST, ""))
-        val savedPort = prefs.getInt(PREF_PORT, 0)
-        if (savedPort > 0) portInput.setText(savedPort.toString())
+        // Tappable "Advanced" header expands/collapses the custom SPL/U-Boot body.
+        val customHeader = findViewById<LinearLayout>(R.id.customHeader)
+        val customBody = findViewById<LinearLayout>(R.id.customBody)
+        val customChevron = findViewById<TextView>(R.id.customChevron)
+        customHeader.setOnClickListener {
+            val show = customBody.visibility != View.VISIBLE
+            customBody.visibility = if (show) View.VISIBLE else View.GONE
+            customChevron.text = if (show) "▾" else "▸"
+        }
 
         // Apply the saved debug level to native (the Settings dialog persists it).
         TdfuBridge.nativeSetDebug(prefs.getBoolean(PREF_DEBUG, false))
@@ -195,36 +193,8 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         clearCustomButton.setOnClickListener { clearCustomBlobs() }
         bootstrapButton.setOnClickListener { startRemoteBootstrap() }
 
-        // Mode toggle
-        modeRadioGroup.setOnCheckedChangeListener { _, checkedId ->
-            isRemoteMode = checkedId == R.id.radioRemote
-            remoteInputRow.visibility = if (isRemoteMode) View.VISIBLE else View.GONE
-            // The custom SPL/U-Boot card is shared by both modes; only the
-            // explicit "Bootstrap Device" button is remote-only (local USB
-            // bootstraps on Read/Write).
-            bootstrapButton.visibility = if (isRemoteMode) View.VISIBLE else View.GONE
-            deviceSpinner.visibility = View.GONE
-            setButtonsEnabled(false)
-            detectedSoc = ""
-            socText.text = ""
-
-            if (isRemoteMode) {
-                updateStatus("Enter daemon host and connect")
-                usbHelper.closeDevice()
-            } else {
-                disconnectRemote()
-                updateStatus("No device connected")
-                scanForDevices()
-            }
-        }
-
-        connectButton.setOnClickListener {
-            if (remoteClient?.isConnected() == true) {
-                disconnectRemote()
-            } else {
-                connectRemote()
-            }
-        }
+        // Backend mode + host/port now live in the Settings dialog. The mode is
+        // applied at the end of onCreate and whenever Settings is saved.
 
         // Disable buttons until device is connected
         setButtonsEnabled(false)
@@ -241,6 +211,9 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
         // Check if launched from USB device attach intent
         handleUsbIntent(intent)
+
+        // Apply the saved backend now that USB + native are initialized.
+        if (isRemoteMode) applyMode(true)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -305,22 +278,20 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     // ======================================================================
 
     private fun connectRemote() {
-        val host = hostInput.text.toString().trim()
+        val host = (prefs.getString(PREF_HOST, "") ?: "").trim()
         if (host.isEmpty()) {
-            appendLog("ERROR: Enter a hostname or IP address\n")
+            appendLog("ERROR: Set the daemon host in Settings\n")
+            updateStatus("Set the daemon host in Settings")
             return
         }
-        val port = portInput.text.toString().toIntOrNull() ?: RemoteClient.DEFAULT_PORT
-
-        // Save for next time
-        prefs.edit().putString(PREF_HOST, host).putInt(PREF_PORT, port).apply()
+        val port = prefs.getInt(PREF_PORT, RemoteClient.DEFAULT_PORT)
+            .let { if (it > 0) it else RemoteClient.DEFAULT_PORT }
 
         // Explicit user connect = genuinely new connection: drop any cached diag.
         // (The automatic post-bootstrap re-discover does NOT call this, so the
         // cached readout survives a device leaving bootrom — which is the point.)
         lastDiagText = null
 
-        connectButton.isEnabled = false
         appendLog("Connecting to $host:$port...\n")
 
         lifecycleScope.launch(Dispatchers.IO) {
@@ -331,7 +302,6 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                 withContext(Dispatchers.Main) {
                     appendLog("Connection failed\n")
                     updateStatus("Connection failed")
-                    connectButton.isEnabled = true
                 }
                 return@launch
             }
@@ -346,8 +316,6 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                 remoteClient = client
                 remoteDevices = devices
                 selectedDeviceIndex = 0
-                connectButton.text = getString(R.string.btn_disconnect)
-                connectButton.isEnabled = true
 
                 if (devices.isEmpty()) {
                     updateStatus("Connected — no devices found")
@@ -387,11 +355,33 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         remoteDevices = emptyList()
         setButtonsEnabled(false)
         deviceSpinner.visibility = View.GONE
-        connectButton.text = getString(R.string.btn_connect)
-        connectButton.isEnabled = true
         if (isRemoteMode) {
             updateStatus("Disconnected")
             socText.text = ""
+        }
+    }
+
+    /** Apply the chosen backend: local -> USB scan; remote -> connect to the saved
+     *  daemon. Called on startup and when Settings is saved with a changed backend. */
+    private fun applyMode(remote: Boolean) {
+        isRemoteMode = remote
+        bootstrapButton.visibility = if (remote) View.VISIBLE else View.GONE
+        deviceSpinner.visibility = View.GONE
+        setButtonsEnabled(false)
+        detectedSoc = ""
+        socText.text = ""
+        if (remote) {
+            usbHelper.closeDevice()
+            val host = (prefs.getString(PREF_HOST, "") ?: "").trim()
+            if (host.isEmpty()) {
+                updateStatus("Set the daemon host in Settings")
+            } else {
+                connectRemote()
+            }
+        } else {
+            disconnectRemote()
+            updateStatus("No device connected")
+            scanForDevices()
         }
     }
 
@@ -1204,9 +1194,27 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     private fun showSettingsDialog() {
         val view = layoutInflater.inflate(R.layout.dialog_settings, null)
         val debugSwitch = view.findViewById<MaterialSwitch>(R.id.dlgDebugSwitch)
+        val modeGroup = view.findViewById<RadioGroup>(R.id.dlgModeRadioGroup)
+        val radioLocal = view.findViewById<RadioButton>(R.id.dlgRadioLocal)
+        val radioRemote = view.findViewById<RadioButton>(R.id.dlgRadioRemote)
+        val remoteFields = view.findViewById<LinearLayout>(R.id.dlgRemoteFields)
+        val hostField = view.findViewById<EditText>(R.id.dlgHostInput)
+        val portField = view.findViewById<EditText>(R.id.dlgPortInput)
 
         val debugWas = prefs.getBoolean(PREF_DEBUG, false)
         debugSwitch.isChecked = debugWas
+
+        // Prefill the backend from the current state / saved prefs.
+        val modeWas = isRemoteMode
+        val hostWas = prefs.getString(PREF_HOST, "") ?: ""
+        val portWas = prefs.getInt(PREF_PORT, 0)
+        (if (modeWas) radioRemote else radioLocal).isChecked = true
+        remoteFields.visibility = if (modeWas) View.VISIBLE else View.GONE
+        hostField.setText(hostWas)
+        if (portWas > 0) portField.setText(portWas.toString())
+        modeGroup.setOnCheckedChangeListener { _, checkedId ->
+            remoteFields.visibility = if (checkedId == R.id.dlgRadioRemote) View.VISIBLE else View.GONE
+        }
 
         MaterialAlertDialogBuilder(this)
             .setTitle(R.string.settings)
@@ -1218,6 +1226,19 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                     prefs.edit().putBoolean(PREF_DEBUG, newDebug).apply()
                     TdfuBridge.nativeSetDebug(newDebug)
                     appendLog("Debug logging ${if (newDebug) "enabled" else "disabled"}\n")
+                }
+
+                // Persist + apply the backend choice (only re-apply if it changed).
+                val remote = radioRemote.isChecked
+                val host = hostField.text.toString().trim()
+                val port = portField.text.toString().toIntOrNull() ?: RemoteClient.DEFAULT_PORT
+                prefs.edit()
+                    .putBoolean(PREF_REMOTE, remote)
+                    .putString(PREF_HOST, host)
+                    .putInt(PREF_PORT, port)
+                    .apply()
+                if (remote != modeWas || (remote && (host != hostWas || port != portWas))) {
+                    applyMode(remote)
                 }
             }
             .show()

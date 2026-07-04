@@ -9,6 +9,72 @@
     android:paddingTop="8dp"
     android:paddingBottom="8dp">
 
+    <!-- Flashing backend (Local USB vs remote dfu-remote daemon) -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_backend"
+        android:textStyle="bold"
+        android:textColor="@color/on_surface" />
+
+    <RadioGroup
+        android:id="@+id/dlgModeRadioGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp">
+
+        <RadioButton
+            android:id="@+id/dlgRadioLocal"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/mode_local_usb" />
+
+        <RadioButton
+            android:id="@+id/dlgRadioRemote"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/mode_remote" />
+    </RadioGroup>
+
+    <LinearLayout
+        android:id="@+id/dlgRemoteFields"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp"
+        android:visibility="gone">
+
+        <EditText
+            android:id="@+id/dlgHostInput"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="2"
+            android:hint="@string/hint_host"
+            android:inputType="text"
+            android:textSize="14sp"
+            android:layout_marginEnd="4dp" />
+
+        <EditText
+            android:id="@+id/dlgPortInput"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:hint="@string/hint_port"
+            android:inputType="number"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="14dp"
+        android:layout_marginBottom="12dp"
+        android:background="@color/on_surface_variant"
+        android:alpha="0.2" />
+
     <!-- Debug logging -->
     <LinearLayout
         android:layout_width="match_parent"
