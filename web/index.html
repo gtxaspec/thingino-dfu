@@ -20,9 +20,15 @@
     </script>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="/vendor/montserrat.css">
     <link rel="stylesheet" href="/rtl.css">
     <style>
-        :root { --bs-font-sans-serif: "Montserrat", sans-serif; }
+        /* Self-hosted Montserrat (vendor/montserrat.css) - matches the thingino
+           image builder, which uses it site-wide. `html:root` (specificity
+           0,1,1) so this beats Bootstrap's own `:root { --bs-font-sans-serif }`
+           (0,1,0), whose bundled CSS loads AFTER this inline block and would
+           otherwise win the tie and reset the font to system-ui. */
+        html:root { --bs-font-sans-serif: "Montserrat", sans-serif; }
         /* `html body` (specificity 0,0,2) so this beats Bootstrap reboot's
            `body { background-color: var(--bs-body-bg) }` (#212529), which the
            bundled CSS loads AFTER this inline block. Overriding the page bg only
@@ -69,6 +75,8 @@
            (yellow); Bootstrap defaults to white text on it - use dark instead. */
         .badge.bg-warning { color: #0d1117 !important; }
         .file-info { font-size: 0.85rem; color: #8b949e; }
+        /* Footer muted grey, matching the thingino image builder. */
+        .muted { color: #8b949e !important; }
         input[type="file"] { display: none; }
         @keyframes pulse-warn {
             0%, 100% { opacity: 1; }
@@ -356,7 +364,7 @@
     </div>
 </div>
 
-<p class="mt-2 small text-center" id="version-text"><a href="https://github.com/wltechblog/thingino-dfu" target="_blank" class="text-secondary text-decoration-none" data-help="help_version">thingino-dfu</a> <span id="version-num"></span></p>
+<p class="mt-2 small text-center muted" id="version-text"><a href="https://github.com/wltechblog/thingino-dfu" target="_blank" class="link-secondary text-decoration-none" data-help="help_version">thingino-dfu</a> <span id="version-num"></span></p>
 
 <div id="browser-warning" class="alert alert-danger flasher-card mt-3 text-center d-none">
     <i class="bi bi-exclamation-triangle me-1"></i>
