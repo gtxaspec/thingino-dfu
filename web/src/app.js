@@ -316,6 +316,14 @@ async function initModule() {
 
     try {
         Module = await createTdfuModule({
+            // Version the tdfu.wasm URL to match the ?v= on the glue script tag
+            // (vite.config.js): the /wasm/* names are fixed, and stale cached
+            // copies have survived redeploys in the field. __APP_VERSION__ is
+            // injected at build time by vite's define.
+            locateFile: function(path, prefix) {
+                var v = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
+                return prefix + path + '?v=' + v;
+            },
             printErr: function(text) {
                 // Read/write progress is emitted as repeated "\r  <N> bytes" on a
                 // single line (terminal overwrite). The log uses white-space:
