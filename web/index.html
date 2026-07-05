@@ -20,14 +20,16 @@
     </script>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="stylesheet" href="/vendor/montserrat.css">
     <link rel="stylesheet" href="/rtl.css">
     <style>
-        /* Self-hosted Montserrat (vendor/montserrat.css) - matches the thingino
-           image builder, which uses it site-wide. `html:root` (specificity
-           0,1,1) so this beats Bootstrap's own `:root { --bs-font-sans-serif }`
-           (0,1,0), whose bundled CSS loads AFTER this inline block and would
-           otherwise win the tie and reset the font to system-ui. */
+        /* Montserrat is bundled via @fontsource (main.js), which ships every
+           subset with unicode-range so each language downloads only the scripts
+           it renders (latin for most, latin-ext for pl/tr, cyrillic for ru/uk;
+           ar and CJK have no Montserrat glyphs and fall back to the system
+           font). `html:root` (specificity 0,1,1) beats Bootstrap's own
+           `:root { --bs-font-sans-serif }` (0,1,0), whose bundled CSS loads
+           AFTER this inline block and would otherwise win the tie and reset the
+           font to system-ui. */
         html:root { --bs-font-sans-serif: "Montserrat", sans-serif; }
         /* `html body` (specificity 0,0,2) so this beats Bootstrap reboot's
            `body { background-color: var(--bs-body-bg) }` (#212529), which the
