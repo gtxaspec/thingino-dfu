@@ -89,6 +89,13 @@ target_link_options(tdfu_web PRIVATE
     "SHELL:-s EXPORTED_FUNCTIONS=[${EXPORTED_FUNCS_STR}]"
     "SHELL:-s EXPORTED_RUNTIME_METHODS=[\"ccall\",\"cwrap\",\"UTF8ToString\",\"stringToUTF8\",\"HEAPU8\",\"HEAPU32\",\"FS\"]"
     "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+    # Never let the glue opt the heap into a resizable ArrayBuffer
+    # (wasmMemory.toResizableBuffer): TextDecoder.decode() rejects views over
+    # resizable buffers, crashing UTF8ArrayToString (emscripten #27241).
+    # Emscripten 6.0.2 flipped this default to 1 (#27212) - that landmine is
+    # what broke v1.5.13, built unpinned on "latest". Off in 6.0.1 anyway;
+    # set explicitly so a future emsdk bump cannot flip it back under us.
+    "SHELL:-s GROWABLE_ARRAYBUFFERS=0"
     "SHELL:-s MODULARIZE=1"
     "SHELL:-s EXPORT_NAME=createTdfuModule"
     "SHELL:-s ASYNCIFY_STACK_SIZE=131072"
