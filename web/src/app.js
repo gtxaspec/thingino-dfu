@@ -315,6 +315,31 @@ async function discoverDevices() {
 /*  WASM Module Init                                                   */
 /* ------------------------------------------------------------------ */
 
+/* Route one libtdfu log line to the UI. Fed live by the C log hook
+ * (Module.onLibLog, set in web_main.c) so '\r' progress updates arrive as they
+ * happen; also used for Emscripten's own stderr. Progress is emitted as
+ * repeated "\r  N/M bytes (P%)" lines (terminal overwrite): the live value goes
+ * to the progress LABEL on the busy bar, matching the remote backend exactly
+ * (the daemon sends no percent frames either, so remote is label-on-busy too). */
+function routeCLog(text) {
+    if (text.indexOf('\r') !== -1) {
+        var pl = document.getElementById('progress-label');
+        var tail = text.slice(text.lastIndexOf('\r') + 1).trim();
+        if (pl && tail) pl.textContent = tail;
+        text = text.slice(0, text.indexOf('\r'));
+        if (!text.trim()) return;
+    }
+    if (text.startsWith('[DEBUG]') || text.startsWith('[shim]')) {
+        log(text, 'debug');
+    } else if (text.startsWith('[WARN]')) {
+        log(text, 'warn');
+    } else if (text.startsWith('[ERROR]')) {
+        log(text, 'error');
+    } else {
+        log(text, 'info');
+    }
+}
+
 async function initModule() {
     console.log('Loading WASM module...');
 
@@ -328,34 +353,17 @@ async function initModule() {
                 var v = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
                 return prefix + path + '?v=' + v;
             },
-            printErr: function(text) {
-                // Read/write progress is emitted as repeated "\r  <N> bytes" on a
-                // single line (terminal overwrite). The log uses white-space:
-                // pre-wrap, where every \r becomes a line break -> thousands of
-                // lines. Emulate the terminal: text after the LAST \r is the live
-                // value (-> progress label); only text BEFORE the first \r is real
-                // output to log.
-                if (text.indexOf('\r') !== -1) {
-                    var pl = document.getElementById('progress-label');
-                    var tail = text.slice(text.lastIndexOf('\r') + 1).trim();
-                    if (pl && tail) pl.textContent = tail;
-                    text = text.slice(0, text.indexOf('\r'));
-                    if (!text.trim()) return;
-                }
-                if (text.startsWith('[DEBUG]') || text.startsWith('[shim]')) {
-                    log(text, 'debug');
-                } else if (text.startsWith('[WARN]')) {
-                    log(text, 'warn');
-                } else if (text.startsWith('[ERROR]')) {
-                    log(text, 'error');
-                } else {
-                    log(text, 'info');
-                }
-            },
-            print: function(text) {
-                log(text, 'info');
-            },
+            // Emscripten's own stderr (asserts/aborts) - route it the same way.
+            printErr: routeCLog,
+            print: function(text) { log(text, 'info'); },
         });
+
+        // Live libtdfu log hook: web_main.c's g_tdfu_log_hook calls
+        // Module.onLibLog per message, bypassing Emscripten's newline-buffered
+        // stderr so '\r' progress updates arrive live. Set on the resolved
+        // instance (not the constructor arg, which Emscripten may not copy);
+        // it only fires during operations, well after this point.
+        Module.onLibLog = routeCLog;
 
         console.log('WASM module loaded (' +
             (Module.HEAPU8.length / 1024 / 1024).toFixed(1) + ' MB heap)');

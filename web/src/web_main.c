@@ -7,9 +7,33 @@
  */
 
 #include <stdbool.h>
+#include <stddef.h>
+
+#include <emscripten.h>
 
 #include "tdfu/core.h" /* tdfu_variant_from_string */
 #include "tdfu/dfu.h"  /* tdfu_dfu_variant_dir */
+#include "tdfu/tdfu.h" /* g_tdfu_log_hook */
+
+/* Route libtdfu log output straight to JS, live. Emscripten buffers stderr
+ * until a '\n', which would stall the '\r'-only progress lines that write/read/
+ * verify emit (they overwrite one terminal line) until the whole operation
+ * ends - so the progress bar never moved on the local backend. Bypass stderr
+ * with a log hook, exactly like the dfu-remote daemon, and hand each message to
+ * the app immediately. */
+static void web_log_hook(const char *msg, size_t len) {
+    EM_ASM(
+        {
+            var s = UTF8ToString($0, $1);
+            /* err() (-> printErr, same router) is the fallback so a message can
+             * never be dropped if onLibLog is somehow not installed yet. */
+            if (Module.onLibLog)
+                Module.onLibLog(s);
+            else if (typeof err === "function")
+                err(s);
+        },
+        msg, len);
+}
 
 /* libtdfu references this; off by default. The web app toggles it at runtime
  * via tdfu_web_set_debug() when the page is loaded with ?debug. */
@@ -32,6 +56,9 @@ const char *tdfu_web_dfu_dir(const char *name) {
 }
 
 int main(void) {
-    /* Nothing to do — JS drives the API */
+    /* Route library logging to JS live (see web_log_hook). Set here at module
+     * load; it only fires during operations, by which point JS has installed
+     * Module.onLibLog. */
+    g_tdfu_log_hook = web_log_hook;
     return 0;
 }
