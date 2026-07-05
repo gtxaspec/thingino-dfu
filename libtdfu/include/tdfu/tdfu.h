@@ -143,7 +143,8 @@ typedef enum {
     TDFU_ERROR_MEMORY = -7,
     TDFU_ERROR_FILE_IO = -8,
     TDFU_ERROR_PROTOCOL = -9,
-    TDFU_ERROR_TRANSFER_TIMEOUT = -10
+    TDFU_ERROR_TRANSFER_TIMEOUT = -10,
+    TDFU_ERROR_VERIFY = -11 /* read-back does not match what was written */
 } tdfu_error_t;
 
 // Device information structure
@@ -239,5 +240,9 @@ const char *tdfu_variant_to_string(tdfu_variant_t variant);
 tdfu_variant_t tdfu_variant_from_string(const char *str);
 const char *tdfu_stage_to_string(tdfu_stage_t stage);
 const char *tdfu_error_to_string(tdfu_error_t error);
+
+/* First index where a[0..n) and b[0..n) differ, or n if equal. Backs the DFU
+ * verify read-back comparison. */
+size_t tdfu_first_diff(const uint8_t *a, const uint8_t *b, size_t n);
 
 #endif // TDFU_H

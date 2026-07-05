@@ -50,6 +50,7 @@ I18N.add("zh-CN", {
   ph_remote_token: "认证令牌（可选）",
   remote_lna_note: "Chrome 会弹出一次提示，以允许访问本地网络。",
   setting_help_label: '显示帮助提示：将鼠标悬停在任意控件上即可显示气泡（或使用 <i class="bi bi-question-lg"></i> 按钮）',
+  setting_verify_label: "写入后校验（读回并比对）",
   setting_debug_label: "调试日志（详细诊断信息）",
   btn_cancel: "取消",
   btn_save: "保存",
@@ -94,6 +95,7 @@ I18N.add("zh-CN", {
   help_setting_remote: "远程模式：本页面与运行在另一台已连接设备的机器上的 dfu-remote 守护进程通信。适合从手机或网络中的另一台主机进行烧录。",
   help_remote_url: "dfu-remote 守护进程的地址，例如 http://192.168.1.50:5050。Chrome 会询问一次以允许访问本地网络。",
   help_remote_token: "可选的认证令牌，仅当守护进程启动时设置了令牌才需要填写。否则请留空。",
+  help_setting_verify: "写入完成后，将整个闪存读回并与文件比对。可以发现错误的写入，但烧录时间大约会翻倍。默认关闭。",
   help_setting_debug: "在活动日志中输出详细诊断信息，取代旧的 ?debug URL 参数。除非在排查问题，否则请保持关闭。",
   help_version: "thingino-dfu 项目的源代码、发布版本和文档都在 GitHub 上。可在此获取 CLI/守护进程的构建版本或提交问题。",
 });

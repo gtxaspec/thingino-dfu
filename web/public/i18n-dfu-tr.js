@@ -53,6 +53,7 @@ I18N.add("tr", {
   ph_remote_token: "kimlik doğrulama belirteci (isteğe bağlı)",
   remote_lna_note: "Chrome, yerel ağ erişimine izin vermeniz için bir kez soracaktır.",
   setting_help_label: 'Yardım ipuçlarını göster: balon görmek için herhangi bir kontrolün üzerine gelin (veya <i class="bi bi-question-lg"></i> düğmesini kullanın)',
+  setting_verify_label: "Yazma sonrası doğrulama (geri okuma ve karşılaştırma)",
   setting_debug_label: "Hata ayıklama günlüğü (ayrıntılı tanılama)",
   btn_cancel: "İptal",
   btn_save: "Kaydet",
@@ -97,6 +98,7 @@ I18N.add("tr", {
   help_setting_remote: "Uzak mod: bu sayfa, cihazın takılı olduğu başka bir makinede çalışan bir dfu-remote daemon'ı ile iletişim kurar. Bir telefondan veya ağ üzerindeki başka bir makineden flash yapmak için idealdir.",
   help_remote_url: "dfu-remote daemon'ının adresi, örn. http://192.168.1.50:5050. Chrome, yerel ağ erişimine izin vermeniz için bir kez soracaktır.",
   help_remote_token: "İsteğe bağlı kimlik doğrulama belirteci; yalnızca daemon bir belirteçle başlatıldıysa gereklidir. Aksi halde boş bırakın.",
+  help_setting_verify: "Yazma bittikten sonra tüm flash içeriğini geri okur ve dosyayla karşılaştırır. Hatalı bir yazma işlemini yakalar, ancak yazma süresini yaklaşık iki katına çıkarır. Varsayılan olarak kapalıdır.",
   help_setting_debug: "Etkinlik günlüğünde ayrıntılı tanılama; eski ?debug URL bayrağının yerini alır. Sorun gidermiyorsanız kapalı bırakın.",
   help_version: "thingino-dfu projesinin kaynak kodu, sürümleri ve belgeleri GitHub'da. CLI/daemon derlemelerini edinin veya buradan bir sorun bildirin.",
 });

@@ -53,6 +53,7 @@ I18N.add("en", {
   ph_remote_token: "auth token (optional)",
   remote_lna_note: "Chrome will prompt once to allow local-network access.",
   setting_help_label: 'Show help hints: hover any control for a balloon (or use the <i class="bi bi-question-lg"></i> button)',
+  setting_verify_label: "Verify after write (read back and compare)",
   setting_debug_label: "Debug logging (verbose diagnostics)",
   btn_cancel: "Cancel",
   btn_save: "Save",
@@ -97,6 +98,7 @@ I18N.add("en", {
   help_setting_remote: "Remote mode: this page talks to a dfu-remote daemon running on another machine that has the device plugged in. Good for flashing from a phone or a box across the network.",
   help_remote_url: "The dfu-remote daemon's address, e.g. http://192.168.1.50:5050. Chrome will ask once to allow local-network access.",
   help_remote_token: "Optional auth token, only if the daemon was started with one. Leave blank otherwise.",
+  help_setting_verify: "After writing, read the whole flash back and compare it against the file. Catches a bad write, but roughly doubles the flashing time. Off by default.",
   help_setting_debug: "Verbose diagnostics in the activity log, replaces the old ?debug URL flag. Leave off unless you're troubleshooting.",
   help_version: "Source, releases and docs on GitHub for the thingino-dfu project. Grab the CLI/daemon builds or file an issue here.",
 });

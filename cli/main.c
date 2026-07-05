@@ -41,6 +41,7 @@ typedef struct {
     char *auth_token;    // Auth token for remote daemon
     char *alt;           // DFU alt-setting: name or number
     bool wait;           // Wait for the required device to appear before proceeding
+    bool verify;         // Read back and compare after a write
 } cli_options_t;
 
 void print_usage(const char *program_name) {
@@ -63,6 +64,7 @@ void print_usage(const char *program_name) {
     printf("      --port <port>         Remote daemon port (default: 5050)\n");
     printf("      --token <secret>      Auth token for remote daemon\n");
     printf("      --alt <name|num>      DFU alt-setting to target\n");
+    printf("      --verify              After -w, read the flash back and compare (fails on mismatch)\n");
     printf("      --wait                Wait for the required device to appear, then proceed\n");
     printf("\nExamples:\n");
     printf("  thingino-dfu -b                                 # Bootrom -> U-Boot DFU (auto-detect SoC)\n");
@@ -122,6 +124,8 @@ tdfu_error_t parse_arguments(int argc, char *argv[], cli_options_t *options) {
             options->firmware_dir = argv[++i];
         } else if (strcmp(argv[i], "--wait") == 0) {
             options->wait = true;
+        } else if (strcmp(argv[i], "--verify") == 0) {
+            options->verify = true;
         } else if (strcmp(argv[i], "--diag") == 0) {
             options->diag = true;
         } else if (strcmp(argv[i], "--alt") == 0) {
@@ -355,7 +359,7 @@ int main(int argc, char *argv[]) {
                 }
             }
             if (rc == 0)
-                rc = remote_write_firmware(options.device_index, cpu, options.input_file, options.alt);
+                rc = remote_write_firmware(options.device_index, cpu, options.input_file, options.alt, options.verify);
             rc = rc < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else if (options.bootstrap) {
             rc = remote_bootstrap(options.device_index, cpu, options.firmware_dir, options.spl_file,
@@ -463,9 +467,15 @@ int main(int argc, char *argv[]) {
         usb_manager_cleanup(&manager);
         return EXIT_DEVICE_ERROR;
     }
-    if (options.write_firmware && options.input_file)
+    if (options.write_firmware && options.input_file) {
         result = tdfu_dfu_download(&manager, options.device_index, alt, options.input_file);
-    else if (options.read_firmware && options.output_file)
+        if (result == TDFU_SUCCESS && options.verify) {
+            uint64_t mismatch_off = 0;
+            result = tdfu_dfu_verify(&manager, options.device_index, alt, options.input_file, &mismatch_off);
+            if (result == TDFU_ERROR_VERIFY)
+                LOG_ERROR("Verify failed at offset 0x%08llX\n", (unsigned long long)mismatch_off);
+        }
+    } else if (options.read_firmware && options.output_file)
         result = tdfu_dfu_upload(&manager, options.device_index, alt, options.output_file, 0);
     else {
         LOG_ERROR("DFU mode needs -l (list alts), -w <file> (download), or -r <file> (upload)\n");

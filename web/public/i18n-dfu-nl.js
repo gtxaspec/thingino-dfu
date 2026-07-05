@@ -53,6 +53,7 @@ I18N.add("nl", {
   ph_remote_token: "authenticatietoken (optioneel)",
   remote_lna_note: "Chrome vraagt eenmalig om toegang tot het lokale netwerk toe te staan.",
   setting_help_label: 'Hulptips tonen: beweeg de muis over een besturingselement voor een ballon (of gebruik de knop <i class="bi bi-question-lg"></i>)',
+  setting_verify_label: "Verificatie na het schrijven (teruglezen en vergelijken)",
   setting_debug_label: "Foutopsporingslogboek (uitgebreide diagnostiek)",
   btn_cancel: "Annuleren",
   btn_save: "Opslaan",
@@ -97,6 +98,7 @@ I18N.add("nl", {
   help_setting_remote: "Externe modus: deze pagina communiceert met een dfu-remote-daemon die draait op een andere machine waarop het apparaat is aangesloten. Handig om te flashen vanaf een telefoon of een apparaat elders in het netwerk.",
   help_remote_url: "Het adres van de dfu-remote-daemon, bijv. http://192.168.1.50:5050. Chrome vraagt eenmalig om toegang tot het lokale netwerk toe te staan.",
   help_remote_token: "Optioneel authenticatietoken, alleen als de daemon met een token is gestart. Laat het anders leeg.",
+  help_setting_verify: "Leest na het schrijven de volledige flash terug en vergelijkt die met het bestand. Ontdekt zo een mislukte schrijfactie, maar het flashen duurt daardoor ongeveer twee keer zo lang. Staat standaard uit.",
   help_setting_debug: "Uitgebreide diagnostiek in het activiteitenlogboek; vervangt de oude ?debug-URL-vlag. Laat uit tenzij je problemen oplost.",
   help_version: "Broncode, releases en documentatie op GitHub voor het thingino-dfu-project. Download hier de CLI-/daemon-builds of dien een issue in.",
 });

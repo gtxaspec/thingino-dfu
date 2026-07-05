@@ -624,6 +624,107 @@ tdfu_error_t tdfu_dfu_read_device(usb_device_t *dev, int alt, const char *path, 
     return r;
 }
 
+/* Verify flash contents against a source image: stream a DFU upload of the
+ * same alt and memcmp block-by-block, stopping at the image length (so an 8 MB
+ * image on a 16 MB part reads only 8 MB). On mismatch, *mismatch_off gets the
+ * offset of the first differing byte - far more diagnostic than a pass/fail
+ * (e.g. 0x40000 fingerprints the env-sector overlap). Never retried by the
+ * caller's reset path: TDFU_ERROR_VERIFY means the data differs, not that the
+ * transfer failed. */
+tdfu_error_t tdfu_dfu_verify_device(usb_device_t *dev, int alt, const char *path, uint64_t *mismatch_off) {
+    tdfu_dfu_info_t info;
+    uint8_t *data = NULL;
+    size_t len = 0;
+
+    if (mismatch_off)
+        *mismatch_off = (uint64_t)-1;
+
+    tdfu_error_t r = dfu_read_info(dev, &info);
+    if (r != TDFU_SUCCESS)
+        return r;
+    if (alt < 0)
+        alt = info.alt_count > 0 ? info.alts[0].alt : 0;
+    r = dfu_claim_alt(dev, info.interface, alt);
+    if (r != TDFU_SUCCESS)
+        return r;
+
+    r = load_file(path, &data, &len);
+    if (r != TDFU_SUCCESS) {
+        LOG_ERROR("Failed to read %s\n", path);
+        return r;
+    }
+    if (len == 0) {
+        free(data);
+        return TDFU_ERROR_INVALID_PARAMETER;
+    }
+
+    LOG_INFO("DFU verify: alt %d vs %s (%zu bytes, %u-byte blocks)\n", alt, path, len, info.transfer_size);
+
+    uint8_t *buf = (uint8_t *)malloc(info.transfer_size);
+    if (!buf) {
+        free(data);
+        return TDFU_ERROR_MEMORY;
+    }
+
+    /* See tdfu_dfu_read_device: a block-0 failure means a stale transaction -
+     * clear and retry once. A mismatch is never retried. */
+    uint16_t block = 0;
+    size_t total = 0;
+    for (int attempt = 0; attempt < 2; attempt++) {
+        if (dfu_make_idle(dev, info.interface) != TDFU_SUCCESS) {
+            r = TDFU_ERROR_PROTOCOL;
+            break;
+        }
+        block = 0;
+        total = 0;
+        r = TDFU_SUCCESS;
+        while (total < len) {
+            int got = 0;
+            r = dfu_upload_block(dev, info.interface, block, buf, info.transfer_size, &got);
+            if (r != TDFU_SUCCESS) {
+                LOG_DEBUG("verify: block %u transfer failed (%s) after %zu bytes\n", block, tdfu_error_to_string(r),
+                          total);
+                break;
+            }
+            size_t want = len - total;
+            size_t cmp = (size_t)got < want ? (size_t)got : want;
+            size_t diff = tdfu_first_diff(buf, data + total, cmp);
+            if (diff < cmp) {
+                if (mismatch_off)
+                    *mismatch_off = (uint64_t)(total + diff);
+                LOG_INFO("\n");
+                LOG_ERROR("Verify FAILED at offset 0x%08zX (wrote 0x%02X, read back 0x%02X)\n", total + diff,
+                          data[total + diff], buf[diff]);
+                r = TDFU_ERROR_VERIFY;
+                break;
+            }
+            total += cmp;
+            LOG_INFO("\r  %zu/%zu bytes (%d%%)", total, len, (int)(total * 100 / len));
+            block++;
+            if (got < (int)info.transfer_size && total < len) {
+                /* device ended the upload before the image length */
+                if (mismatch_off)
+                    *mismatch_off = (uint64_t)total;
+                LOG_INFO("\n");
+                LOG_ERROR("Verify FAILED: device returned only %zu of %zu bytes\n", total, len);
+                r = TDFU_ERROR_VERIFY;
+                break;
+            }
+        }
+        if (r == TDFU_SUCCESS || r == TDFU_ERROR_VERIFY || block != 0)
+            break; /* done, mismatch, or a genuine mid-stream error (not a stale sequence) */
+        LOG_WARN("DFU verify: clearing a stale transaction (reload mid-transfer?) and retrying\n");
+    }
+    if (r == TDFU_SUCCESS) {
+        LOG_INFO("\n");
+        LOG_INFO("Verify OK: %zu bytes match\n", len);
+    }
+
+    free(buf);
+    free(data);
+    return r;
+}
+
 static tdfu_error_t dfu_download_impl(usb_manager_t *manager, int device_index, int alt, const char *path) {
     usb_device_t *dev = NULL;
     tdfu_error_t r = dfu_open_device(manager, device_index, &dev);
@@ -660,6 +761,27 @@ tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, 
     tdfu_error_t r = dfu_upload_impl(manager, device_index, alt, path, size);
     if (r != TDFU_SUCCESS && dfu_err_recoverable(r) && dfu_reset_device(manager, device_index))
         r = dfu_upload_impl(manager, device_index, alt, path, size);
+    return r;
+}
+
+static tdfu_error_t dfu_verify_impl(usb_manager_t *manager, int device_index, int alt, const char *path,
+                                    uint64_t *mismatch_off) {
+    usb_device_t *dev = NULL;
+    tdfu_error_t r = dfu_open_device(manager, device_index, &dev);
+    if (r != TDFU_SUCCESS)
+        return r;
+    r = tdfu_dfu_verify_device(dev, alt, path, mismatch_off);
+    dfu_close_device(dev, 0);
+    return r;
+}
+
+tdfu_error_t tdfu_dfu_verify(usb_manager_t *manager, int device_index, int alt, const char *path,
+                             uint64_t *mismatch_off) {
+    tdfu_error_t r = dfu_verify_impl(manager, device_index, alt, path, mismatch_off);
+    /* dfu_err_recoverable excludes TDFU_ERROR_VERIFY: only comms failures get
+     * the USB-reset retry, a data mismatch is final. */
+    if (r != TDFU_SUCCESS && dfu_err_recoverable(r) && dfu_reset_device(manager, device_index))
+        r = dfu_verify_impl(manager, device_index, alt, path, mismatch_off);
     return r;
 }
 

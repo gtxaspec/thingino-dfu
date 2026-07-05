@@ -116,6 +116,12 @@ object TdfuBridge {
     ): Int
 
     /**
+     * Read the just-written flash back and compare against inputFile.
+     * Returns 0 on match, non-zero on mismatch or read error.
+     */
+    external fun nativeVerifyFirmware(fd: Int, inputFile: String): Int
+
+    /**
      * Enable or disable verbose debug logging in libtdfu.
      */
     @JvmStatic

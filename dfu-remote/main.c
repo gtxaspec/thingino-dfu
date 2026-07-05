@@ -483,6 +483,10 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len) {
     const uint8_t *fw_data = p;
     p += fw_len;
     uint32_t fw_crc_expected = read_be32(p);
+    p += 4;
+
+    /* Optional trailing [1:verify] byte (absent from older clients). */
+    int do_verify = (p < end && *p != 0) ? 1 : 0;
 
     /* Verify CRC32 */
     uint32_t fw_crc = remote_crc32(fw_data, fw_len);
@@ -527,6 +531,13 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len) {
     int alt = dfu_pick_alt(&manager, device_index, alt_str[0] ? alt_str : NULL);
     tdfu_error_t result = (alt < 0) ? TDFU_ERROR_DEVICE_NOT_FOUND
                                     : tdfu_dfu_download(&manager, device_index, alt, tmpfile);
+
+    uint64_t mismatch_off = 0;
+    if (result == TDFU_SUCCESS && do_verify) {
+        g_state = "verifying";
+        printf("Verify request: device=%d, alt=%d\n", device_index, alt);
+        result = tdfu_dfu_verify(&manager, device_index, alt, tmpfile, &mismatch_off);
+    }
     g_log_client_fd = -1;
 
     remove(tmpfile);
@@ -534,8 +545,11 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len) {
 
     g_state = "idle";
     if (result != TDFU_SUCCESS) {
-        char msg[128];
-        snprintf(msg, sizeof(msg), "write failed: %s", tdfu_error_to_string(result));
+        char msg[160];
+        if (result == TDFU_ERROR_VERIFY)
+            snprintf(msg, sizeof(msg), "verify failed at offset 0x%08llX", (unsigned long long)mismatch_off);
+        else
+            snprintf(msg, sizeof(msg), "write failed: %s", tdfu_error_to_string(result));
         return send_error(client_fd, msg);
     }
 

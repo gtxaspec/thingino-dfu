@@ -50,6 +50,7 @@ I18N.add("de", {
   ph_remote_token: "Auth-Token (optional)",
   remote_lna_note: "Chrome fragt einmalig nach der Erlaubnis für den Zugriff auf das lokale Netzwerk.",
   setting_help_label: 'Hilfehinweise anzeigen: für eine Sprechblase mit dem Mauszeiger über ein beliebiges Bedienelement fahren (oder die Schaltfläche <i class="bi bi-question-lg"></i> verwenden)',
+  setting_verify_label: "Nach dem Schreiben überprüfen (zurücklesen und vergleichen)",
   setting_debug_label: "Debug-Protokollierung (ausführliche Diagnose)",
   btn_cancel: "Abbrechen",
   btn_save: "Speichern",
@@ -94,6 +95,7 @@ I18N.add("de", {
   help_setting_remote: "Remote-Modus: Diese Seite kommuniziert mit einem dfu-remote-Daemon, der auf einem anderen Rechner läuft, an dem das Gerät angeschlossen ist. Praktisch zum Flashen von einem Smartphone oder einem anderen Rechner im Netzwerk aus.",
   help_remote_url: "Die Adresse des dfu-remote-Daemons, z. B. http://192.168.1.50:5050. Chrome fragt einmalig nach der Erlaubnis für den Zugriff auf das lokale Netzwerk.",
   help_remote_token: "Optionales Auth-Token, nur falls der Daemon mit einem gestartet wurde. Andernfalls leer lassen.",
+  help_setting_verify: "Liest nach dem Schreiben den gesamten Flash-Speicher zurück und vergleicht ihn mit der Datei. Erkennt einen fehlerhaften Schreibvorgang, verdoppelt aber ungefähr die Dauer des Flash-Vorgangs. Standardmäßig ausgeschaltet.",
   help_setting_debug: "Ausführliche Diagnose im Aktivitätsprotokoll, ersetzt das alte URL-Flag ?debug. Lassen Sie es ausgeschaltet, sofern Sie keine Fehler suchen.",
   help_version: "Quellcode, Releases und Dokumentation zum thingino-dfu-Projekt auf GitHub. Hier erhalten Sie die CLI-/Daemon-Builds oder können ein Issue melden.",
 });

@@ -277,9 +277,23 @@ const char *tdfu_error_to_string(tdfu_error_t error) {
         return "Protocol error";
     case TDFU_ERROR_TRANSFER_TIMEOUT:
         return "Transfer timeout";
+    case TDFU_ERROR_VERIFY:
+        return "Verify failed (read-back mismatch)";
     default:
         return "Unknown error";
     }
+}
+
+/* First index where a[0..n) and b[0..n) differ, or n if the ranges are equal.
+ * Factored out of the DFU verify loop so the mismatch/offset logic is unit
+ * testable - a real read-back mismatch can't be induced on healthy hardware
+ * (write and verify are coupled to the same image, so a good write always
+ * matches). */
+size_t tdfu_first_diff(const uint8_t *a, const uint8_t *b, size_t n) {
+    size_t i = 0;
+    while (i < n && a[i] == b[i])
+        i++;
+    return i;
 }
 
 tdfu_variant_t detect_variant_from_magic(const char *magic) {

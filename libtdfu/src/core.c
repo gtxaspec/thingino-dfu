@@ -192,4 +192,13 @@ tdfu_error_t tdfu_web_dfu_upload(int device_index, const char *alt_name, const c
         return TDFU_ERROR_INVALID_PARAMETER;
     return tdfu_dfu_upload(&g_manager, device_index, alt, path, size);
 }
+
+/* Verify the just-written flash against the MEMFS-staged image. Returns
+ * TDFU_ERROR_VERIFY on mismatch; the JS side reads the offset from the log. */
+tdfu_error_t tdfu_web_dfu_verify(int device_index, const char *alt_name, const char *path) {
+    int alt = web_dfu_resolve_alt(device_index, alt_name);
+    if (alt < 0)
+        return TDFU_ERROR_INVALID_PARAMETER;
+    return tdfu_dfu_verify(&g_manager, device_index, alt, path, NULL);
+}
 #endif /* __EMSCRIPTEN__ */

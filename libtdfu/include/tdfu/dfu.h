@@ -57,6 +57,14 @@ tdfu_error_t tdfu_dfu_download(usb_manager_t *manager, int device_index, int alt
  */
 tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, const char *path, uint32_t size);
 
+/* Verify flash contents against a source image: DFU-upload the same alt and
+ * compare block-by-block, stopping at the image length. TDFU_ERROR_VERIFY on
+ * mismatch, with *mismatch_off (may be NULL) set to the first differing offset
+ * (or the device's short read length). Run after tdfu_dfu_download with the
+ * same alt and file. */
+tdfu_error_t tdfu_dfu_verify(usb_manager_t *manager, int device_index, int alt, const char *path,
+                             uint64_t *mismatch_off);
+
 /**
  * Bootstrap a device from the Ingenic bootrom (a108:c309) into U-Boot DFU mode:
  * USB-boot a DFU-capable SPL + U-Boot and start it; the device then re-enumerates
@@ -81,6 +89,7 @@ bool tdfu_dfu_gadget_present(usb_manager_t *manager);
  * For read/write, alt < 0 selects the single/first alt setting. */
 tdfu_error_t tdfu_dfu_read_device(usb_device_t *dev, int alt, const char *path, uint32_t size);
 tdfu_error_t tdfu_dfu_write_device(usb_device_t *dev, int alt, const char *path);
+tdfu_error_t tdfu_dfu_verify_device(usb_device_t *dev, int alt, const char *path, uint64_t *mismatch_off);
 tdfu_error_t tdfu_dfu_bootstrap_device(usb_device_t *dev, const uint8_t *spl, size_t spl_len, const uint8_t *uboot,
                                        size_t uboot_len);
 

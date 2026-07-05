@@ -218,12 +218,13 @@ export class RemoteClient {
         return data.slice();
     }
 
-    async writeFirmware(deviceIndex, variant, firmwareData) {
+    async writeFirmware(deviceIndex, variant, firmwareData, verify) {
         const vb = new TextEncoder().encode(variant || '');
         // Wire format the daemon parses:
-        //   [idx][variant_len][variant][alt_len][alt][fw_len][fw][crc]
+        //   [idx][variant_len][variant][alt_len][alt][fw_len][fw][crc][verify?]
         // alt is empty here (alt_len = 0 => daemon's default alt 0 = flash).
-        const buf = new Uint8Array(2 + vb.length + 1 + 4 + firmwareData.length + 4);
+        // The trailing verify byte is optional (older daemons stop after crc).
+        const buf = new Uint8Array(2 + vb.length + 1 + 4 + firmwareData.length + 4 + (verify ? 1 : 0));
         const dv = new DataView(buf.buffer);
         buf[0] = deviceIndex & 0xff;
         buf[1] = vb.length;
@@ -236,6 +237,8 @@ export class RemoteClient {
         buf.set(firmwareData, off);
         off += firmwareData.length;
         dv.setUint32(off, crc32(firmwareData));
+        off += 4;
+        if (verify) buf[off] = 1;
         return (await this._command(CMD_WRITE, buf)) !== null;
     }
 }

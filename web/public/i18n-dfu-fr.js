@@ -50,6 +50,7 @@ I18N.add("fr", {
   ph_remote_token: "jeton d'authentification (facultatif)",
   remote_lna_note: "Chrome vous demandera une fois l'autorisation d'accès au réseau local.",
   setting_help_label: 'Afficher les bulles d\'aide : survolez n\'importe quel contrôle pour faire apparaître une bulle (ou utilisez le bouton <i class="bi bi-question-lg"></i>)',
+  setting_verify_label: "Vérifier après l'écriture (relire et comparer)",
   setting_debug_label: "Journalisation de débogage (diagnostics détaillés)",
   btn_cancel: "Annuler",
   btn_save: "Enregistrer",
@@ -94,6 +95,7 @@ I18N.add("fr", {
   help_setting_remote: "Mode distant : cette page communique avec un démon dfu-remote qui s'exécute sur une autre machine où l'appareil est branché. Pratique pour flasher depuis un téléphone ou un boîtier à l'autre bout du réseau.",
   help_remote_url: "L'adresse du démon dfu-remote, par ex. http://192.168.1.50:5050. Chrome demandera une fois l'autorisation d'accès au réseau local.",
   help_remote_token: "Jeton d'authentification facultatif, uniquement si le démon a été démarré avec un. Sinon, laissez vide.",
+  help_setting_verify: "Après l'écriture, relit l'intégralité de la flash et la compare au fichier. Détecte une écriture défectueuse, mais double environ la durée du flashage. Désactivé par défaut.",
   help_setting_debug: "Diagnostics détaillés dans le journal d'activité ; remplace l'ancien paramètre d'URL ?debug. Laissez désactivé sauf en cas de dépannage.",
   help_version: "Code source, versions et documentation sur GitHub pour le projet thingino-dfu. Récupérez les builds CLI/démon ou signalez un problème ici.",
 });

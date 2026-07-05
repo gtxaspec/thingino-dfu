@@ -44,6 +44,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         private const val PREF_PORT = "remote_port"
         private const val PREF_REMOTE = "remote_mode"
         private const val PREF_DEBUG = "debug_logging"
+        private const val PREF_VERIFY = "verify_after_write"
     }
 
     private lateinit var usbHelper: UsbHelper
@@ -799,16 +800,29 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                 return@launch
             }
 
-            val result = TdfuBridge.nativeWriteFirmware(
+            var result = TdfuBridge.nativeWriteFirmware(
                 newFd, detectedSoc, tempFile.absolutePath, cacheDir, assetManager
             )
+
+            // Verify: read the flash back and compare against the same temp file,
+            // on the same reopened fd. Opt-in via Settings (off by default).
+            val verify = prefs.getBoolean(PREF_VERIFY, false)
+            var verifyFailed = false
+            if (result == 0 && verify) {
+                withContext(Dispatchers.Main) { appendLog("Verifying flash...\n") }
+                val vr = TdfuBridge.nativeVerifyFirmware(newFd, tempFile.absolutePath)
+                if (vr != 0) { verifyFailed = true; result = vr }
+            }
 
             tempFile.delete()
 
             withContext(Dispatchers.Main) {
                 if (result == 0) {
-                    appendLog("Write complete!\n")
-                    updateStatus("Write complete!")
+                    appendLog(if (verify) "Write + verify complete!\n" else "Write complete!\n")
+                    updateStatus(if (verify) "Write + verify OK" else "Write complete!")
+                } else if (verifyFailed) {
+                    appendLog("Verify FAILED - flash does not match\n")
+                    updateStatus("Verify failed")
                 } else {
                     appendLog("Write failed (error $result)\n")
                     updateStatus("Write failed")
@@ -852,12 +866,13 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                 appendLog("Firmware file: ${firmwareData.size / 1024} KB\n")
             }
 
-            val result = client.writeFirmware(selectedDeviceIndex, detectedSoc, firmwareData)
+            val verify = prefs.getBoolean(PREF_VERIFY, false)
+            val result = client.writeFirmware(selectedDeviceIndex, detectedSoc, firmwareData, verify)
 
             withContext(Dispatchers.Main) {
                 if (result) {
-                    appendLog("Write complete!\n")
-                    updateStatus("Write complete!")
+                    appendLog(if (verify) "Write + verify complete!\n" else "Write complete!\n")
+                    updateStatus(if (verify) "Write + verify OK" else "Write complete!")
                 } else {
                     appendLog("Write failed\n")
                     updateStatus("Write failed")
@@ -1194,6 +1209,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     private fun showSettingsDialog() {
         val view = layoutInflater.inflate(R.layout.dialog_settings, null)
         val debugSwitch = view.findViewById<MaterialSwitch>(R.id.dlgDebugSwitch)
+        val verifySwitch = view.findViewById<MaterialSwitch>(R.id.dlgVerifySwitch)
         val modeGroup = view.findViewById<RadioGroup>(R.id.dlgModeRadioGroup)
         val radioLocal = view.findViewById<RadioButton>(R.id.dlgRadioLocal)
         val radioRemote = view.findViewById<RadioButton>(R.id.dlgRadioRemote)
@@ -1203,6 +1219,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
         val debugWas = prefs.getBoolean(PREF_DEBUG, false)
         debugSwitch.isChecked = debugWas
+        verifySwitch.isChecked = prefs.getBoolean(PREF_VERIFY, false)
 
         // Prefill the backend from the current state / saved prefs.
         val modeWas = isRemoteMode
@@ -1221,6 +1238,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             .setView(view)
             .setNegativeButton(R.string.btn_cancel, null)
             .setPositiveButton(R.string.btn_save) { _, _ ->
+                prefs.edit().putBoolean(PREF_VERIFY, verifySwitch.isChecked).apply()
                 val newDebug = debugSwitch.isChecked
                 if (newDebug != debugWas) {
                     prefs.edit().putBoolean(PREF_DEBUG, newDebug).apply()

@@ -45,6 +45,10 @@ var debugEnabled = localStorage.getItem('tdfu_debug') === '1' ||
     new URLSearchParams(location.search).has('debug') || /\bdebug\b/.test(location.hash);
 window.__tdfu_debug = debugEnabled;
 
+/* Read the flash back and compare after every write (opt-in; roughly doubles
+ * flash time). Applies to both the DFU and remote backends. */
+var verifyAfterWrite = localStorage.getItem('tdfu_verify') === '1';
+
 /**
  * Serialize all WASM async ccalls — Asyncify only supports one at a time.
  */
@@ -743,11 +747,30 @@ async function doDfuWrite() {
         Module.FS.writeFile('/tmp/dfu-wr.bin', firmwareData);
         var rc = await wasmCall('tdfu_web_dfu_download', 'number',
             ['number', 'string', 'string'], [0, '', '/tmp/dfu-wr.bin']);
-        try { Module.FS.unlink('/tmp/dfu-wr.bin'); } catch (e) { /* ignore */ }
-        if (rc !== 0) { log('DFU write failed: error ' + rc, 'error'); hideProgress(); setState('error'); return; }
-        showProgress(100, 'Write complete'); log('Firmware written via DFU!');
+        if (rc !== 0) {
+            try { Module.FS.unlink('/tmp/dfu-wr.bin'); } catch (e) { /* ignore */ }
+            log('DFU write failed: error ' + rc, 'error'); hideProgress(); setState('error'); return;
+        }
+        log('Firmware written via DFU!');
+        // Verify: read the flash back and compare against the same staged image.
+        if (verifyAfterWrite) {
+            showProgressBusy('Verifying flash via DFU...');
+            log('DFU verify: reading back ' + firmwareData.length + ' bytes...');
+            var vrc = await wasmCall('tdfu_web_dfu_verify', 'number',
+                ['number', 'string', 'string'], [0, '', '/tmp/dfu-wr.bin']);
+            try { Module.FS.unlink('/tmp/dfu-wr.bin'); } catch (e) { /* ignore */ }
+            if (vrc !== 0) {
+                log('DFU verify FAILED (error ' + vrc + ') — flash does not match', 'error');
+                hideProgress(); setState('error'); return;
+            }
+            showProgress(100, 'Write + verify complete'); log('Verify OK: flash matches');
+        } else {
+            try { Module.FS.unlink('/tmp/dfu-wr.bin'); } catch (e) { /* ignore */ }
+            showProgress(100, 'Write complete');
+        }
         setTimeout(hideProgress, 1500); setState('done');
     } catch (e) {
+        try { Module.FS.unlink('/tmp/dfu-wr.bin'); } catch (ue) { /* ignore */ }
         log('DFU write error: ' + e.message, 'error'); console.error(e); hideProgress(); setState('error');
     }
 }
@@ -855,6 +878,14 @@ function setDebug(on) {
         try { window.Module.ccall('tdfu_web_set_debug', null, ['number'], [debugEnabled ? 1 : 0]); } catch (e) { /* not ready */ }
     }
     log('Debug logging ' + (debugEnabled ? 'enabled' : 'disabled'));
+}
+
+/* Verify-after-write — Settings toggle, persisted. */
+function setVerify(on) {
+    verifyAfterWrite = !!on;
+    localStorage.setItem('tdfu_verify', verifyAfterWrite ? '1' : '0');
+    var s = document.getElementById('setting-verify');
+    if (s) s.checked = verifyAfterWrite;
 }
 
 function hideHelpBalloon() {
@@ -1084,12 +1115,12 @@ async function doRemoteWrite(data) {
     if (!remoteReady()) return;
     setState('writing');
     showProgressBusy('Writing flash via daemon...');
-    log('Remote write (' + data.length + ' bytes)...');
+    log('Remote write (' + data.length + ' bytes)' + (verifyAfterWrite ? ' + verify...' : '...'));
     try {
-        var ok = await remoteClient.writeFirmware(selectedRemoteIndex, detectedVariantName, data);
+        var ok = await remoteClient.writeFirmware(selectedRemoteIndex, detectedVariantName, data, verifyAfterWrite);
         if (!ok) { log('Remote write failed.', 'error'); hideProgress(); setState('error'); return; }
-        showProgress(100, 'Write complete');
-        log('Remote write complete.');
+        showProgress(100, verifyAfterWrite ? 'Write + verify complete' : 'Write complete');
+        log('Remote write complete.' + (verifyAfterWrite ? ' Verify OK.' : ''));
         setTimeout(hideProgress, 1500);
         setState('done');
     } catch (e) { log('Remote write error: ' + e.message, 'error'); hideProgress(); setState('error'); }
@@ -1132,6 +1163,7 @@ function openSettings() {
     var u = document.getElementById('remote-url'); if (u) u.value = remoteUrl;
     var t = document.getElementById('remote-token'); if (t) t.value = remoteToken;
     var h = document.getElementById('setting-help'); if (h) h.checked = helpMode;
+    var v = document.getElementById('setting-verify'); if (v) v.checked = verifyAfterWrite;
     var d = document.getElementById('setting-debug'); if (d) d.checked = debugEnabled;
     toggleRemoteFields();
     document.getElementById('settings-overlay').classList.remove('d-none');
@@ -1188,7 +1220,7 @@ function saveSettings() {
 
 // Expose handlers referenced by HTML onclick/onchange attributes
 Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSelected, doRead,
-                        doDiag, closeDiag, copyDiag, toggleHelp, setHelp, setDebug,
+                        doDiag, closeDiag, copyDiag, toggleHelp, setHelp, setDebug, setVerify,
                         openSettings, closeSettings, openWindowsHelp, closeWindowsHelp, saveSettings, toggleRemoteFields,
                         toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader,
                         selectRemoteDevice });

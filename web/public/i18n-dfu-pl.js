@@ -53,6 +53,7 @@ I18N.add("pl", {
   ph_remote_token: "token uwierzytelniania (opcjonalny)",
   remote_lna_note: "Chrome jednorazowo poprosi o zezwolenie na dostęp do sieci lokalnej.",
   setting_help_label: 'Pokaż wskazówki pomocy: najedź kursorem na dowolny element sterujący, aby zobaczyć dymek (lub użyj przycisku <i class="bi bi-question-lg"></i>)',
+  setting_verify_label: "Weryfikacja po zapisie (ponowny odczyt i porównanie)",
   setting_debug_label: "Rejestrowanie debugowania (szczegółowa diagnostyka)",
   btn_cancel: "Anuluj",
   btn_save: "Zapisz",
@@ -97,6 +98,7 @@ I18N.add("pl", {
   help_setting_remote: "Tryb zdalny: ta strona komunikuje się z demonem dfu-remote działającym na innej maszynie, do której podłączone jest urządzenie. Przydatne do flashowania z telefonu lub innego urządzenia w sieci.",
   help_remote_url: "Adres demona dfu-remote, np. http://192.168.1.50:5050. Chrome zapyta raz o zezwolenie na dostęp do sieci lokalnej.",
   help_remote_token: "Opcjonalny token uwierzytelniania, tylko jeśli demon został uruchomiony z tokenem. W przeciwnym razie pozostaw puste.",
+  help_setting_verify: "Po zapisie odczytuje ponownie całą pamięć flash i porównuje ją z plikiem. Wykrywa błędny zapis, ale mniej więcej podwaja czas flashowania. Domyślnie wyłączone.",
   help_setting_debug: "Szczegółowa diagnostyka w dzienniku aktywności; zastępuje dawną flagę URL ?debug. Pozostaw wyłączone, chyba że rozwiązujesz problemy.",
   help_version: "Kod źródłowy, wydania i dokumentacja projektu thingino-dfu na GitHub. Pobierz kompilacje CLI/demona lub zgłoś problem tutaj.",
 });

@@ -53,6 +53,7 @@ I18N.add("ko", {
   ph_remote_token: "인증 토큰 (선택 사항)",
   remote_lna_note: "Chrome에서 로컬 네트워크 접근을 허용할지 한 번 물어봅니다.",
   setting_help_label: '도움말 힌트 표시: 컨트롤 위에 마우스를 올리면 풍선이 나타납니다 (또는 <i class="bi bi-question-lg"></i> 버튼 사용)',
+  setting_verify_label: "기록 후 검증 (다시 읽어 비교)",
   setting_debug_label: "디버그 로깅 (상세 진단)",
   btn_cancel: "취소",
   btn_save: "저장",
@@ -97,6 +98,7 @@ I18N.add("ko", {
   help_setting_remote: "원격 모드: 이 페이지가 장치가 연결된 다른 컴퓨터에서 실행 중인 dfu-remote 데몬과 통신합니다. 휴대폰이나 네트워크 너머의 장비에서 플래싱할 때 유용합니다.",
   help_remote_url: "dfu-remote 데몬의 주소입니다. 예: http://192.168.1.50:5050. Chrome에서 로컬 네트워크 접근을 허용할지 한 번 물어봅니다.",
   help_remote_token: "선택적 인증 토큰으로, 데몬이 토큰과 함께 시작된 경우에만 필요합니다. 그렇지 않으면 비워 두세요.",
+  help_setting_verify: "기록이 끝나면 전체 플래시를 다시 읽어 파일과 비교합니다. 잘못된 기록을 잡아내지만, 플래싱 시간이 약 두 배로 늘어납니다. 기본값은 꺼짐입니다.",
   help_setting_debug: "활동 로그에 상세 진단을 표시하며, 기존 ?debug URL 플래그를 대체합니다. 문제를 해결하는 경우가 아니면 꺼 두세요.",
   help_version: "thingino-dfu 프로젝트의 소스, 릴리스, 문서가 GitHub에 있습니다. 여기에서 CLI/데몬 빌드를 받거나 이슈를 등록할 수 있습니다.",
 });

@@ -611,6 +611,44 @@ Java_com_thingino_dfu_TdfuBridge_nativeWriteFirmware(
 }
 
 /* ========================================================================== */
+/* JNI: verifyFirmware                                                        */
+/* ========================================================================== */
+
+JNIEXPORT jint JNICALL
+Java_com_thingino_dfu_TdfuBridge_nativeVerifyFirmware(
+        JNIEnv *env, jclass clazz, jint fd, jstring input_file_str) {
+    (void)clazz;
+
+    const char *input_cstr = (*env)->GetStringUTFChars(env, input_file_str, NULL);
+    if (!input_cstr)
+        return -1;
+
+    LOGI("nativeVerifyFirmware: fd=%d input=%s", fd, input_cstr);
+
+    /* Read the flash back and compare against the just-written file. Same DFU
+     * gadget, same alt -1 (first alt = boot flash) as the write. */
+    char dmsg[256];
+    uint64_t mismatch_off = 0;
+    jni_log("DFU verify (reading back)...\n");
+    jni_progress(0, "verify", "Verifying flash...");
+    usb_device_t *ddev = device_from_fd(fd);
+    tdfu_error_t dr = ddev ? tdfu_dfu_verify_device(ddev, -1, input_cstr, &mismatch_off) : TDFU_ERROR_OPEN_FAILED;
+    if (ddev) device_close_android(ddev);
+    if (dr == TDFU_SUCCESS) {
+        jni_progress(100, "verify", "Verify OK!");
+        jni_log("DFU verify OK: flash matches.\n");
+    } else if (dr == TDFU_ERROR_VERIFY) {
+        snprintf(dmsg, sizeof(dmsg), "ERROR: verify failed at offset 0x%08llX\n", (unsigned long long)mismatch_off);
+        jni_log(dmsg);
+    } else {
+        snprintf(dmsg, sizeof(dmsg), "ERROR: DFU verify failed: %s\n", tdfu_error_to_string(dr));
+        jni_log(dmsg);
+    }
+    (*env)->ReleaseStringUTFChars(env, input_file_str, input_cstr);
+    return (dr == TDFU_SUCCESS) ? 0 : -1;
+}
+
+/* ========================================================================== */
 /* JNI: setDebug                                                              */
 /* ========================================================================== */
 

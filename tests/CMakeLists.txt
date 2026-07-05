@@ -20,3 +20,6 @@ add_tdfu_test(test_protocol)
 
 # File operations test
 add_tdfu_test(test_file_ops)
+
+# DFU verify read-back comparison (tdfu_first_diff)
+add_tdfu_test(test_verify)

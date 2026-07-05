@@ -196,7 +196,7 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
         return fwData
     }
 
-    fun writeFirmware(deviceIndex: Int, variant: String, firmwareData: ByteArray): Boolean {
+    fun writeFirmware(deviceIndex: Int, variant: String, firmwareData: ByteArray, verify: Boolean = false): Boolean {
         val variantBytes = variant.toByteArray(Charsets.UTF_8)
 
         val crc = CRC32()
@@ -204,9 +204,10 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
         val crcValue = crc.value.toInt()
 
         // Wire format the daemon parses:
-        //   [idx][variant_len][variant][alt_len][alt][fw_len][fw][crc]
+        //   [idx][variant_len][variant][alt_len][alt][fw_len][fw][crc][verify?]
         // alt is empty here (alt_len = 0 => daemon's default alt 0 = flash).
-        val buf = ByteBuffer.allocate(2 + variantBytes.size + 1 + 4 + firmwareData.size + 4)
+        // The trailing verify byte is optional (older daemons stop after crc).
+        val buf = ByteBuffer.allocate(2 + variantBytes.size + 1 + 4 + firmwareData.size + 4 + if (verify) 1 else 0)
             .order(ByteOrder.BIG_ENDIAN)
         buf.put(deviceIndex.toByte())
         buf.put(variantBytes.size.toByte())
@@ -215,6 +216,7 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
         buf.putInt(firmwareData.size)
         buf.put(firmwareData)
         buf.putInt(crcValue)
+        if (verify) buf.put(1.toByte())
 
         sendRequest(CMD_WRITE, buf.array())
         return drainResponses() != null

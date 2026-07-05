@@ -53,6 +53,7 @@ I18N.add("it", {
   ph_remote_token: "token di autenticazione (opzionale)",
   remote_lna_note: "Chrome chiederà una volta di consentire l'accesso alla rete locale.",
   setting_help_label: 'Mostra i suggerimenti di aiuto: passa il mouse su qualsiasi controllo per un fumetto (o usa il pulsante <i class="bi bi-question-lg"></i>)',
+  setting_verify_label: "Verifica dopo la scrittura (rilettura e confronto)",
   setting_debug_label: "Log di debug (diagnostica dettagliata)",
   btn_cancel: "Annulla",
   btn_save: "Salva",
@@ -97,6 +98,7 @@ I18N.add("it", {
   help_setting_remote: "Modalità remota: questa pagina comunica con un daemon dfu-remote in esecuzione su un'altra macchina a cui è collegato il dispositivo. Utile per scrivere da uno smartphone o da un'altra macchina sulla rete.",
   help_remote_url: "L'indirizzo del daemon dfu-remote, ad es. http://192.168.1.50:5050. Chrome chiederà una volta di consentire l'accesso alla rete locale.",
   help_remote_token: "Token di autenticazione opzionale, solo se il daemon è stato avviato con uno. Altrimenti lascia il campo vuoto.",
+  help_setting_verify: "Dopo la scrittura rilegge l'intera flash e la confronta con il file. Rileva una scrittura difettosa, ma raddoppia all'incirca il tempo di scrittura. Disattivata per impostazione predefinita.",
   help_setting_debug: "Diagnostica dettagliata nel log delle attività; sostituisce il vecchio flag URL ?debug. Lascialo disattivato a meno che tu non stia risolvendo un problema.",
   help_version: "Codice sorgente, release e documentazione su GitHub per il progetto thingino-dfu. Qui puoi scaricare le build CLI/daemon o segnalare un problema.",
 });

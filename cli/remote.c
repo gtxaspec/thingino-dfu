@@ -483,7 +483,8 @@ int remote_bootstrap(int device_index, const char *cpu_variant, const char *firm
  *   [1:device_idx][1:variant_len][N:variant]
  *   [4:fw_len][fw_data][4:crc32]
  */
-int remote_write_firmware(int device_index, const char *cpu_variant, const char *firmware_file, const char *alt) {
+int remote_write_firmware(int device_index, const char *cpu_variant, const char *firmware_file, const char *alt,
+                          bool verify) {
     uint8_t *fw_data = NULL;
     size_t fw_len = 0;
     if (read_file(firmware_file, &fw_data, &fw_len) < 0) {
@@ -502,7 +503,9 @@ int remote_write_firmware(int device_index, const char *cpu_variant, const char 
     /* alt selector: empty = daemon default (alt 0 = flash); name/num targets it */
     const char *alt_s = alt ? alt : "";
     size_t alt_len = strlen(alt_s);
-    size_t payload_len = 2 + variant_len + 1 + alt_len + 4 + fw_len + 4;
+    /* Trailing [1:verify] byte is optional in the wire format (older daemons
+     * stop after the CRC); only append it when verify is requested. */
+    size_t payload_len = 2 + variant_len + 1 + alt_len + 4 + fw_len + 4 + (verify ? 1 : 0);
     uint8_t *payload = malloc(payload_len);
     if (!payload) {
         free(fw_data);
@@ -523,6 +526,8 @@ int remote_write_firmware(int device_index, const char *cpu_variant, const char 
     p += fw_len;
     write_be32(p, fw_crc);
     p += 4;
+    if (verify)
+        *p++ = 1;
 
     free(fw_data);
 
