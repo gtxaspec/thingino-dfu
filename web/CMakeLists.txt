@@ -106,3 +106,33 @@ set_target_properties(tdfu_web PROPERTIES
     # would otherwise not trigger a relink. Make it an explicit link dependency.
     LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/libusb-webusb.js"
 )
+
+# Resolve a real node binary for the post-link patch below. Bare "node" is
+# unsafe: the emsdk root is on PATH and contains a "node/" *directory*, so an
+# unqualified "node" resolves to that directory ("node: Permission denied",
+# make error 127). find_program returns the actual executable (it skips
+# directories); EMSDK_NODE is the fallback inside an emsdk environment.
+find_program(NODE_EXECUTABLE NAMES node)
+if(NOT NODE_EXECUTABLE AND DEFINED ENV{EMSDK_NODE})
+    set(NODE_EXECUTABLE "$ENV{EMSDK_NODE}")
+endif()
+if(NOT NODE_EXECUTABLE)
+    message(FATAL_ERROR "node not found - needed to patch the WASM glue (patch-textdecoder.mjs)")
+endif()
+
+# Post-link fix: with ALLOW_MEMORY_GROWTH the WASM heap is a resizable
+# ArrayBuffer in recent Chrome, and TextDecoder.decode() rejects views over
+# resizable buffers ("The provided ArrayBuffer value must not be resizable").
+# Emscripten's UTF8ArrayToString feeds it heapOrArray.subarray(...) - a view -
+# for non-shared-memory builds, so decoding any C string > 16 bytes throws.
+# Rewrite those decode views to .slice() (a copy into a fresh, non-resizable
+# buffer), exactly what Emscripten itself does for shared memory. TEXTDECODER=0
+# (which would have avoided TextDecoder entirely) was removed in Emscripten 5+,
+# so this version-stable post-link patch is the fix. The emsdk version is pinned
+# (web/build.sh, .github/workflows/build.yml) so the glue shape stays stable.
+add_custom_command(TARGET tdfu_web POST_BUILD
+    COMMAND "${NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/patch-textdecoder.mjs"
+                 "$<TARGET_FILE:tdfu_web>"
+    VERBATIM
+    COMMENT "Patching TextDecoder decode() for resizable ArrayBuffers"
+)
