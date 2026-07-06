@@ -248,6 +248,8 @@ const char *tdfu_stage_to_string(tdfu_stage_t stage) {
         return "bootrom";
     case TDFU_STAGE_FIRMWARE:
         return "firmware";
+    case TDFU_STAGE_DFU:
+        return "dfu";
     default:
         return "unknown";
     }
