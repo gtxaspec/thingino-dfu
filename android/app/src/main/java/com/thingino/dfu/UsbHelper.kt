@@ -46,8 +46,20 @@ class UsbHelper(private val context: Context) {
             }
         }
 
-        /** True if the device is a running U-Boot DFU gadget (a108/601a:4d44). */
-        fun isDfuGadget(device: UsbDevice): Boolean = device.productId == PID_DFU_GADGET
+        /**
+         * True if the device is a running U-Boot DFU gadget: the standard DFU
+         * gadget PID (a108/601a:4d44), or any device exposing a DFU interface
+         * (class 0xFE / subclass 0x01), which catches a gadget that shares the
+         * bootrom PID (0xC309). Detection is by descriptor, not PID alone.
+         */
+        fun isDfuGadget(device: UsbDevice): Boolean {
+            if (device.productId == PID_DFU_GADGET) return true
+            for (i in 0 until device.interfaceCount) {
+                val itf = device.getInterface(i)
+                if (itf.interfaceClass == 0xFE && itf.interfaceSubclass == 0x01) return true
+            }
+            return false
+        }
     }
 
     private val usbManager: UsbManager =

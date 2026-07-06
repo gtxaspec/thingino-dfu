@@ -194,6 +194,13 @@ tdfu_error_t usb_manager_find_devices_fast(usb_manager_t *manager, tdfu_device_i
 tdfu_error_t usb_manager_open_device(usb_manager_t *manager, const tdfu_device_info_t *info, usb_device_t **device);
 void usb_manager_cleanup(usb_manager_t *manager);
 
+/* True if the device's config descriptor exposes a DFU interface (class 0xFE /
+ * subclass 0x01) - identifies a U-Boot DFU gadget by descriptor rather than PID,
+ * so a gadget that shares the bootrom PID (0xC309) is still recognized. Always
+ * false on the Emscripten build (its stub libusb has no config API; the web
+ * detects the gadget in JS). */
+bool usb_dev_has_dfu_interface(libusb_device *dev);
+
 // Device functions
 tdfu_error_t usb_device_init(usb_device_t *device, uint8_t bus, uint8_t address);
 tdfu_error_t usb_device_close(usb_device_t *device);

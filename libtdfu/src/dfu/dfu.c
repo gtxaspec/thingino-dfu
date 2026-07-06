@@ -415,7 +415,12 @@ bool tdfu_dfu_gadget_present(usb_manager_t *manager) {
         struct libusb_device_descriptor dd;
         if (libusb_get_device_descriptor(list[i], &dd) != 0)
             continue;
-        if ((dd.idVendor == 0x601A || dd.idVendor == 0xA108) && dd.idProduct == 0x4D44)
+        if (dd.idVendor != 0x601A && dd.idVendor != 0xA108)
+            continue;
+        /* The standard DFU gadget PID, or any Ingenic device exposing a DFU
+         * interface (class 0xFE/sub 0x01) - the latter catches a gadget that
+         * shares the bootrom PID (0xC309). */
+        if (dd.idProduct == 0x4D44 || usb_dev_has_dfu_interface(list[i]))
             found = true;
     }
     libusb_free_device_list(list, 1);

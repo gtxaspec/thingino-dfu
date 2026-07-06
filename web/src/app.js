@@ -453,7 +453,7 @@ async function connectDevice() {
 
         // A U-Boot DFU gadget (a108:4d44) is ready to flash directly; it isn't
         // an Ingenic bootrom, so skip the SoC detect path.
-        if (device.productId === 0x4D44) {
+        if (deviceIsDfuGadget(device)) {
             inDfuMode = true;
             showDeviceInfo(detectedVariantName ? detectedVariantName.toUpperCase() : '—', 'U-Boot DFU',
                        device.vendorId, device.productId);
@@ -509,6 +509,30 @@ async function connectDevice() {
  * automatically. The very first authorization still needs one chooser click
  * (WebUSB won't surface a device that isn't present yet, and the PID changes
  * across re-enumeration). */
+
+/* Recognize the U-Boot DFU gadget by its DFU interface (class 0xFE / subclass
+ * 0x01) rather than only the 0x4D44 PID, so a gadget that shares the bootrom PID
+ * (0xC309) is still detected. The gadget often has no active configuration set,
+ * so scan device.configurations (all), not device.configuration. */
+function deviceHasDfuInterface(device) {
+    try {
+        var cfgs = device.configurations || [];
+        for (var c = 0; c < cfgs.length; c++) {
+            var ifs = (cfgs[c] && cfgs[c].interfaces) || [];
+            for (var i = 0; i < ifs.length; i++) {
+                var alts = (ifs[i] && ifs[i].alternates) || [];
+                for (var a = 0; a < alts.length; a++) {
+                    if (alts[a].interfaceClass === 0xFE && alts[a].interfaceSubclass === 0x01) return true;
+                }
+            }
+        }
+    } catch (e) { /* ignore */ }
+    return false;
+}
+function deviceIsDfuGadget(device) {
+    return device.productId === 0x4D44 || deviceHasDfuInterface(device);
+}
+
 async function autoAttachDevice(device) {
     if (!tdfuReady || !device) { log('autoAttach: not ready', 'debug'); return; }
     if (device.vendorId !== 0x601A && device.vendorId !== 0xA108) {
@@ -527,7 +551,7 @@ async function autoAttachDevice(device) {
         window._webusb_devices.push(device);
     setAttention('btn-connect', false); // device is here; no manual re-pick needed
 
-    if (device.productId === 0x4D44) {
+    if (deviceIsDfuGadget(device)) {
         inDfuMode = true;
         showDeviceInfo(detectedVariantName ? detectedVariantName.toUpperCase() : '—', 'U-Boot DFU',
                        device.vendorId, device.productId);

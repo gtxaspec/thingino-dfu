@@ -21,6 +21,34 @@ tdfu_error_t usb_manager_init(usb_manager_t *manager) {
     return TDFU_SUCCESS;
 }
 
+/* See tdfu.h. Reads config index 0, not the active config: the driverless DFU
+ * gadget often has no configuration set. */
+bool usb_dev_has_dfu_interface(libusb_device *dev) {
+#ifdef __EMSCRIPTEN__
+    /* The web build's stub libusb has no config-descriptor API; the web detects
+     * the gadget in JS (app.js deviceIsDfuGadget) instead. */
+    (void)dev;
+    return false;
+#else
+    struct libusb_config_descriptor *cfg = NULL;
+    if (libusb_get_config_descriptor(dev, 0, &cfg) != 0 || !cfg)
+        return false;
+    bool found = false;
+    for (int i = 0; i < cfg->bNumInterfaces && !found; i++) {
+        const struct libusb_interface *itf = &cfg->interface[i];
+        for (int a = 0; a < itf->num_altsetting; a++) {
+            const struct libusb_interface_descriptor *id = &itf->altsetting[a];
+            if (id->bInterfaceClass == 0xFE && id->bInterfaceSubClass == 0x01) {
+                found = true;
+                break;
+            }
+        }
+    }
+    libusb_free_config_descriptor(cfg);
+    return found;
+#endif
+}
+
 // Helper: check if a USB device is an Ingenic bootrom/DFU device
 static bool is_ingenic_device(const struct libusb_device_descriptor *desc, bool *out_bootrom, bool *out_firmware,
                               bool *out_dfu) {
@@ -72,6 +100,14 @@ tdfu_error_t usb_manager_find_devices(usb_manager_t *manager, tdfu_device_info_t
         bool is_bootrom, is_firmware, is_dfu;
         if (!is_ingenic_device(&desc, &is_bootrom, &is_firmware, &is_dfu))
             continue;
+
+        /* Stage by descriptor, not PID: a DFU interface means the U-Boot DFU
+         * gadget even when it shares the bootrom PID (0xC309). This keeps the
+         * bootrom's CPU-info probe and the diag path off a gadget. */
+        if (usb_dev_has_dfu_interface(device_list[i])) {
+            is_dfu = true;
+            is_bootrom = false;
+        }
         (void)is_bootrom;
 
         DEBUG_PRINT("Found Ingenic device %zd (VID:0x%04X, PID:0x%04X)\n", i, desc.idVendor, desc.idProduct);
