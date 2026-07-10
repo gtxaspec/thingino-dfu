@@ -411,8 +411,10 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    /* -b: bootstrap a bootrom device into U-Boot DFU mode */
-    if (options.bootstrap) {
+    /* -b on its own: bootstrap a bootrom device into U-Boot DFU mode and stop.
+     * When -w/-r is also given, fall through so the transfer path below auto-
+     * bootstraps and then writes/reads in one shot. */
+    if (options.bootstrap && !options.write_firmware && !options.read_firmware) {
         result = tdfu_dfu_bootstrap(&manager, options.device_index, options.firmware_dir, options.force_cpu,
                                     options.spl_file, options.uboot_file);
         usb_manager_cleanup(&manager);
@@ -448,6 +450,30 @@ int main(int argc, char *argv[]) {
         }
         usb_manager_cleanup(&manager);
         return result != TDFU_SUCCESS ? EXIT_DEVICE_ERROR : 0;
+    }
+
+    /* -w/-r: if the target is still a bootrom, bootstrap it into the U-Boot DFU
+     * gadget and wait for it to re-enumerate, then fall through to the transfer
+     * below. Mirrors the remote and cloner backends, where a plain -w/-r
+     * bootstraps as needed - so `thingino-dfu -w <img>` works in one shot. */
+    if (options.write_firmware || options.read_firmware) {
+        tdfu_device_info_t *devs = NULL;
+        int n = 0;
+        if (usb_manager_find_devices(&manager, &devs, &n) == TDFU_SUCCESS &&
+            options.device_index >= 0 && options.device_index < n &&
+            devs[options.device_index].stage == TDFU_STAGE_BOOTROM) {
+            LOG_INFO("Device is in bootrom mode; bootstrapping into DFU...\n");
+            result = tdfu_dfu_bootstrap(&manager, options.device_index, options.firmware_dir, options.force_cpu,
+                                        options.spl_file, options.uboot_file);
+            if (result != TDFU_SUCCESS) {
+                LOG_ERROR("DFU bootstrap failed: %s\n", tdfu_error_to_string(result));
+                free(devs);
+                usb_manager_cleanup(&manager);
+                return EXIT_DEVICE_ERROR;
+            }
+            wait_for_device(&manager, true); /* block until the gadget re-enumerates */
+        }
+        free(devs);
     }
 
     tdfu_dfu_info_t dfu_info;
