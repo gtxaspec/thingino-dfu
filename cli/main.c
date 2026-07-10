@@ -260,6 +260,28 @@ static void print_diag(const tdfu_diag_info_t *d) {
     printf("\n%s\n", report);
 }
 
+/* Remote -w/-r first bootstraps a bootrom target into the U-Boot DFU gadget -
+ * there is no gadget to transfer with otherwise. A device that has already
+ * re-enumerated as a gadget is transferred directly (re-bootstrapping a gadget
+ * fails). Returns 0 when the device is ready to transfer, -1 on bootstrap
+ * failure. `action` labels the "proceeding to <action>" line. */
+static int remote_prepare_transfer(const cli_options_t *o, const char **cpu, bool dfu_custom_blobs,
+                                   const char *action) {
+    int stage = remote_device_stage(o->device_index); /* 0=bootrom 1=firmware <0=unknown */
+    if (!o->bootstrap && stage != 0)
+        return 0; /* already a DFU gadget (or firmware stage) - transfer directly */
+    if (!*cpu && !dfu_custom_blobs)
+        *cpu = remote_detect_variant(o->device_index);
+    if (!*cpu && !dfu_custom_blobs) {
+        fprintf(stderr, "Failed to detect remote device variant for bootstrap\n");
+        return -1;
+    }
+    int rc = remote_bootstrap(o->device_index, *cpu, o->firmware_dir, o->spl_file, o->uboot_file);
+    if (rc == 0)
+        printf("Bootstrap complete, proceeding to %s\n\n", action);
+    return rc;
+}
+
 int main(int argc, char *argv[]) {
     fprintf(stderr, "thingino-dfu %s (%s)\n", VERSION, GIT_HASH);
 
@@ -339,25 +361,9 @@ int main(int argc, char *argv[]) {
         if (options.list_devices) {
             rc = remote_list_devices() < 0 ? EXIT_DEVICE_ERROR : 0;
         } else if (options.write_firmware && options.input_file) {
-            /* -w bootstraps then writes: bootstrap if the user passed -b or the
-             * target is still in bootrom; if it has already re-enumerated as a
-             * DFU gadget, write straight away (re-bootstrapping a gadget fails). */
-            int stage = remote_device_stage(options.device_index); /* 0=bootrom 1=fw <0=unknown */
-            bool do_bootstrap = options.bootstrap || stage == 0;
-            rc = 0;
-            if (do_bootstrap) {
-                if (!cpu && !dfu_custom_blobs)
-                    cpu = remote_detect_variant(options.device_index);
-                if (!cpu && !dfu_custom_blobs) {
-                    fprintf(stderr, "Failed to detect remote device variant for bootstrap\n");
-                    rc = -1;
-                } else {
-                    rc = remote_bootstrap(options.device_index, cpu, options.firmware_dir, options.spl_file,
-                                          options.uboot_file);
-                    if (rc == 0)
-                        printf("Bootstrap complete, proceeding to write\n\n");
-                }
-            }
+            /* A bootrom target is bootstrapped into the DFU gadget first; a
+             * device already re-enumerated as a gadget writes straight away. */
+            rc = remote_prepare_transfer(&options, &cpu, dfu_custom_blobs, "write");
             if (rc == 0)
                 rc = remote_write_firmware(options.device_index, cpu, options.input_file, options.alt, options.verify);
             rc = rc < 0 ? EXIT_TRANSFER_ERROR : 0;
@@ -367,7 +373,11 @@ int main(int argc, char *argv[]) {
                      ? EXIT_DEVICE_ERROR
                      : 0;
         } else if (options.read_firmware && options.output_file) {
-            rc = remote_read_firmware(options.device_index, options.output_file, options.alt) < 0 ? EXIT_TRANSFER_ERROR : 0;
+            /* Read needs the DFU gadget too, so bootstrap a bootrom first. */
+            rc = remote_prepare_transfer(&options, &cpu, dfu_custom_blobs, "read");
+            if (rc == 0)
+                rc = remote_read_firmware(options.device_index, options.output_file, options.alt);
+            rc = rc < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else if (options.diag) {
             rc = remote_diag(options.device_index) < 0 ? EXIT_DEVICE_ERROR : 0;
         } else {
