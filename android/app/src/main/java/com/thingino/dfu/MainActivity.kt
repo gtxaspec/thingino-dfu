@@ -219,12 +219,15 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         // Backend mode + host/port now live in the Settings dialog. The mode is
         // applied at the end of onCreate and whenever Settings is saved.
 
-        // Disable buttons until device is connected
-        setButtonsEnabled(false)
-
-        // Set up USB
+        // Set up USB. This has to come before setButtonsEnabled: the release-picker
+        // gate asks usbHelper whether a device is connected, so a later init means
+        // the very first setButtonsEnabled call reads an uninitialized lateinit and
+        // the activity dies before it draws.
         usbHelper = UsbHelper(this)
         usbHelper.setListener(this)
+
+        // Disable buttons until device is connected
+        setButtonsEnabled(false)
 
         // Set up native callback
         TdfuBridge.nativeSetCallback(this)
