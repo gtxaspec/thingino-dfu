@@ -49,6 +49,15 @@ window.__tdfu_debug = debugEnabled;
  * flash time). Applies to both the DFU and remote backends. */
 var verifyAfterWrite = localStorage.getItem('tdfu_verify') === '1';
 
+/* Surface the Advanced (custom SPL/U-Boot) panel in the main view. Opt-in: the
+ * bundled loaders are correct for every supported SoC, so this is an expert
+ * escape hatch rather than a normal step. */
+var advancedEnabled = localStorage.getItem('tdfu_advanced') === '1';
+
+/* Surface the "Flash a prebuilt thingino release" panel in the main view. Opt-in,
+ * so the default view stays a plain flash-the-file-I-picked flow. */
+var releasesEnabled = localStorage.getItem('tdfu_releases') === '1';
+
 /**
  * Serialize all WASM async ccalls — Asyncify only supports one at a time.
  */
@@ -114,6 +123,13 @@ function showProgressBusy(label) {
 
 function hideProgress() {
     document.getElementById('progress').classList.add('d-none');
+}
+
+/* Runtime counterpart to data-i18n, for strings built in JS (dropdown options,
+ * status lines) that I18N.apply() cannot reach. t() resolves against the current
+ * language, falling back to English then to the key. */
+function t(key, params) {
+    return window.I18N ? I18N.t(key, params) : key;
 }
 
 /* Hex SHA-256 of a byte buffer via Web Crypto (available in the secure context
@@ -920,6 +936,38 @@ function setVerify(on) {
     if (s) s.checked = verifyAfterWrite;
 }
 
+/* Advanced (custom SPL/U-Boot) — Settings toggle, persisted. */
+function setAdvanced(on) {
+    advancedEnabled = !!on;
+    localStorage.setItem('tdfu_advanced', advancedEnabled ? '1' : '0');
+    var s = document.getElementById('setting-advanced');
+    if (s) s.checked = advancedEnabled;
+    applyAdvanced();
+}
+
+function applyAdvanced() {
+    var adv = document.getElementById('adv-wrap');
+    if (adv) adv.classList.toggle('d-none', !advancedEnabled);
+    /* Hiding the panel must not leave a custom loader armed for the next
+     * bootstrap: it would be used with nothing on screen saying so, and no way
+     * to clear it. Turning Advanced off therefore drops any loaded override. */
+    if (!advancedEnabled && (customSpl || customUboot)) clearCustomBootloader();
+}
+
+/* Prebuilt-release picker — Settings toggle, persisted. */
+function setReleases(on) {
+    releasesEnabled = !!on;
+    localStorage.setItem('tdfu_releases', releasesEnabled ? '1' : '0');
+    var s = document.getElementById('setting-releases');
+    if (s) s.checked = releasesEnabled;
+    applyReleases();
+}
+
+function applyReleases() {
+    var rel = document.getElementById('rel-wrap');
+    if (rel) rel.classList.toggle('d-none', !releasesEnabled);
+}
+
 function hideHelpBalloon() {
     _helpHover = null;
     if (_helpBalloon) _helpBalloon.classList.remove('show');
@@ -1145,6 +1193,9 @@ async function doRemoteRead() {
 
 async function doRemoteWrite(data) {
     if (!remoteReady()) return;
+    /* Same guard doDfuWrite has: a bootrom exposes no DFU gadget, so the daemon
+     * would sit waiting for one that never answers. Fail fast, don't hang. */
+    if (!inDfuMode) { log('Not a DFU device — bootstrap into DFU mode first', 'warn'); return; }
     setState('writing');
     showProgressBusy('Writing flash via daemon...');
     log('Remote write (' + data.length + ' bytes)' + (verifyAfterWrite ? ' + verify...' : '...'));
@@ -1167,9 +1218,8 @@ function applyBackendMode(mode) {
     localStorage.setItem('tdfu_backend', backendMode);
     var ind = document.getElementById('mode-indicator');
     if (ind) ind.textContent = backendMode === 'remote' ? 'Remote' : 'DFU';
-    // The custom SPL/U-Boot override is a DFU-bootstrap feature; hide it otherwise.
-    var adv = document.getElementById('adv-wrap');
-    if (adv) adv.classList.remove('d-none'); // custom SPL/U-Boot works in DFU and remote now
+    // The custom SPL/U-Boot override works in both backends, so its visibility is
+    // owned solely by the Advanced setting (see applyAdvanced), not by the backend.
     // Leaving remote mode drops any open daemon connection.
     if (backendMode !== 'remote' && remoteClient) {
         remoteClient.disconnect();
@@ -1197,6 +1247,8 @@ function openSettings() {
     var h = document.getElementById('setting-help'); if (h) h.checked = helpMode;
     var v = document.getElementById('setting-verify'); if (v) v.checked = verifyAfterWrite;
     var d = document.getElementById('setting-debug'); if (d) d.checked = debugEnabled;
+    var a = document.getElementById('setting-advanced'); if (a) a.checked = advancedEnabled;
+    var rl = document.getElementById('setting-releases'); if (rl) rl.checked = releasesEnabled;
     toggleRemoteFields();
     document.getElementById('settings-overlay').classList.remove('d-none');
 }
@@ -1247,15 +1299,254 @@ function saveSettings() {
 }
 
 /* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
+/*  Prebuilt thingino releases                                         */
+/* ------------------------------------------------------------------ */
+
+/* Where the firmware BYTES come from. GitHub release assets carry no
+ * Access-Control-Allow-Origin, so a browser cannot fetch them directly - the
+ * bytes must pass through a hop that adds the header. That hop is a Cloudflare
+ * Worker (worker/src/index.js in this repo): it streams the asset through and
+ * adds the header, refusing anything outside the thingino firmware allow-list.
+ * Listing releases needs no hop - api.github.com does send CORS. */
+var FW_PROXY = 'https://thingino-dfu-fw.gtxent.workers.dev/fw';
+
+var relAssets = {}; /* tag -> assets[] from the releases API */
+var relLoaded = false;
+
+function toggleReleases(e) {
+    if (e) e.preventDefault();
+    var panel = document.getElementById('rel-panel');
+    var chev = document.getElementById('rel-chevron');
+    var hidden = panel.classList.toggle('d-none');
+    if (chev) chev.className = hidden ? 'bi bi-chevron-right' : 'bi bi-chevron-down';
+    if (!hidden && !relLoaded) loadReleases();
+}
+
+/* (Re)build the release dropdown from relAssets, preserving the selection. Split
+ * out of loadReleases so a language switch can retranslate the options without
+ * hitting the API again. Object key order is insertion order: newest first. */
+function renderReleaseOptions() {
+    var sel = document.getElementById('rel-release');
+    if (!sel) return;
+    var keep = sel.value;
+    sel.innerHTML = '';
+    sel.appendChild(new Option(t('rel_select_release'), ''));
+    Object.keys(relAssets).forEach(function(tag) {
+        sel.appendChild(new Option(tag.replace('firmware-', ''), tag));
+    });
+    sel.value = keep;
+}
+
+/* List the firmware-<date> releases. api.github.com sends ACAO:*, so this is a
+ * plain cross-origin fetch - no proxy involved. */
+async function loadReleases() {
+    var sel = document.getElementById('rel-release');
+    try {
+        var r = await fetch('https://api.github.com/repos/themactep/thingino-firmware/releases?per_page=30');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var rels = (await r.json()).filter(function(x) {
+            return !x.draft && x.tag_name.indexOf('firmware-') === 0;
+        });
+        relAssets = {};
+        rels.forEach(function(x) { relAssets[x.tag_name] = x.assets; });
+        relLoaded = true;
+        renderReleaseOptions();
+        log('Found ' + rels.length + ' thingino firmware releases.');
+    } catch (e) {
+        sel.innerHTML = '';
+        sel.appendChild(new Option(t('rel_load_error'), ''));
+        log('Could not list releases: ' + e.message, 'error');
+    }
+}
+
+/* Fill the device list for the selected release. The SoC is part of the asset
+ * name (thingino-<vendor>_<model>_<soc>_<sensor>_<wifi>.bin), so the detected
+ * SoC narrows ~160 images down to the handful that fit this board. */
+function releaseChanged() {
+    var tag = document.getElementById('rel-release').value;
+    var dev = document.getElementById('rel-device');
+    var info = document.getElementById('rel-info');
+    var btn = document.getElementById('rel-flash');
+    /* Survive a rebuild triggered by a language switch or the show-all tick. */
+    var keep = dev.value;
+    btn.disabled = true;
+
+    if (!tag || !relAssets[tag]) {
+        dev.disabled = true;
+        dev.innerHTML = '';
+        dev.appendChild(new Option(t('rel_pick_release'), ''));
+        info.textContent = '';
+        return;
+    }
+
+    var soc = (detectedVariantName || '').toLowerCase();
+    var all = document.getElementById('rel-all').checked;
+    var bins = relAssets[tag].filter(function(a) { return /\.bin$/.test(a.name); });
+    var list = bins;
+    if (soc && !all) {
+        var re = new RegExp('_' + soc + '[._]'); /* _t31x_ or _t31x. */
+        list = bins.filter(function(a) { return re.test(a.name.toLowerCase()); });
+    }
+
+    dev.disabled = false;
+    dev.onchange = function() { btn.disabled = !dev.value; };
+    if (!list.length) {
+        dev.innerHTML = '';
+        dev.appendChild(new Option(t('rel_no_match'), ''));
+        info.textContent = soc && !all
+            ? t('rel_info_none_soc', { soc: soc.toUpperCase() })
+            : t('rel_info_no_bins');
+        return;
+    }
+    dev.innerHTML = '';
+    dev.appendChild(new Option(t('rel_select_device'), ''));
+    list.forEach(function(a) {
+        dev.appendChild(new Option(
+            a.name.replace(/^thingino-/, '').replace(/\.bin$/, '').replace(/_/g, ' '), a.name));
+    });
+    dev.value = keep; /* no-op if this release has no such image */
+    btn.disabled = !dev.value;
+
+    /* Count last, so no translation has to agree with a plural. */
+    info.textContent = (soc && !all
+        ? t('rel_info_soc', { soc: soc.toUpperCase(), n: list.length })
+        : t('rel_info_all', { n: list.length })) +
+        (soc ? '' : ' ' + t('rel_info_connect'));
+}
+
+/* fetch() the image with a live progress bar. */
+async function downloadWithProgress(url, label) {
+    var r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var total = parseInt(r.headers.get('Content-Length') || '0', 10);
+    var reader = r.body.getReader();
+    var chunks = [], got = 0;
+    for (;;) {
+        var res = await reader.read();
+        if (res.done) break;
+        chunks.push(res.value);
+        got += res.value.length;
+        var mb = (got / 1048576).toFixed(1);
+        if (total)
+            showProgress(Math.floor(got * 100 / total), label + ' ' + mb + ' / ' + (total / 1048576).toFixed(1) + ' MB');
+        else
+            showProgressBusy(label + ' ' + mb + ' MB');
+    }
+    var out = new Uint8Array(got), off = 0;
+    chunks.forEach(function(c) { out.set(c, off); off += c.length; });
+    return out;
+}
+
+/* Every .bin ships a .bin.sha256sum next to it - verify before flashing. */
+async function verifySha256(tag, name, data) {
+    try {
+        var r = await fetch(FW_PROXY + '?tag=' + encodeURIComponent(tag) +
+                            '&name=' + encodeURIComponent(name + '.sha256sum'));
+        if (!r.ok) {
+            log('No sha256sum published for this image; skipping verification.', 'warn');
+            return true;
+        }
+        /* thingino's .sha256sum starts with '#' comment lines, then the usual
+         * "<hash>  <filename>" line - so skip comments, take the first hash. */
+        var want = '';
+        (await r.text()).split('\n').forEach(function(line) {
+            line = line.trim();
+            if (want || !line || line.charAt(0) === '#') return;
+            var tok = line.split(/\s+/)[0].toLowerCase();
+            if (/^[0-9a-f]{64}$/.test(tok)) want = tok;
+        });
+        if (!want) {
+            log('Could not parse the published sha256sum; skipping verification.', 'warn');
+            return true;
+        }
+        var got = (await sha256Hex(data)).toLowerCase();
+        if (want !== got) {
+            log('SHA256 mismatch: expected ' + want + ', got ' + got, 'error');
+            return false;
+        }
+        return true;
+    } catch (e) {
+        log('SHA256 check skipped: ' + e.message, 'warn');
+        return true;
+    }
+}
+
+/* A bootrom has no DFU gadget to write to, so bootstrap it first. The Write
+ * button is gated on inDfuMode, but Flash-from-release is one-click by design,
+ * so it bootstraps on demand - same as a plain `thingino-dfu -w` on the CLI.
+ * Returns true once the device is a DFU gadget. */
+async function ensureDfuMode() {
+    if (inDfuMode) return true;
+    log('Device is in bootrom mode; bootstrapping into DFU first...');
+    await doBootstrap();
+    /* The remote bootstrap polls discover until the gadget re-enumerates and
+     * sets inDfuMode itself. The local WebUSB path re-attaches asynchronously
+     * via the 'connect' event, so give that a moment to land. */
+    for (var i = 0; i < 40 && !inDfuMode; i++)
+        await new Promise(function(r) { setTimeout(r, 500); });
+
+    /* The gadget has only just enumerated. Starting a 16 MB download the instant
+     * it appears races U-Boot's DFU coming fully up; a wedged transfer leaves a
+     * stale block sequence behind (U-Boot then reports "Wrong sequence number"
+     * on the next attempt). A short settle avoids that. */
+    if (inDfuMode) await new Promise(function(r) { setTimeout(r, 1500); });
+    return inDfuMode;
+}
+
+/* Download the chosen image, verify it, bootstrap if needed, then hand the bytes
+ * to the normal write path - identical to picking a local file. */
+async function flashFromRelease() {
+    var tag = document.getElementById('rel-release').value;
+    var name = document.getElementById('rel-device').value;
+    if (!tag || !name) return;
+
+    var btn = document.getElementById('rel-flash');
+    btn.disabled = true;
+    try {
+        log('Downloading ' + name + ' ...');
+        var data = await downloadWithProgress(
+            FW_PROXY + '?tag=' + encodeURIComponent(tag) + '&name=' + encodeURIComponent(name),
+            t('rel_downloading'));
+
+        if (!await verifySha256(tag, name, data)) {
+            hideProgress();
+            btn.disabled = false;
+            return; /* refuse to flash a corrupt download */
+        }
+        hideProgress();
+
+        firmwareData = data;
+        firmwareFileName = name;
+        var sizeMB = (data.length / (1024 * 1024)).toFixed(2);
+        document.getElementById('file-info').textContent = t('rel_file_ok', { name: name, size: sizeMB });
+        log('Firmware loaded: ' + name + ' (' + sizeMB + ' MB), sha256 verified.');
+
+        /* Bootstrap a bootrom target before writing, or the write has no gadget
+         * to talk to (the daemon would just sit there waiting). */
+        if (!await ensureDfuMode()) {
+            log('Device did not enter DFU mode; not flashing.', 'error');
+            btn.disabled = false;
+            return;
+        }
+        doWrite();
+    } catch (e) {
+        hideProgress();
+        log('Download failed: ' + e.message, 'error');
+        btn.disabled = false;
+    }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Init                                                               */
 /* ------------------------------------------------------------------ */
 
 // Expose handlers referenced by HTML onclick/onchange attributes
 Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSelected, doRead,
-                        doDiag, closeDiag, copyDiag, toggleHelp, setHelp, setDebug, setVerify,
+                        doDiag, closeDiag, copyDiag, toggleHelp, setHelp, setDebug, setVerify, setAdvanced, setReleases,
                         openSettings, closeSettings, openWindowsHelp, closeWindowsHelp, saveSettings, toggleRemoteFields,
                         toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader,
-                        selectRemoteDevice });
+                        selectRemoteDevice, toggleReleases, releaseChanged, flashFromRelease });
 
 (function() {
     if (!navigator.usb) {
@@ -1278,6 +1569,8 @@ Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSele
     });
 
     applyBackendMode(backendMode);
+    applyAdvanced(); // restore the saved Advanced-panel preference (default off)
+    applyReleases(); // restore the saved release-picker preference (default off)
     setState('idle');
     // The Windows-driver prompt only matters on Windows (WinUSB via Zadig);
     // the link is hidden by default and revealed here only on Windows.
@@ -1291,7 +1584,12 @@ Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSele
     if (window.I18N) {
         I18N.apply();
         I18N.selector('lang-slot');
-        window.addEventListener('i18nchange', function () { I18N.apply(); });
+        window.addEventListener('i18nchange', function () {
+            I18N.apply();
+            // I18N.apply() only reaches data-i18n elements. The release dropdowns
+            // are built in JS, so they retranslate themselves here.
+            if (relLoaded) { renderReleaseOptions(); releaseChanged(); }
+        });
     }
     applyHelpMode(); // restore the saved help-hints preference (default off)
     initModule();

@@ -224,8 +224,45 @@
             <div class="file-info mt-1" id="file-info"></div>
             <input type="file" id="firmware-file" accept=".bin" onchange="firmwareSelected(this)">
 
-            <!-- Advanced: optional custom DFU bootloader (DFU backend only) -->
-            <div id="adv-wrap" class="mt-2">
+            <!-- Flash a prebuilt thingino release straight from GitHub. The list
+                 comes from the GitHub API (CORS-clean); the image itself is
+                 fetched through /fw, which adds the header GitHub omits.
+                 Hidden unless the user opts in via Settings; starts d-none so it
+                 never flashes on load. -->
+            <div id="rel-wrap" class="mt-2 d-none">
+                <a href="#" id="rel-toggle" class="small text-secondary text-decoration-none" onclick="toggleReleases(event)" data-help="help_rel_toggle">
+                    <i class="bi bi-chevron-right" id="rel-chevron"></i>
+                    <span data-i18n="rel_toggle">Flash a prebuilt thingino release</span>
+                </a>
+                <div id="rel-panel" class="d-none mt-2">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-12 col-md-3">
+                            <select id="rel-release" class="form-select form-select-sm" onchange="releaseChanged()" data-help="help_rel_release">
+                                <option value="" data-i18n="rel_loading">Loading releases...</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-7">
+                            <select id="rel-device" class="form-select form-select-sm" disabled data-help="help_rel_device">
+                                <option value="" data-i18n="rel_pick_release">Select a release first</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-2 d-grid">
+                            <button id="rel-flash" class="btn btn-warning btn-sm" onclick="flashFromRelease()" disabled data-help="help_rel_flash">
+                                <i class="bi bi-lightning-charge me-1"></i> <span data-i18n="rel_flash">Flash</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-check mt-2" data-help="help_rel_all">
+                        <input class="form-check-input" type="checkbox" id="rel-all" onchange="releaseChanged()">
+                        <label class="form-check-label small muted" for="rel-all" data-i18n="rel_show_all">Show all devices (not just my SoC)</label>
+                    </div>
+                    <div class="small muted mt-1" id="rel-info"></div>
+                </div>
+            </div>
+
+            <!-- Advanced: optional custom DFU bootloader. Hidden unless the user
+                 opts in via Settings; starts d-none so it never flashes on load. -->
+            <div id="adv-wrap" class="mt-2 d-none">
                 <a href="#" id="adv-toggle" class="small text-secondary text-decoration-none" onclick="toggleAdvanced(event)" data-help="help_advanced">
                     <i class="bi bi-chevron-right" id="adv-chevron"></i> <span data-i18n="adv_toggle">Advanced: custom SPL / U-Boot</span>
                 </a>
@@ -301,13 +338,23 @@
                 <div class="small text-secondary mt-1"><i class="bi bi-info-circle me-1"></i><span data-i18n="remote_lna_note">Chrome will prompt once to allow local-network access.</span></div>
             </div>
             <hr class="my-2">
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="setting-help" onchange="setHelp(this.checked)">
-                <label class="form-check-label" for="setting-help" data-i18n-html="setting_help_label">Show help hints: hover any control for a balloon (or use the <i class="bi bi-question-lg"></i> button)</label>
-            </div>
+            <p class="small text-secondary mb-2" data-i18n="settings_flashing">Flashing options</p>
             <div class="form-check form-switch" data-help="help_setting_verify">
                 <input class="form-check-input" type="checkbox" id="setting-verify" onchange="setVerify(this.checked)">
                 <label class="form-check-label" for="setting-verify" data-i18n="setting_verify_label">Verify after write (read back and compare)</label>
+            </div>
+            <div class="form-check form-switch" data-help="help_setting_releases">
+                <input class="form-check-input" type="checkbox" id="setting-releases" onchange="setReleases(this.checked)">
+                <label class="form-check-label" for="setting-releases" data-i18n="setting_releases_label">Show Flash a prebuilt thingino release in the main view</label>
+            </div>
+            <div class="form-check form-switch" data-help="help_setting_advanced">
+                <input class="form-check-input" type="checkbox" id="setting-advanced" onchange="setAdvanced(this.checked)">
+                <label class="form-check-label" for="setting-advanced" data-i18n="setting_advanced_label">Show Advanced (custom SPL / U-Boot) in the main view</label>
+            </div>
+            <hr class="my-2">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="setting-help" onchange="setHelp(this.checked)">
+                <label class="form-check-label" for="setting-help" data-i18n-html="setting_help_label">Show help hints: hover any control for a balloon (or use the <i class="bi bi-question-lg"></i> button)</label>
             </div>
             <div class="form-check form-switch" data-help="help_setting_debug">
                 <input class="form-check-input" type="checkbox" id="setting-debug" onchange="setDebug(this.checked)">
