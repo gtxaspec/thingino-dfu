@@ -210,12 +210,26 @@ function setState(state) {
     // it also stays live post-bootstrap when there's a cached readout to show.
     document.getElementById('btn-diag').disabled = !(canBoot || (lastDiagText && !busy));
 
+    updateReleaseFlash();
+
     // Glow the single "next action" so it's obvious what to click. In local DFU
     // mode with a bootrom attached, that's Bootstrap. The remote flow sets its
     // own Read/Bootstrap glow after discover/bootstrap, so clear Read on every
     // state change here and let those re-apply it.
     setAttention('btn-bootstrap', canBoot && dfu);
     setAttention('btn-read', false);
+}
+
+/* Gate the release panel's Flash button. Unlike Write it does not require
+ * inDfuMode - it is one-click by design and bootstraps a bootrom itself - but it
+ * does require a device to actually be there, exactly like every other action.
+ * hasDevice is state === 'done', which is true for a connected local USB device
+ * and for a device discovered by the remote daemon, and false before either. */
+function updateReleaseFlash() {
+    var btn = document.getElementById('rel-flash');
+    if (!btn) return;
+    var img = document.getElementById('rel-device');
+    btn.disabled = !(currentState === 'done' && img && img.value);
 }
 
 /* Toggle the pulsing "click me" glow on a button. */
@@ -1390,7 +1404,7 @@ function releaseChanged() {
     }
 
     dev.disabled = false;
-    dev.onchange = function() { btn.disabled = !dev.value; };
+    dev.onchange = updateReleaseFlash;
     if (!list.length) {
         dev.innerHTML = '';
         dev.appendChild(new Option(t('rel_no_match'), ''));
@@ -1406,7 +1420,7 @@ function releaseChanged() {
             a.name.replace(/^thingino-/, '').replace(/\.bin$/, '').replace(/_/g, ' '), a.name));
     });
     dev.value = keep; /* no-op if this release has no such image */
-    btn.disabled = !dev.value;
+    updateReleaseFlash();
 
     /* Count last, so no translation has to agree with a plural. */
     info.textContent = (soc && !all
@@ -1500,6 +1514,12 @@ async function flashFromRelease() {
     var tag = document.getElementById('rel-release').value;
     var name = document.getElementById('rel-device').value;
     if (!tag || !name) return;
+    /* The button is gated on this too, but do not rely on the button alone: a
+     * device can go away between the last render and the click. */
+    if (currentState !== 'done') {
+        log('Connect a device first.', 'warn');
+        return;
+    }
 
     var btn = document.getElementById('rel-flash');
     btn.disabled = true;
@@ -1511,7 +1531,7 @@ async function flashFromRelease() {
 
         if (!await verifySha256(tag, name, data)) {
             hideProgress();
-            btn.disabled = false;
+            updateReleaseFlash();
             return; /* refuse to flash a corrupt download */
         }
         hideProgress();
@@ -1526,14 +1546,14 @@ async function flashFromRelease() {
          * to talk to (the daemon would just sit there waiting). */
         if (!await ensureDfuMode()) {
             log('Device did not enter DFU mode; not flashing.', 'error');
-            btn.disabled = false;
+            updateReleaseFlash();
             return;
         }
         doWrite();
     } catch (e) {
         hideProgress();
         log('Download failed: ' + e.message, 'error');
-        btn.disabled = false;
+        updateReleaseFlash();
     }
 }
 

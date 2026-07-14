@@ -98,11 +98,15 @@
             background-color: rgba(255, 140, 0, 0.08) !important;
         }
         /* Disabled actions read as clearly OFF: flat muted grey instead of a
-           dimmed accent color, so it's obvious at a glance which are live. */
+           dimmed accent color, so it's obvious at a glance which are live.
+           rel-flash is a solid btn-warning rather than an outline, so without
+           this it would only dim to a slightly darker yellow and still read as
+           clickable. Enabled, it stays solid yellow: it is the primary action. */
         #btn-connect:disabled,
         #btn-bootstrap:disabled,
         #btn-write:disabled,
-        #btn-read:disabled {
+        #btn-read:disabled,
+        #rel-flash:disabled {
             color: #484f58 !important;
             border-color: #30363d !important;
             background-color: transparent !important;
