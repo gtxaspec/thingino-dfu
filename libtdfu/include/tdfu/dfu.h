@@ -65,6 +65,20 @@ tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, 
 tdfu_error_t tdfu_dfu_verify(usb_manager_t *manager, int device_index, int alt, const char *path,
                              uint64_t *mismatch_off);
 
+/* Whole-chip erase via the loader's "erase" alt (u-boot-ingenic USB-boot
+ * loaders): DFU-download the wipe token to it. DESTRUCTIVE: wipes the entire
+ * boot flash (NAND skips bad blocks). Required before writing a NAND UBI
+ * image smaller than the chip - UBI needs the space beyond the image erased.
+ * Fails with a clear error when the loader predates the "erase" alt. */
+#define TDFU_DFU_ERASE_ALT "erase"
+#define TDFU_DFU_ERASE_TOKEN "XBURST-FLASH-WIPE"
+tdfu_error_t tdfu_dfu_erase(usb_manager_t *manager, int device_index);
+
+/* Default alt for a transfer when the user gave none: the alt named "flash"
+ * (the boot flash on the u-boot-ingenic loaders), else a single alt if that
+ * is all there is. Returns the alt number, or -1 (caller must ask for --alt). */
+int tdfu_dfu_default_alt(const tdfu_dfu_info_t *info);
+
 /**
  * Bootstrap a device from the Ingenic bootrom (a108:c309) into U-Boot DFU mode:
  * USB-boot a DFU-capable SPL + U-Boot and start it; the device then re-enumerates
@@ -90,6 +104,7 @@ bool tdfu_dfu_gadget_present(usb_manager_t *manager);
 tdfu_error_t tdfu_dfu_read_device(usb_device_t *dev, int alt, const char *path, uint32_t size);
 tdfu_error_t tdfu_dfu_write_device(usb_device_t *dev, int alt, const char *path);
 tdfu_error_t tdfu_dfu_verify_device(usb_device_t *dev, int alt, const char *path, uint64_t *mismatch_off);
+tdfu_error_t tdfu_dfu_erase_device(usb_device_t *dev);
 tdfu_error_t tdfu_dfu_bootstrap_device(usb_device_t *dev, const uint8_t *spl, size_t spl_len, const uint8_t *uboot,
                                        size_t uboot_len);
 

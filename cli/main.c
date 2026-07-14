@@ -42,6 +42,7 @@ typedef struct {
     char *alt;           // DFU alt-setting: name or number
     bool wait;           // Wait for the required device to appear before proceeding
     bool verify;         // Read back and compare after a write
+    bool erase;          // Erase the whole flash (before -w, or on its own)
 } cli_options_t;
 
 void print_usage(const char *program_name) {
@@ -65,12 +66,15 @@ void print_usage(const char *program_name) {
     printf("      --token <secret>      Auth token for remote daemon\n");
     printf("      --alt <name|num>      DFU alt-setting to target\n");
     printf("      --verify              After -w, read the flash back and compare (fails on mismatch)\n");
+    printf("      --erase               Erase the WHOLE flash first (alone, or before -w).\n");
+    printf("                            Required when writing a NAND UBI image smaller than the chip.\n");
     printf("      --wait                Wait for the required device to appear, then proceed\n");
     printf("\nExamples:\n");
     printf("  thingino-dfu -b                                 # Bootrom -> U-Boot DFU (auto-detect SoC)\n");
     printf("  thingino-dfu --spl spl.bin --uboot u-boot.bin   # USB-boot custom blobs (bootstrap implied)\n");
     printf("  thingino-dfu -l                                 # List DFU alt-settings\n");
     printf("  thingino-dfu --alt rootfs -w rootfs.bin         # Flash an alt-setting via DFU\n");
+    printf("  thingino-dfu --erase -w fw.bin                  # NAND: wipe chip, then write the image\n");
     printf("  thingino-dfu --host 192.168.1.50 -w fw.bin      # Remote: bootstrap (if needed) + write\n");
     printf("  thingino-dfu --diag                             # Dump eFuse/serial/secure-boot (bootrom)\n");
 }
@@ -126,6 +130,8 @@ tdfu_error_t parse_arguments(int argc, char *argv[], cli_options_t *options) {
             options->wait = true;
         } else if (strcmp(argv[i], "--verify") == 0) {
             options->verify = true;
+        } else if (strcmp(argv[i], "--erase") == 0) {
+            options->erase = true;
         } else if (strcmp(argv[i], "--diag") == 0) {
             options->diag = true;
         } else if (strcmp(argv[i], "--alt") == 0) {
@@ -324,7 +330,7 @@ int main(int argc, char *argv[]) {
      * (t31-usbboot.py ergonomics): USB-booting them is the only thing a
      * pair of boot blobs on its own can mean. Applies to local and remote. */
     if (!options.list_devices && !options.bootstrap && !options.read_firmware && !options.write_firmware &&
-        !options.diag && options.spl_file && options.uboot_file) {
+        !options.diag && !options.erase && options.spl_file && options.uboot_file) {
         options.bootstrap = true;
     }
 
@@ -364,8 +370,16 @@ int main(int argc, char *argv[]) {
             /* A bootrom target is bootstrapped into the DFU gadget first; a
              * device already re-enumerated as a gadget writes straight away. */
             rc = remote_prepare_transfer(&options, &cpu, dfu_custom_blobs, "write");
+            if (rc == 0 && options.erase)
+                rc = remote_erase(options.device_index);
             if (rc == 0)
                 rc = remote_write_firmware(options.device_index, cpu, options.input_file, options.alt, options.verify);
+            rc = rc < 0 ? EXIT_TRANSFER_ERROR : 0;
+        } else if (options.erase) {
+            /* Erase-only: needs the DFU gadget just like a write. */
+            rc = remote_prepare_transfer(&options, &cpu, dfu_custom_blobs, "erase");
+            if (rc == 0)
+                rc = remote_erase(options.device_index);
             rc = rc < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else if (options.bootstrap) {
             rc = remote_bootstrap(options.device_index, cpu, options.firmware_dir, options.spl_file,
@@ -381,7 +395,7 @@ int main(int argc, char *argv[]) {
         } else if (options.diag) {
             rc = remote_diag(options.device_index) < 0 ? EXIT_DEVICE_ERROR : 0;
         } else {
-            printf("Remote mode: specify -l, -b, -w, or -r\n");
+            printf("Remote mode: specify -l, -b, -w, -r, or --erase\n");
             rc = 1;
         }
 
@@ -391,7 +405,7 @@ int main(int argc, char *argv[]) {
 
     // Local mode
     if (!options.list_devices && !options.bootstrap && !options.read_firmware && !options.write_firmware &&
-        !options.diag) {
+        !options.diag && !options.erase) {
         printf("No action specified. Use -h for help.\n");
         return 1;
     }
@@ -422,9 +436,9 @@ int main(int argc, char *argv[]) {
     }
 
     /* -b on its own: bootstrap a bootrom device into U-Boot DFU mode and stop.
-     * When -w/-r is also given, fall through so the transfer path below auto-
-     * bootstraps and then writes/reads in one shot. */
-    if (options.bootstrap && !options.write_firmware && !options.read_firmware) {
+     * When -w/-r/--erase is also given, fall through so the transfer path below
+     * auto-bootstraps and then acts in one shot. */
+    if (options.bootstrap && !options.write_firmware && !options.read_firmware && !options.erase) {
         result = tdfu_dfu_bootstrap(&manager, options.device_index, options.firmware_dir, options.force_cpu,
                                     options.spl_file, options.uboot_file);
         usb_manager_cleanup(&manager);
@@ -462,11 +476,11 @@ int main(int argc, char *argv[]) {
         return result != TDFU_SUCCESS ? EXIT_DEVICE_ERROR : 0;
     }
 
-    /* -w/-r: if the target is still a bootrom, bootstrap it into the U-Boot DFU
-     * gadget and wait for it to re-enumerate, then fall through to the transfer
-     * below. Mirrors the remote and cloner backends, where a plain -w/-r
-     * bootstraps as needed - so `thingino-dfu -w <img>` works in one shot. */
-    if (options.write_firmware || options.read_firmware) {
+    /* -w/-r/--erase: if the target is still a bootrom, bootstrap it into the
+     * U-Boot DFU gadget and wait for it to re-enumerate, then fall through to
+     * the transfer below. Mirrors the remote and cloner backends, where a plain
+     * -w/-r bootstraps as needed - so `thingino-dfu -w <img>` works in one shot. */
+    if (options.write_firmware || options.read_firmware || options.erase) {
         tdfu_device_info_t *devs = NULL;
         int n = 0;
         if (usb_manager_find_devices(&manager, &devs, &n) == TDFU_SUCCESS &&
@@ -486,6 +500,22 @@ int main(int argc, char *argv[]) {
         free(devs);
     }
 
+    /* --erase runs first: wipe the whole flash, then fall through to a write
+     * if one was requested (the erased chip is exactly what a NAND UBI image
+     * needs to land on). */
+    if (options.erase) {
+        result = tdfu_dfu_erase(&manager, options.device_index);
+        if (result != TDFU_SUCCESS) {
+            LOG_ERROR("Erase failed: %s\n", tdfu_error_to_string(result));
+            usb_manager_cleanup(&manager);
+            return EXIT_TRANSFER_ERROR;
+        }
+        if (!options.write_firmware && !options.read_firmware) {
+            usb_manager_cleanup(&manager);
+            return 0;
+        }
+    }
+
     tdfu_dfu_info_t dfu_info;
     result = tdfu_dfu_probe(&manager, options.device_index, &dfu_info);
     if (result != TDFU_SUCCESS) {
@@ -496,8 +526,8 @@ int main(int argc, char *argv[]) {
     int alt = -1;
     if (options.alt)
         alt = tdfu_dfu_find_alt(&dfu_info, options.alt);
-    else if (dfu_info.alt_count == 1)
-        alt = dfu_info.alts[0].alt;
+    else
+        alt = tdfu_dfu_default_alt(&dfu_info);
     if (alt < 0) {
         LOG_ERROR("Specify --alt <name|num> (use -l to list alt settings)\n");
         usb_manager_cleanup(&manager);

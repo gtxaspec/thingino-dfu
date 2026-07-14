@@ -468,6 +468,18 @@ int tdfu_dfu_find_alt(const tdfu_dfu_info_t *info, const char *name_or_num) {
     return -1;
 }
 
+/* Default alt when the user gave none. Loaders grew a second alt ("erase"),
+ * so "exactly one alt -> take it" alone no longer covers the common case;
+ * prefer the boot flash by its well-known name. */
+int tdfu_dfu_default_alt(const tdfu_dfu_info_t *info) {
+    if (!info)
+        return -1;
+    int alt = tdfu_dfu_find_alt(info, "flash");
+    if (alt >= 0)
+        return alt;
+    return info->alt_count == 1 ? info->alts[0].alt : -1;
+}
+
 /* ====================================================================== */
 /* Device-level DFU read/write: operate on an already-open usb_device_t.   */
 /* Used by the manager-based wrappers (after dfu_open_device) AND by the    */
@@ -543,6 +555,55 @@ tdfu_error_t tdfu_dfu_write_device(usb_device_t *dev, int alt, const char *path)
     }
 
     free(data);
+    return r;
+}
+
+/* Whole-chip erase: download the wipe token to the loader's "erase" alt.
+ * The loader answers GETSTATUS with state dfuMANIFEST + bwPollTimeout 500ms
+ * for the seconds the erase takes, so the normal poll loop just waits it
+ * out. Loaders without the alt (pre-erase builds) fail up front. */
+tdfu_error_t tdfu_dfu_erase_device(usb_device_t *dev) {
+    static const char token[] = TDFU_DFU_ERASE_TOKEN;
+    tdfu_dfu_info_t info;
+    dfu_status_t st;
+
+    tdfu_error_t r = dfu_read_info(dev, &info);
+    if (r != TDFU_SUCCESS)
+        return r;
+    int alt = tdfu_dfu_find_alt(&info, TDFU_DFU_ERASE_ALT);
+    if (alt < 0) {
+        LOG_ERROR("This loader has no \"%s\" alt - update the DFU loader firmware\n", TDFU_DFU_ERASE_ALT);
+        return TDFU_ERROR_INVALID_PARAMETER;
+    }
+    r = dfu_claim_alt(dev, info.interface, alt);
+    if (r != TDFU_SUCCESS)
+        return r;
+
+    if (dfu_make_idle(dev, info.interface) != TDFU_SUCCESS) {
+        LOG_ERROR("Device not in a DFU-idle state\n");
+        return TDFU_ERROR_PROTOCOL;
+    }
+
+    LOG_INFO("Erasing the whole flash (alt %d)... this takes a while\n", alt);
+    r = dfu_dnload(dev, info.interface, 0, (const uint8_t *)token, (uint16_t)strlen(token));
+    if (r != TDFU_SUCCESS)
+        return r;
+    r = dfu_poll_until_ready(dev, info.interface, &st);
+    if (r != TDFU_SUCCESS)
+        return r;
+    /* zero-length DNLOAD ends the transfer; the erase runs in the manifest
+     * phase that follows, so this poll is the one that actually waits. */
+    r = dfu_dnload(dev, info.interface, 1, NULL, 0);
+    if (r != TDFU_SUCCESS)
+        return r;
+    r = dfu_poll_until_ready(dev, info.interface, &st);
+    if (r == TDFU_SUCCESS) {
+        if (st.bStatus != DFU_STATUS_OK || st.bState == DFU_STATE_dfuERROR) {
+            LOG_ERROR("Erase failed on the device (status %u, state %u)\n", st.bStatus, st.bState);
+            return TDFU_ERROR_PROTOCOL;
+        }
+        LOG_INFO("Erase complete\n");
+    }
     return r;
 }
 
@@ -766,6 +827,25 @@ tdfu_error_t tdfu_dfu_upload(usb_manager_t *manager, int device_index, int alt, 
     tdfu_error_t r = dfu_upload_impl(manager, device_index, alt, path, size);
     if (r != TDFU_SUCCESS && dfu_err_recoverable(r) && dfu_reset_device(manager, device_index))
         r = dfu_upload_impl(manager, device_index, alt, path, size);
+    return r;
+}
+
+static tdfu_error_t dfu_erase_impl(usb_manager_t *manager, int device_index) {
+    usb_device_t *dev = NULL;
+    tdfu_error_t r = dfu_open_device(manager, device_index, &dev);
+    if (r != TDFU_SUCCESS)
+        return r;
+    r = tdfu_dfu_erase_device(dev);
+    dfu_close_device(dev, 0);
+    return r;
+}
+
+/* Erase is idempotent, so it gets the same USB-reset-and-retry-once recovery
+ * as download/upload. */
+tdfu_error_t tdfu_dfu_erase(usb_manager_t *manager, int device_index) {
+    tdfu_error_t r = dfu_erase_impl(manager, device_index);
+    if (r != TDFU_SUCCESS && dfu_err_recoverable(r) && dfu_reset_device(manager, device_index))
+        r = dfu_erase_impl(manager, device_index);
     return r;
 }
 

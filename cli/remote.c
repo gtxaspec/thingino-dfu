@@ -11,6 +11,7 @@
 #include <ws2tcpip.h>
 #endif
 
+#include "tdfu/dfu.h"
 #include "tdfu/protocol.h"
 #include "tdfu/tdfu.h"
 
@@ -476,25 +477,12 @@ int remote_bootstrap(int device_index, const char *cpu_variant, const char *firm
     return 0;
 }
 
-/**
- * Write firmware to remote device.
- *
- * Payload format:
- *   [1:device_idx][1:variant_len][N:variant]
- *   [4:fw_len][fw_data][4:crc32]
- */
-int remote_write_firmware(int device_index, const char *cpu_variant, const char *firmware_file, const char *alt,
-                          bool verify) {
-    uint8_t *fw_data = NULL;
-    size_t fw_len = 0;
-    if (read_file(firmware_file, &fw_data, &fw_len) < 0) {
-        fprintf(stderr, "Failed to read firmware file: %s\n", firmware_file);
-        return -1;
-    }
-
-    printf("Sending firmware to remote daemon:\n");
-    printf("  File: %s (%zu bytes)\n", firmware_file, fw_len);
-
+/* Send a CMD_WRITE with an in-memory payload targeting the given alt. Backs
+ * both the firmware write (file contents -> default/explicit alt) and the
+ * whole-chip erase (wipe token -> the loader's "erase" alt). `what` labels
+ * the completion message. */
+static int remote_send_write(int device_index, const char *cpu_variant, const uint8_t *fw_data, size_t fw_len,
+                             const char *alt, bool verify, const char *what) {
     uint32_t fw_crc = remote_crc32(fw_data, fw_len);
 
     /* variant is optional (DFU write passes none - the daemon resolves the alt) */
@@ -507,10 +495,8 @@ int remote_write_firmware(int device_index, const char *cpu_variant, const char 
      * stop after the CRC); only append it when verify is requested. */
     size_t payload_len = 2 + variant_len + 1 + alt_len + 4 + fw_len + 4 + (verify ? 1 : 0);
     uint8_t *payload = malloc(payload_len);
-    if (!payload) {
-        free(fw_data);
+    if (!payload)
         return -1;
-    }
 
     uint8_t *p = payload;
     *p++ = (uint8_t)device_index;
@@ -529,8 +515,6 @@ int remote_write_firmware(int device_index, const char *cpu_variant, const char 
     if (verify)
         *p++ = 1;
 
-    free(fw_data);
-
     if (send_command(CMD_WRITE, payload, payload_len) < 0) {
         free(payload);
         return -1;
@@ -541,19 +525,52 @@ int remote_write_firmware(int device_index, const char *cpu_variant, const char 
     uint8_t *resp = NULL;
     uint32_t resp_len = 0;
     if (recv_response(&resp_status, &resp, &resp_len) < 0) {
-        fprintf(stderr, "Lost connection during write\n");
+        fprintf(stderr, "Lost connection during %s\n", what);
         return -1;
     }
 
     if (resp_status != RESP_OK) {
-        fprintf(stderr, "Write failed: %s\n", resp ? (char *)resp : "unknown");
+        fprintf(stderr, "%s failed: %s\n", what, resp ? (char *)resp : "unknown");
         free(resp);
         return -1;
     }
 
-    printf("Firmware write completed successfully (remote)\n");
+    printf("%s completed successfully (remote)\n", what);
     free(resp);
     return 0;
+}
+
+/**
+ * Write firmware to remote device.
+ *
+ * Payload format:
+ *   [1:device_idx][1:variant_len][N:variant][1:alt_len][N:alt]
+ *   [4:fw_len][fw_data][4:crc32][1:verify (optional)]
+ */
+int remote_write_firmware(int device_index, const char *cpu_variant, const char *firmware_file, const char *alt,
+                          bool verify) {
+    uint8_t *fw_data = NULL;
+    size_t fw_len = 0;
+    if (read_file(firmware_file, &fw_data, &fw_len) < 0) {
+        fprintf(stderr, "Failed to read firmware file: %s\n", firmware_file);
+        return -1;
+    }
+
+    printf("Sending firmware to remote daemon:\n");
+    printf("  File: %s (%zu bytes)\n", firmware_file, fw_len);
+
+    int rc = remote_send_write(device_index, cpu_variant, fw_data, fw_len, alt, verify, "Firmware write");
+    free(fw_data);
+    return rc;
+}
+
+/* Whole-chip erase: the wipe token to the loader's "erase" alt is just a tiny
+ * CMD_WRITE, so any daemon that can write can erase - only the loader must be
+ * new enough to expose the alt. */
+int remote_erase(int device_index) {
+    printf("Erasing the whole flash (remote)... this takes a while\n");
+    return remote_send_write(device_index, NULL, (const uint8_t *)TDFU_DFU_ERASE_TOKEN,
+                             strlen(TDFU_DFU_ERASE_TOKEN), TDFU_DFU_ERASE_ALT, false, "Erase");
 }
 
 /**
