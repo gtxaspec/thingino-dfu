@@ -9,6 +9,7 @@ import android.os.Environment
 import android.text.method.ScrollingMovementMethod
 import android.view.View
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -45,6 +46,8 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         private const val PREF_REMOTE = "remote_mode"
         private const val PREF_DEBUG = "debug_logging"
         private const val PREF_VERIFY = "verify_after_write"
+        private const val PREF_RELEASES = "show_releases"
+        private const val PREF_ADVANCED = "show_advanced"
     }
 
     private lateinit var usbHelper: UsbHelper
@@ -70,6 +73,21 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
     private lateinit var selectUbootButton: Button
     private lateinit var clearCustomButton: Button
     private lateinit var bootstrapButton: Button
+    private lateinit var advancedCard: View
+
+    // Prebuilt-release picker (opt-in via Settings).
+    private lateinit var releaseCard: View
+    private lateinit var releaseSpinner: Spinner
+    private lateinit var releaseDeviceSpinner: Spinner
+    private lateinit var releaseAllCheck: CheckBox
+    private lateinit var releaseInfo: TextView
+    private lateinit var releaseFlashButton: Button
+    private var releases: List<Releases.Release> = emptyList()
+    private var releaseImages: List<String> = emptyList()
+    private var releasesLoaded = false
+    // The SoC the image list is currently narrowed to, so we can tell when a
+    // device is connected, swapped or unplugged and the list needs rebuilding.
+    private var releaseFilterSoc: String = ""
 
     // State
     private var detectedSoc: String = ""
@@ -168,6 +186,8 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         updateCustomBlobInfo()
 
         // Tappable "Advanced" header expands/collapses the custom SPL/U-Boot body.
+        advancedCard = findViewById(R.id.remoteBootstrapCard)
+        applyAdvancedVisible()
         val customHeader = findViewById<LinearLayout>(R.id.customHeader)
         val customBody = findViewById<LinearLayout>(R.id.customBody)
         val customChevron = findViewById<TextView>(R.id.customChevron)
@@ -176,6 +196,8 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             customBody.visibility = if (show) View.VISIBLE else View.GONE
             customChevron.text = if (show) "▾" else "▸"
         }
+
+        setupReleasePicker()
 
         // Apply the saved debug level to native (the Settings dialog persists it).
         TdfuBridge.nativeSetDebug(prefs.getBoolean(PREF_DEBUG, false))
@@ -1168,6 +1190,213 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         writeButton.alpha = if (enabled) 1.0f else 0.5f
         refreshDiagButton()
         refreshBootstrapButton()
+        refreshReleaseFlashButton()
+    }
+
+    // ---------------------------------------------------------------
+    //  Prebuilt thingino releases (see Releases.kt - no proxy needed)
+    // ---------------------------------------------------------------
+
+    private fun setupReleasePicker() {
+        releaseCard = findViewById(R.id.releaseCard)
+        releaseSpinner = findViewById(R.id.releaseSpinner)
+        releaseDeviceSpinner = findViewById(R.id.releaseDeviceSpinner)
+        releaseAllCheck = findViewById(R.id.releaseAllCheck)
+        releaseInfo = findViewById(R.id.releaseInfo)
+        releaseFlashButton = findViewById(R.id.releaseFlashButton)
+
+        val header = findViewById<LinearLayout>(R.id.releaseHeader)
+        val body = findViewById<LinearLayout>(R.id.releaseBody)
+        val chevron = findViewById<TextView>(R.id.releaseChevron)
+        header.setOnClickListener {
+            val show = body.visibility != View.VISIBLE
+            body.visibility = if (show) View.VISIBLE else View.GONE
+            chevron.text = if (show) "▾" else "▸"
+            // Load lazily: someone who never opens the panel never calls the API.
+            if (show && !releasesLoaded) loadReleases()
+        }
+
+        releaseSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) = releaseSelectionChanged()
+            override fun onNothingSelected(p: AdapterView<*>?) {}
+        }
+        releaseDeviceSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) = refreshReleaseFlashButton()
+            override fun onNothingSelected(p: AdapterView<*>?) {}
+        }
+        releaseAllCheck.setOnCheckedChangeListener { _, _ -> releaseSelectionChanged() }
+        releaseFlashButton.setOnClickListener { flashSelectedRelease() }
+
+        applyReleasesVisible()
+    }
+
+    /** The picker is opt-in, like the web flasher's. */
+    private fun applyReleasesVisible() {
+        releaseCard.visibility =
+            if (prefs.getBoolean(PREF_RELEASES, false)) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * The custom SPL/U-Boot card is opt-in too. Hiding it must not leave a loaded
+     * override armed for the next bootstrap: it would be used with nothing on
+     * screen saying so, and no way to clear it. So turning it off drops the blobs.
+     */
+    private fun applyAdvancedVisible() {
+        val show = prefs.getBoolean(PREF_ADVANCED, false)
+        advancedCard.visibility = if (show) View.VISIBLE else View.GONE
+        if (!show && (customSplBytes != null || customUbootBytes != null)) clearCustomBlobs()
+    }
+
+    private fun spinnerOf(items: List<String>): ArrayAdapter<String> =
+        ArrayAdapter(this, android.R.layout.simple_spinner_item, items).also {
+            it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+
+    private fun loadReleases() {
+        releaseSpinner.adapter = spinnerOf(listOf("Loading releases..."))
+        lifecycleScope.launch {
+            try {
+                releases = Releases.list()
+                releasesLoaded = true
+                releaseSpinner.adapter = spinnerOf(listOf("Select a release...") + releases.map { it.label })
+                appendLog("Found ${releases.size} thingino firmware releases\n")
+            } catch (e: Exception) {
+                releaseSpinner.adapter = spinnerOf(listOf("Could not load releases"))
+                appendLog("ERROR: Could not list releases: ${e.message}\n")
+            }
+        }
+    }
+
+    private fun selectedRelease(): Releases.Release? {
+        val pos = releaseSpinner.selectedItemPosition
+        return if (releasesLoaded && pos in 1..releases.size) releases[pos - 1] else null
+    }
+
+    private fun selectedImage(): String? {
+        val pos = releaseDeviceSpinner.selectedItemPosition
+        return if (pos in 1..releaseImages.size) releaseImages[pos - 1] else null
+    }
+
+    /** Fill the device list for the selected release, narrowed to the detected SoC. */
+    private fun releaseSelectionChanged() {
+        releaseFilterSoc = detectedSoc
+        val rel = selectedRelease()
+        if (rel == null) {
+            releaseImages = emptyList()
+            releaseDeviceSpinner.adapter = spinnerOf(listOf("Select a release first"))
+            releaseInfo.text = ""
+            refreshReleaseFlashButton()
+            return
+        }
+
+        val all = releaseAllCheck.isChecked
+        releaseImages = Releases.imagesFor(rel, detectedSoc, all)
+        if (releaseImages.isEmpty()) {
+            releaseDeviceSpinner.adapter = spinnerOf(listOf("No matching images"))
+            releaseInfo.text = if (detectedSoc.isNotEmpty() && !all)
+                "No ${detectedSoc.uppercase()} image in this release. Tick “Show all devices” to browse every model."
+            else
+                "This release has no .bin images."
+            refreshReleaseFlashButton()
+            return
+        }
+
+        releaseDeviceSpinner.adapter = spinnerOf(
+            listOf("Select your device...") +
+                releaseImages.map { it.removePrefix("thingino-").removeSuffix(".bin").replace('_', ' ') })
+        releaseInfo.text = if (detectedSoc.isNotEmpty() && !all)
+            "Images for ${detectedSoc.uppercase()} in this release: ${releaseImages.size}"
+        else
+            "Images in this release (all devices): ${releaseImages.size}" +
+                if (detectedSoc.isEmpty()) "  Connect a device to filter by SoC." else ""
+        refreshReleaseFlashButton()
+    }
+
+    /**
+     * Same rule as the web flasher: Flash needs a device to be connected, but NOT
+     * DFU mode - the write path bootstraps a bootrom itself, so requiring DFU would
+     * disable it for exactly the case it exists to handle.
+     */
+    private fun refreshReleaseFlashButton() {
+        // Called from setButtonsEnabled, so this runs on every connect, disconnect
+        // and finished operation: if the detected SoC moved, rebuild the list so it
+        // matches the board actually attached. releaseSelectionChanged() re-points
+        // releaseFilterSoc first, so it lands back here exactly once.
+        if (releasesLoaded && releaseFilterSoc != detectedSoc) {
+            releaseSelectionChanged()
+            return
+        }
+        val enabled = deviceConnected() && !operationRunning &&
+            selectedRelease() != null && selectedImage() != null
+        releaseFlashButton.isEnabled = enabled
+        releaseFlashButton.alpha = if (enabled) 1.0f else 0.5f
+    }
+
+    private fun deviceConnected(): Boolean =
+        if (isRemoteMode) remoteClient?.isConnected() == true else usbHelper.isConnected()
+
+    /**
+     * Download the chosen image, check it against the published SHA-256, then hand
+     * it to the ordinary write path as a file:// Uri - the very same one the file
+     * picker feeds. Local (which auto-bootstraps a bootrom) and remote both work
+     * unchanged, with no flash logic duplicated here.
+     */
+    private fun flashSelectedRelease() {
+        val rel = selectedRelease() ?: return
+        val name = selectedImage() ?: return
+        // The button is gated on this too, but a device can go away between the
+        // last refresh and the tap.
+        if (!deviceConnected() || operationRunning) {
+            appendLog("Connect a device first\n")
+            return
+        }
+
+        operationRunning = true
+        setButtonsEnabled(false)
+        progressBar.visibility = View.VISIBLE
+        progressText.visibility = View.VISIBLE
+        progressBar.progress = 0
+
+        val dest = File(cacheDir, "release_download.bin")
+        lifecycleScope.launch {
+            try {
+                appendLog("\n--- PREBUILT RELEASE ---\n")
+                appendLog("Downloading $name\n")
+                Releases.download(rel.tag, name, dest) { pct, got, total ->
+                    runOnUiThread {
+                        if (pct >= 0) progressBar.progress = pct
+                        progressText.text = if (total > 0)
+                            "Downloading  ${got / 1048576} / ${total / 1048576} MB"
+                        else
+                            "Downloading  ${got / 1048576} MB"
+                    }
+                }
+
+                val want = Releases.publishedSha256(rel.tag, name)
+                if (want == null) {
+                    appendLog("No sha256sum published for this image; skipping verification\n")
+                } else {
+                    val got = Releases.sha256(dest)
+                    if (want != got) {
+                        // Refuse to flash a corrupt download.
+                        appendLog("ERROR: SHA256 mismatch\n  expected $want\n  got      $got\n")
+                        dest.delete()
+                        finishOperation()
+                        return@launch
+                    }
+                    appendLog("sha256 verified: $got\n")
+                }
+
+                // Hand off. startWriteOperation sets its own operationRunning and
+                // owns the progress bar from here.
+                operationRunning = false
+                startWriteOperation(Uri.fromFile(dest))
+            } catch (e: Exception) {
+                appendLog("ERROR: Download failed: ${e.message}\n")
+                dest.delete()
+                finishOperation()
+            }
+        }
     }
 
     /**
@@ -1210,6 +1439,8 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         val view = layoutInflater.inflate(R.layout.dialog_settings, null)
         val debugSwitch = view.findViewById<MaterialSwitch>(R.id.dlgDebugSwitch)
         val verifySwitch = view.findViewById<MaterialSwitch>(R.id.dlgVerifySwitch)
+        val releasesSwitch = view.findViewById<MaterialSwitch>(R.id.dlgReleasesSwitch)
+        val advancedSwitch = view.findViewById<MaterialSwitch>(R.id.dlgAdvancedSwitch)
         val modeGroup = view.findViewById<RadioGroup>(R.id.dlgModeRadioGroup)
         val radioLocal = view.findViewById<RadioButton>(R.id.dlgRadioLocal)
         val radioRemote = view.findViewById<RadioButton>(R.id.dlgRadioRemote)
@@ -1220,6 +1451,8 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         val debugWas = prefs.getBoolean(PREF_DEBUG, false)
         debugSwitch.isChecked = debugWas
         verifySwitch.isChecked = prefs.getBoolean(PREF_VERIFY, false)
+        releasesSwitch.isChecked = prefs.getBoolean(PREF_RELEASES, false)
+        advancedSwitch.isChecked = prefs.getBoolean(PREF_ADVANCED, false)
 
         // Prefill the backend from the current state / saved prefs.
         val modeWas = isRemoteMode
@@ -1239,6 +1472,10 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
             .setNegativeButton(R.string.btn_cancel, null)
             .setPositiveButton(R.string.btn_save) { _, _ ->
                 prefs.edit().putBoolean(PREF_VERIFY, verifySwitch.isChecked).apply()
+                prefs.edit().putBoolean(PREF_RELEASES, releasesSwitch.isChecked).apply()
+                prefs.edit().putBoolean(PREF_ADVANCED, advancedSwitch.isChecked).apply()
+                applyReleasesVisible()
+                applyAdvancedVisible()
                 val newDebug = debugSwitch.isChecked
                 if (newDebug != debugWas) {
                     prefs.edit().putBoolean(PREF_DEBUG, newDebug).apply()

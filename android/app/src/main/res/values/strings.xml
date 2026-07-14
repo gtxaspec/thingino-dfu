@@ -27,4 +27,13 @@
     <string name="settings_debug_desc">Verbose libtdfu diagnostics in the log</string>
     <string name="btn_save">Save</string>
     <string name="btn_cancel">Cancel</string>
+
+    <!-- Prebuilt thingino releases (straight from GitHub; no proxy needed natively) -->
+    <string name="release_title">Flash a prebuilt thingino release</string>
+    <string name="release_show_all">Show all devices (not just my SoC)</string>
+    <string name="release_flash">Flash</string>
+    <string name="settings_releases">Prebuilt releases</string>
+    <string name="settings_releases_desc">Show the thingino release picker on the main screen</string>
+    <string name="settings_advanced">Custom SPL / U-Boot</string>
+    <string name="settings_advanced_desc">Show the custom bootloader card on the main screen</string>
 </resources>
