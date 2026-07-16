@@ -9,6 +9,14 @@ try {
   appVersion = execSync('git describe --tags --always --dirty', { encoding: 'utf8' }).trim()
 } catch { /* no git available - keep 'dev' */ }
 
+// Short commit sha for the footer version display (v<lib>-<sha>, same format
+// as the thingino image builder). Separate from appVersion: `git describe` on
+// a tagged commit is just the tag, with no hash in it.
+let gitSha = 'dev'
+try {
+  gitSha = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
+} catch { /* no git available - keep 'dev' */ }
+
 // GitHub Pages project sites serve from a subpath
 // (https://<user>.github.io/<repo>/), so allow the base href to be set at
 // build time via PAGES_BASE. Defaults to '/' for root hosting / local dev.
@@ -18,6 +26,8 @@ export default defineConfig({
     // Compiled into the bundle; app.js uses it to version the tdfu.wasm URL
     // (Module.locateFile) to match the ?v= on the glue script tag below.
     __APP_VERSION__: JSON.stringify(appVersion),
+    // Footer version display (appended to the wasm's library version).
+    __GIT_SHA__: JSON.stringify(gitSha),
   },
   plugins: [
     {

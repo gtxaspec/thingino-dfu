@@ -416,11 +416,15 @@ async function initModule() {
 
         tdfuReady = true;
 
-        // Display version
+        // Display version: library version + build commit (v1.5.30-cc3f06a),
+        // same format as the thingino image builder footer. The lib version
+        // comes from the wasm and the sha from the JS bundle, so a stale
+        // cached copy of either shows up here as a mismatched pair.
         var verPtr = Module.ccall('tdfu_get_version', 'number', [], []);
         var version = verPtr ? Module.UTF8ToString(verPtr) : 'dev';
+        var sha = typeof __GIT_SHA__ !== 'undefined' ? __GIT_SHA__ : 'dev';
         var verEl = document.getElementById('version-num');
-        if (verEl) verEl.textContent = 'v' + version;
+        if (verEl) verEl.textContent = 'v' + version + '-' + sha;
 
         log('Ready — click Connect Device to begin');
         // Nothing on initial load: auto-attach happens ONLY via the USB 'connect'
