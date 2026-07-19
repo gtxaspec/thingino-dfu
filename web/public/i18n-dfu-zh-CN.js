@@ -23,6 +23,12 @@ I18N.add("zh-CN", {
   btn_bootstrap: "引导启动",
   title_write: "将固件 .bin 文件写入设备的闪存",
   btn_write: "写入固件",
+  // Wi-Fi injector (inject.js)
+  wifi_label: "预配置的 Wi-Fi（可选）",
+  wifi_ssid_ph: "Wi-Fi 名称 (SSID)",
+  wifi_psk_ph: "Wi-Fi 密码",
+  wifi_hint: "写入前在浏览器中直接注入到 overlay 分区。",
+  wifi_inject_failed: "无法向此镜像添加 Wi-Fi 凭据。",
   title_read: "读取完整的闪存内容并下载为 .bin 文件",
   btn_read: "读取固件",
   title_diag: "只读：eFuse、序列号、安全启动状态（bootrom）",

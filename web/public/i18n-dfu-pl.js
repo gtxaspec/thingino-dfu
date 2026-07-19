@@ -26,6 +26,12 @@ I18N.add("pl", {
   btn_bootstrap: "Rozruch",
   title_write: "Zapisz plik firmware .bin do pamięci flash urządzenia",
   btn_write: "Zapisz firmware",
+  // Wi-Fi injector (inject.js)
+  wifi_label: "Wi-Fi do wstępnej konfiguracji (opcjonalnie)",
+  wifi_ssid_ph: "SSID Wi-Fi",
+  wifi_psk_ph: "Hasło Wi-Fi",
+  wifi_hint: "Wstawiane do overlay przed zapisem, w całości w przeglądarce.",
+  wifi_inject_failed: "Nie można dodać danych Wi-Fi do tego obrazu.",
   title_read: "Odczytaj całą zawartość pamięci flash i pobierz jako plik .bin",
   btn_read: "Odczytaj firmware",
   title_diag: "Tylko do odczytu: eFuse, numer seryjny, stan secure-boot (bootrom)",

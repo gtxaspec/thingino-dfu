@@ -23,6 +23,12 @@ I18N.add("de", {
   btn_bootstrap: "Initialisieren",
   title_write: "Eine Firmware-.bin-Datei in den Flash-Speicher des Geräts schreiben",
   btn_write: "Firmware schreiben",
+  // Wi-Fi injector (inject.js)
+  wifi_label: "WLAN vorkonfigurieren (optional)",
+  wifi_ssid_ph: "WLAN-SSID",
+  wifi_psk_ph: "WLAN-Passwort",
+  wifi_hint: "Wird vor dem Schreiben direkt im Browser in das Overlay eingebettet.",
+  wifi_inject_failed: "WLAN-Zugangsdaten konnten diesem Image nicht hinzugefügt werden.",
   title_read: "Den gesamten Flash-Inhalt auslesen und als .bin-Datei herunterladen",
   btn_read: "Firmware auslesen",
   title_diag: "Nur lesen: eFuse, Seriennummer, Secure-Boot-Status (bootrom)",

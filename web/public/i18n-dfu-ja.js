@@ -23,6 +23,12 @@ I18N.add("ja", {
   btn_bootstrap: "ブートストラップ",
   title_write: "ファームウェアの .bin ファイルをデバイスのフラッシュメモリに書き込みます",
   btn_write: "ファームウェアを書き込む",
+  // Wi-Fi injector (inject.js)
+  wifi_label: "事前設定する Wi-Fi（任意）",
+  wifi_ssid_ph: "Wi-Fi SSID",
+  wifi_psk_ph: "Wi-Fi パスワード",
+  wifi_hint: "書き込み前にブラウザー内でオーバーレイに埋め込まれます。",
+  wifi_inject_failed: "このイメージに Wi-Fi 認証情報を追加できませんでした。",
   title_read: "フラッシュの全内容を読み出し、.bin ファイルとしてダウンロードします",
   btn_read: "ファームウェアを読み出す",
   title_diag: "読み取り専用: eFuse、シリアル、セキュアブート状態 (bootrom)",

@@ -26,6 +26,12 @@ I18N.add("nl", {
   btn_bootstrap: "Bootstrappen",
   title_write: "Schrijf een firmware-.bin-bestand naar het flashgeheugen van het apparaat",
   btn_write: "Firmware schrijven",
+  // Wi-Fi injector (inject.js)
+  wifi_label: "Wi-Fi vooraf instellen (optioneel)",
+  wifi_ssid_ph: "Wi-Fi-SSID",
+  wifi_psk_ph: "Wi-Fi-wachtwoord",
+  wifi_hint: "Wordt vóór het schrijven in de overlay gezet, volledig in je browser.",
+  wifi_inject_failed: "Kan de Wi-Fi-gegevens niet aan deze image toevoegen.",
   title_read: "Lees de volledige flashinhoud en download deze als .bin-bestand",
   btn_read: "Firmware lezen",
   title_diag: "Alleen-lezen: eFuse, serienummer, secure-boot-status (bootrom)",

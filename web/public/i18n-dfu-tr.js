@@ -26,6 +26,12 @@ I18N.add("tr", {
   btn_bootstrap: "Önyükle",
   title_write: "Cihazın flash belleğine bir firmware .bin dosyası yazın",
   btn_write: "Firmware Yaz",
+  // Wi-Fi injector (inject.js)
+  wifi_label: "Önceden yapılandırılacak Wi-Fi (isteğe bağlı)",
+  wifi_ssid_ph: "Wi-Fi SSID",
+  wifi_psk_ph: "Wi-Fi parolası",
+  wifi_hint: "Yazmadan önce tamamen tarayıcınızda overlay'e gömülür.",
+  wifi_inject_failed: "Wi-Fi kimlik bilgileri bu görüntüye eklenemedi.",
   title_read: "Tüm flash içeriğini okuyup .bin dosyası olarak indirin",
   btn_read: "Firmware Oku",
   title_diag: "Salt okunur: eFuse, seri numarası, güvenli önyükleme durumu (bootrom)",

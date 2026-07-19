@@ -23,6 +23,12 @@ I18N.add("es", {
   btn_bootstrap: "Inicializar",
   title_write: "Escriba un archivo de firmware .bin en la memoria flash del dispositivo",
   btn_write: "Escribir firmware",
+  // Wi-Fi injector (inject.js)
+  wifi_label: "Wi-Fi a preconfigurar (opcional)",
+  wifi_ssid_ph: "SSID de Wi-Fi",
+  wifi_psk_ph: "Contraseña de Wi-Fi",
+  wifi_hint: "Se integra en el overlay antes de escribir, todo en tu navegador.",
+  wifi_inject_failed: "No se pudieron añadir las credenciales Wi-Fi a esta imagen.",
   title_read: "Lea todo el contenido de la flash y descárguelo como un archivo .bin",
   btn_read: "Leer firmware",
   title_diag: "Solo lectura: eFuse, número de serie, estado de arranque seguro (bootrom)",

@@ -26,6 +26,12 @@ I18N.add("uk", {
   btn_bootstrap: "Ініціалізувати",
   title_write: "Записати файл прошивки .bin у флеш-пам'ять пристрою",
   btn_write: "Записати прошивку",
+  // Wi-Fi injector (inject.js)
+  wifi_label: "Wi-Fi для попереднього налаштування (необов'язково)",
+  wifi_ssid_ph: "Назва мережі Wi-Fi (SSID)",
+  wifi_psk_ph: "Пароль Wi-Fi",
+  wifi_hint: "Вбудовується в overlay перед записом, повністю у вашому браузері.",
+  wifi_inject_failed: "Не вдалося додати облікові дані Wi-Fi до цього образу.",
   title_read: "Зчитати весь вміст флеш-пам'яті та завантажити як файл .bin",
   btn_read: "Зчитати прошивку",
   title_diag: "Лише для читання: eFuse, серійний номер, стан secure-boot (bootrom)",

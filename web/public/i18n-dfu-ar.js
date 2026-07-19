@@ -26,6 +26,12 @@ I18N.add("ar", {
   btn_bootstrap: "تمهيد",
   title_write: "كتابة ملف برنامج ثابت بصيغة .bin إلى ذاكرة فلاش الجهاز",
   btn_write: "كتابة البرنامج الثابت",
+  // Wi-Fi injector (inject.js)
+  wifi_label: "شبكة Wi-Fi المراد إعدادها مسبقًا (اختياري)",
+  wifi_ssid_ph: "اسم شبكة Wi-Fi (SSID)",
+  wifi_psk_ph: "كلمة مرور Wi-Fi",
+  wifi_hint: "يُضمَّن في التراكب (overlay) قبل الكتابة، بالكامل داخل متصفحك.",
+  wifi_inject_failed: "تعذّرت إضافة بيانات اعتماد Wi-Fi إلى هذه الصورة.",
   title_read: "قراءة كامل محتوى الفلاش وتنزيله كملف .bin",
   btn_read: "قراءة البرنامج الثابت",
   title_diag: "للقراءة فقط: eFuse، والرقم التسلسلي، وحالة الإقلاع الآمن (bootrom)",

@@ -26,6 +26,12 @@ I18N.add("ko", {
   btn_bootstrap: "부트스트랩",
   title_write: "펌웨어 .bin 파일을 장치의 플래시 메모리에 기록",
   btn_write: "펌웨어 기록",
+  // Wi-Fi injector (inject.js)
+  wifi_label: "미리 설정할 Wi-Fi (선택 사항)",
+  wifi_ssid_ph: "Wi-Fi SSID",
+  wifi_psk_ph: "Wi-Fi 비밀번호",
+  wifi_hint: "기록하기 전에 브라우저에서 오버레이에 삽입됩니다.",
+  wifi_inject_failed: "이 이미지에 Wi-Fi 자격 증명을 추가할 수 없습니다.",
   title_read: "전체 플래시 내용을 읽어 .bin 파일로 다운로드",
   btn_read: "펌웨어 읽기",
   title_diag: "읽기 전용: eFuse, 시리얼, 보안 부팅 상태 (bootrom)",
