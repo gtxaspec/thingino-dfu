@@ -26,6 +26,12 @@ I18N.add("en", {
   btn_bootstrap: "Bootstrap",
   title_write: "Write a firmware .bin file to the device's flash memory",
   btn_write: "Write Firmware",
+  // optional Wi-Fi injection (inject.js)
+  wifi_label: "Wi-Fi to pre-configure (optional)",
+  wifi_ssid_ph: "Wi-Fi SSID",
+  wifi_psk_ph: "Wi-Fi password",
+  wifi_hint: "Baked into the overlay before writing, entirely in your browser.",
+  wifi_inject_failed: "Could not add Wi-Fi credentials to this image.",
   title_read: "Read the full flash contents and download as a .bin file",
   btn_read: "Read Firmware",
   title_diag: "Read-only: eFuse, serial, secure-boot state (bootrom)",

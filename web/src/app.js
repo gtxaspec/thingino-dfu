@@ -6,6 +6,7 @@
  */
 
 import { RemoteClient } from './remote.js';
+import { injectWifi } from './inject.js';
 
 /* ------------------------------------------------------------------ */
 /*  State                                                              */
@@ -646,9 +647,31 @@ function firmwareSelected(input) {
 }
 
 async function doWrite() {
+    if (!(await applyWifiInjection())) return;   // abort if creds were given but couldn't be applied
     if (backendMode === 'remote') { if (firmwareData) return doRemoteWrite(firmwareData); return; }
     if (!tdfuReady || !firmwareData) return;
     return doDfuWrite();
+}
+
+/* If the user entered Wi-Fi credentials, bake them into the loaded image's
+ * overlay (client-side, in the browser) before flashing. Returns false to abort
+ * the flash only when an injection was requested but failed - so creds are never
+ * silently dropped (e.g. on a NAND image, which isn't supported yet). */
+async function applyWifiInjection() {
+    var ssidEl = document.getElementById('wifi-ssid');
+    var ssid = ssidEl ? ssidEl.value.trim() : '';
+    if (!ssid || !firmwareData) return true;
+    var psk = (document.getElementById('wifi-psk') || {}).value || '';
+    try {
+        log('Baking Wi-Fi credentials into the overlay...');
+        firmwareData = await injectWifi(firmwareData, { ssid: ssid, psk: psk });
+        log('Wi-Fi injected (SSID "' + ssid + '") - flashing the customised image.');
+        return true;
+    } catch (e) {
+        log('Wi-Fi injection failed: ' + e.message);
+        alert(t('wifi_inject_failed') + '\n\n' + e.message);
+        return false;
+    }
 }
 
 /* ------------------------------------------------------------------ */

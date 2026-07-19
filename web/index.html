@@ -228,6 +228,17 @@
             <div class="file-info mt-1" id="file-info"></div>
             <input type="file" id="firmware-file" accept=".bin" onchange="firmwareSelected(this)">
 
+            <!-- Optional: bake Wi-Fi credentials into the image's overlay just before
+                 flashing. Repacked in the browser (WASM); nothing is uploaded. NOR + NAND. -->
+            <div class="mt-2" id="wifi-inject">
+                <label class="small text-secondary d-block mb-1" data-i18n="wifi_label">Wi-Fi to pre-configure (optional)</label>
+                <div class="d-flex flex-wrap gap-2">
+                    <input id="wifi-ssid" class="form-control form-control-sm" style="max-width:14rem" autocomplete="off" data-i18n-ph="wifi_ssid_ph" placeholder="Wi-Fi SSID">
+                    <input id="wifi-psk" type="password" class="form-control form-control-sm" style="max-width:14rem" autocomplete="off" data-i18n-ph="wifi_psk_ph" placeholder="Wi-Fi password">
+                </div>
+                <div class="small text-secondary mt-1" data-i18n="wifi_hint">Baked into the overlay before writing, entirely in your browser.</div>
+            </div>
+
             <!-- Flash a prebuilt thingino release straight from GitHub. The list
                  comes from the GitHub API (CORS-clean); the image itself is
                  fetched through /fw, which adds the header GitHub omits.
