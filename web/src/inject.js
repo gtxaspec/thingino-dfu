@@ -1,23 +1,30 @@
 /*
- * Client-side Wi-Fi injection for thingino images.
+ * Client-side overlay injection for thingino images.
  *
  * Right before flashing, the loaded image bytes are already in hand, so we bake
- * the user's Wi-Fi credentials into the writable overlay and hand the modified
- * bytes back to the flasher - no upload, no rebuild.
+ * a small set of files into the writable overlay and hand the modified bytes
+ * back to the flasher - no upload, no rebuild. Used for Wi-Fi credentials, an
+ * SSH key, and anything else that belongs in the overlay.
  *
  *   NOR  (flat 'data' partition): repack the JFFS2 overlay        (mkfs.jffs2)
  *   NAND ('-(ubi)' partition):    rebuild the UBI with a fresh    (mkfs.ubifs
  *                                 UBIFS overlay volume             + ubinize)
  *
+ * The overlayfs upperdir differs by kernel: NOR (3.10) mounts the overlay root
+ * as upperdir; NAND (4.4) uses <overlay>/root. injectNand adds the 'root/'
+ * prefix so a file targeting /etc/foo lands at /etc/foo either way.
+ *
  * The WASM engines live in /wasm/ (like tdfu.wasm), loaded on first use.
  */
 const ALIGN = 0x10000;                         // JFFS2 eraseblock (NOR)
 const OVERLAY_MAX_LEBS = 8192;                 // generous UBIFS -c; autoresize fills the real chip
+const MT = 1000000000 * 1000;                  // fixed mtime -> deterministic output
 
-// --- lazy WASM engine loaders (URL in a variable so the bundler leaves them alone) ---
+let WASM_BASE = '/wasm/';
+export function setWasmBase(b) { WASM_BASE = b; }   // override for tests / non-root hosting
 const _mods = {};
 async function engine(name) {
-  if (!_mods[name]) { const url = '/wasm/' + name + '.mjs'; _mods[name] = (await import(/* @vite-ignore */ url)).default; }
+  if (!_mods[name]) { const url = WASM_BASE + name + '.mjs'; _mods[name] = (await import(/* @vite-ignore */ url)).default; }
   return _mods[name];
 }
 
@@ -49,7 +56,6 @@ export function parseMtdparts(u8) {
   return { parts, raw: s };
 }
 
-// What kind of overlay does this image have?
 export function overlayInfo(u8) {
   const { parts } = parseMtdparts(u8);
   if (parts.data) return { ok: true, type: 'nor', offset: parts.data.offset, size: parts.data.size };
@@ -57,28 +63,42 @@ export function overlayInfo(u8) {
   return { ok: false, reason: 'No writable overlay partition found in this image.' };
 }
 
-function wpaConf(ssid, psk) {   // client-mode block, matches on-device `wlan configure`
-  return `ctrl_interface=/run/wpa_supplicant\nupdate_config=1\nap_scan=1\n\nnetwork={\n\tssid="${ssid}"\n\tpsk="${psk}"\n}\n`;
-}
-function fixedMtime(FS, paths) { const t = 1000000000 * 1000; for (const p of paths) FS.utime(p, t, t); }
-
-// --- NOR: repack the JFFS2 'data' partition -----------------------------------
-async function injectNor(u8, info, ssid, psk) {
-  const Module = await (await engine('mkfs_jffs2_memfs'))({ print: () => {}, printErr: () => {} });
-  const FS = Module.FS;
-  FS.mkdirTree('/in/etc');
-  FS.writeFile('/in/etc/wpa_supplicant.conf', wpaConf(ssid, psk));
-  fixedMtime(FS, ['/in', '/in/etc', '/in/etc/wpa_supplicant.conf']);
-  Module.callMain(['--little-endian', '--squash', `--eraseblock=0x${ALIGN.toString(16)}`,
-                   `--pad=0x${info.size.toString(16)}`, '-d', '/in', '-o', '/out.jffs2']);
-  const overlay = FS.readFile('/out.jffs2');
-  if (overlay.length > info.size) throw new Error('overlay overflow');
-  const out = new Uint8Array(u8);
-  out.set(overlay, info.offset);
-  return out;
+// --- build the files that Wi-Fi + SSH map to (client-mode wpa block; root's keys) ---
+export function overlayFilesFor({ ssid, psk, sshKey }) {
+  const files = {};
+  if (ssid) files['/etc/wpa_supplicant.conf'] =
+    `ctrl_interface=/run/wpa_supplicant\nupdate_config=1\nap_scan=1\n\nnetwork={\n\tssid="${ssid}"\n\tpsk="${psk}"\n}\n`;
+  if (sshKey && sshKey.trim()) files['/root/.ssh/authorized_keys'] = sshKey.trim() + '\n';
+  return files;
 }
 
-// --- NAND: parse the UBI, rebuild it with a fresh UBIFS overlay volume ---------
+// Write { '/etc/foo': content } into the MEMFS overlay tree under `base`+`prefix`.
+// Everything is chowned root:root with sane perms (0644 files / 0755 dirs) so the
+// files are valid overlay content - and so dropbear accepts authorized_keys.
+function writeFiles(FS, base, prefix, entries) {
+  const dirs = new Set();
+  for (const [p, content] of entries) {
+    const full = base + prefix + '/' + p.replace(/^\/+/, '');
+    const dir = full.slice(0, full.lastIndexOf('/'));
+    FS.mkdirTree(dir);
+    FS.writeFile(full, content);
+    FS.chmod(full, 0o644); FS.chown(full, 0, 0); FS.utime(full, MT, MT);
+    let d = dir; while (d.length > base.length) { dirs.add(d); d = d.slice(0, d.lastIndexOf('/')); }
+  }
+  for (const d of dirs) { FS.chmod(d, 0o755); FS.chown(d, 0, 0); FS.utime(d, MT, MT); }
+}
+
+async function injectNor(u8, info, entries) {
+  const M = await (await engine('mkfs_jffs2_memfs'))({ print: () => {}, printErr: () => {} });
+  writeFiles(M.FS, '/in', '', entries);
+  M.callMain(['--little-endian', '--squash', `--eraseblock=0x${ALIGN.toString(16)}`,
+              `--pad=0x${info.size.toString(16)}`, '-d', '/in', '-o', '/out.jffs2']);
+  const overlay = M.FS.readFile('/out.jffs2');
+  if (overlay.length > info.size) throw new Error('too much data for the NOR overlay partition');
+  const out = new Uint8Array(u8); out.set(overlay, info.offset); return out;
+}
+
+// --- NAND UBI reader (extract kernel/rootfs/uboot-env volumes for the rebuild) ---
 const EC_MAGIC = 0x55424923, VID_MAGIC = 0x55424921;
 export function readUbiVolumes(ubi) {
   const be32 = o => ((ubi[o] << 24) | (ubi[o+1] << 16) | (ubi[o+2] << 8) | ubi[o+3]) >>> 0;
@@ -110,20 +130,16 @@ export function readUbiVolumes(ubi) {
   return { vols: out, peb, dataOff, lebSize: peb - dataOff };
 }
 
-async function injectNand(u8, info, ssid, psk) {
-  const ubiStart = info.ubiStart;
-  const { vols, peb, lebSize, dataOff } = readUbiVolumes(u8.subarray(ubiStart));
+async function injectNand(u8, info, entries) {
+  const { vols, peb, lebSize, dataOff } = readUbiVolumes(u8.subarray(info.ubiStart));
   if (!vols[0] || !vols[1] || !vols[2]) throw new Error('unexpected UBI layout (need uboot-env/kernel/rootfs)');
   const page = dataOff / 2;
 
-  // fresh overlay UBIFS with the creds (generous -c; autoresize fills the chip on-device)
   const mk = await (await engine('mkfs_ubifs_memfs'))({ print: () => {}, printErr: () => {} });
-  mk.FS.mkdirTree('/in/root/etc');
-  mk.FS.writeFile('/in/root/etc/wpa_supplicant.conf', wpaConf(ssid, psk));
+  writeFiles(mk.FS, '/in', '/root', entries);          // NAND upperdir = <overlay>/root
   mk.callMain(['-m', String(page), '-e', String(lebSize), '-c', String(OVERLAY_MAX_LEBS), '-r', '/in', '-o', '/ov.ubifs']);
   const overlay = mk.FS.readFile('/ov.ubifs');
 
-  // reassemble UBI: preserved vols 0/1/2 + fresh overlay vol 3
   const ub = await (await engine('ubinize_memfs'))({ print: () => {}, printErr: () => {} });
   ub.FS.writeFile('/v0', vols[0].image); ub.FS.writeFile('/v1', vols[1].image);
   ub.FS.writeFile('/v2', vols[2].image); ub.FS.writeFile('/ov.ubifs', overlay);
@@ -136,16 +152,17 @@ async function injectNand(u8, info, ssid, psk) {
   ub.callMain(['-o', '/out.ubi', '-p', '0x' + peb.toString(16), '-m', '0x' + page.toString(16), '/c.cfg']);
   const newUbi = ub.FS.readFile('/out.ubi');
 
-  const out = new Uint8Array(ubiStart + newUbi.length);   // NAND image may grow (overlay LEBs)
-  out.set(u8.subarray(0, ubiStart), 0);
-  out.set(newUbi, ubiStart);
+  const out = new Uint8Array(info.ubiStart + newUbi.length);
+  out.set(u8.subarray(0, info.ubiStart), 0);
+  out.set(newUbi, info.ubiStart);
   return out;
 }
 
-// --- public entry -------------------------------------------------------------
-export async function injectWifi(u8, { ssid, psk }) {
-  if (!ssid) throw new Error('SSID is required');
+// --- public entry: inject { '/abs/path': content, ... } into the overlay --------
+export async function injectOverlay(u8, files) {
+  const entries = Object.entries(files).filter(([, v]) => v != null && v !== '');
+  if (!entries.length) return u8;                      // nothing to inject -> unchanged
   const info = overlayInfo(u8);
   if (!info.ok) throw new Error(info.reason);
-  return info.type === 'nand' ? injectNand(u8, info, ssid, psk) : injectNor(u8, info, ssid, psk);
+  return info.type === 'nand' ? injectNand(u8, info, entries) : injectNor(u8, info, entries);
 }

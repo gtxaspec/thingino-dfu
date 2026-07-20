@@ -6,7 +6,7 @@
  */
 
 import { RemoteClient } from './remote.js';
-import { injectWifi } from './inject.js';
+import { injectOverlay, overlayFilesFor } from './inject.js';
 
 /* ------------------------------------------------------------------ */
 /*  State                                                              */
@@ -647,28 +647,31 @@ function firmwareSelected(input) {
 }
 
 async function doWrite() {
-    if (!(await applyWifiInjection())) return;   // abort if creds were given but couldn't be applied
+    if (!(await applyOverlayInjection())) return;   // abort if injection was requested but failed
     if (backendMode === 'remote') { if (firmwareData) return doRemoteWrite(firmwareData); return; }
     if (!tdfuReady || !firmwareData) return;
     return doDfuWrite();
 }
 
-/* If the user entered Wi-Fi credentials, bake them into the loaded image's
- * overlay (client-side, in the browser) before flashing. Returns false to abort
- * the flash only when an injection was requested but failed - so creds are never
- * silently dropped (e.g. on a NAND image, which isn't supported yet). */
-async function applyWifiInjection() {
-    var ssidEl = document.getElementById('wifi-ssid');
-    var ssid = ssidEl ? ssidEl.value.trim() : '';
-    if (!ssid || !firmwareData) return true;
+/* If the user entered any pre-configuration (Wi-Fi, SSH key), bake the
+ * corresponding files into the loaded image's overlay (client-side, in the
+ * browser) before flashing. Returns false to abort the flash only when an
+ * injection was requested but failed - so it's never silently dropped. */
+async function applyOverlayInjection() {
+    if (!firmwareData) return true;
+    var ssid = ((document.getElementById('wifi-ssid') || {}).value || '').trim();
     var psk = (document.getElementById('wifi-psk') || {}).value || '';
+    var sshKey = (document.getElementById('ssh-key') || {}).value || '';
+    var files = overlayFilesFor({ ssid: ssid, psk: psk, sshKey: sshKey });
+    var names = Object.keys(files);
+    if (!names.length) return true;
     try {
-        log('Baking Wi-Fi credentials into the overlay...');
-        firmwareData = await injectWifi(firmwareData, { ssid: ssid, psk: psk });
-        log('Wi-Fi injected (SSID "' + ssid + '") - flashing the customised image.');
+        log('Baking overlay files into the image (' + names.join(', ') + ')...');
+        firmwareData = await injectOverlay(firmwareData, files);
+        log('Overlay injected - flashing the customised image.');
         return true;
     } catch (e) {
-        log('Wi-Fi injection failed: ' + e.message);
+        log('Overlay injection failed: ' + e.message);
         alert(t('wifi_inject_failed') + '\n\n' + e.message);
         return false;
     }
