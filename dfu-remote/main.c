@@ -332,12 +332,15 @@ static int stage_temp_blob(char *path_out, size_t path_sz, const uint8_t *data, 
  *
  * Right after a bootstrap the gadget may still be re-enumerating (the bootrom ->
  * U-Boot DFU transition, sometimes with a USB reset to recover an unresponsive
- * gadget). Re-probe for a few seconds - libusb re-scans on each call - so a
+ * gadget). Re-probe for up to ~30 s - libusb re-scans on each call - so a
  * one-shot `-w` (bootstrap + write) and `-b -w` don't race the re-enumeration
- * window and fail with a spurious "Device not found". */
+ * window and fail with a spurious "Device not found". The interactive local
+ * path waits indefinitely (wait_for_device); the daemon can't block a client
+ * forever, but 30 s comfortably covers a loader whose board_late_init probes
+ * MMC/NAND before bringing up the DFU gadget (~8-10 s to DFU-ready). */
 static int dfu_pick_alt(usb_manager_t *manager, int device_index, const char *alt_sel) {
     tdfu_dfu_info_t info;
-    for (int attempt = 0; attempt < 20; attempt++) {
+    for (int attempt = 0; attempt < 120; attempt++) {
         if (tdfu_dfu_probe(manager, device_index, &info) == TDFU_SUCCESS) {
             /* An explicit selector (--alt, name or number) wins; otherwise
              * the first alt - alt 0 is the boot flash on our loaders, so the
@@ -346,7 +349,7 @@ static int dfu_pick_alt(usb_manager_t *manager, int device_index, const char *al
                 return tdfu_dfu_find_alt(&info, alt_sel);
             return info.alt_count > 0 ? info.alts[0].alt : -1;
         }
-        usleep(250000); /* 250 ms; ~5 s total */
+        usleep(250000); /* 250 ms; ~30 s total */
     }
     return -1;
 }
