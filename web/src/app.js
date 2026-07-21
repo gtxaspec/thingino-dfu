@@ -663,6 +663,21 @@ async function applyOverlayInjection() {
     var psk = (document.getElementById('wifi-psk') || {}).value || '';
     var sshKey = (document.getElementById('ssh-key') || {}).value || '';
     var files = overlayFilesFor({ ssid: ssid, psk: psk, sshKey: sshKey });
+
+    // generic user-added files: each row is a target path + a local file
+    var rows = document.querySelectorAll('#extra-files .xf-row');
+    for (var i = 0; i < rows.length; i++) {
+        var p = (rows[i].querySelector('.xf-path').value || '').trim();
+        var f = rows[i].querySelector('.xf-file').files[0];
+        if (!p && !f) continue;                       // untouched row - ignore
+        if (!p || !f) {                               // half-filled - don't silently drop
+            log('Overlay injection failed: each added file needs both a target path and a file.');
+            alert(t('wifi_inject_failed') + '\n\n' + t('xf_incomplete'));
+            return false;
+        }
+        files['/' + p.replace(/^\/+/, '')] = new Uint8Array(await f.arrayBuffer());
+    }
+
     var names = Object.keys(files);
     if (!names.length) return true;
     try {
@@ -675,6 +690,33 @@ async function applyOverlayInjection() {
         alert(t('wifi_inject_failed') + '\n\n' + e.message);
         return false;
     }
+}
+
+/* Append an empty "add a file" row (target path + file picker + remove button).
+ * Placeholders/labels are set via t() so dynamically-added rows are localized. */
+function addExtraFileRow() {
+    var box = document.getElementById('extra-files');
+    if (!box) return;
+    var row = document.createElement('div');
+    row.className = 'd-flex flex-wrap gap-2 mt-2 xf-row';
+    var path = document.createElement('input');
+    path.className = 'form-control form-control-sm xf-path';
+    path.style.maxWidth = '16rem';
+    path.setAttribute('autocomplete', 'off');
+    path.placeholder = t('xf_path_ph');
+    var file = document.createElement('input');
+    file.type = 'file';
+    file.className = 'form-control form-control-sm xf-file';
+    file.style.maxWidth = '16rem';
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'btn btn-sm btn-outline-danger xf-del';
+    del.textContent = '×';
+    del.title = t('xf_remove');
+    del.onclick = function () { row.remove(); };
+    row.append(path, file, del);
+    box.appendChild(row);
+    path.focus();
 }
 
 /* ------------------------------------------------------------------ */
@@ -1596,7 +1638,7 @@ Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSele
                         doDiag, closeDiag, copyDiag, toggleHelp, setHelp, setDebug, setVerify, setAdvanced, setReleases,
                         openSettings, closeSettings, openWindowsHelp, closeWindowsHelp, saveSettings, toggleRemoteFields,
                         toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader,
-                        selectRemoteDevice, toggleReleases, releaseChanged, flashFromRelease });
+                        selectRemoteDevice, toggleReleases, releaseChanged, flashFromRelease, addExtraFileRow });
 
 (function() {
     if (!navigator.usb) {
