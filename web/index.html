@@ -228,6 +228,20 @@
             <div class="file-info mt-1" id="file-info"></div>
             <input type="file" id="firmware-file" accept=".bin" onchange="firmwareSelected(this)">
 
+            <!-- Optional: bake files (Wi-Fi creds, SSH key, ...) into the image's overlay
+                 just before flashing. Repacked in the browser (WASM); nothing is uploaded. NOR + NAND. -->
+            <div class="mt-2 d-none" id="wifi-inject">
+                <label class="small text-secondary d-block mb-1" data-i18n="preconfig_label">Pre-configure before flashing (optional)</label>
+                <div class="d-flex flex-wrap gap-2">
+                    <input id="wifi-ssid" class="form-control form-control-sm" style="max-width:14rem" autocomplete="off" data-i18n-ph="wifi_ssid_ph" placeholder="Wi-Fi SSID">
+                    <input id="wifi-psk" type="password" class="form-control form-control-sm" style="max-width:14rem" autocomplete="off" data-i18n-ph="wifi_psk_ph" placeholder="Wi-Fi password">
+                </div>
+                <input id="ssh-key" class="form-control form-control-sm mt-2" autocomplete="off" data-i18n-ph="ssh_key_ph" placeholder="SSH public key for root login (optional)">
+                <div id="extra-files" class="mt-1"></div>
+                <button type="button" id="add-file-btn" class="btn btn-sm btn-outline-secondary mt-2" onclick="addExtraFileRow()" data-i18n="add_file_btn">+ Add a file</button>
+                <div class="small text-secondary mt-1" data-i18n="wifi_hint">Baked into the overlay before writing, entirely in your browser.</div>
+            </div>
+
             <!-- Flash a prebuilt thingino release straight from GitHub. The list
                  comes from the GitHub API (CORS-clean); the image itself is
                  fetched through /fw, which adds the header GitHub omits.
@@ -354,6 +368,10 @@
             <div class="form-check form-switch" data-help="help_setting_advanced">
                 <input class="form-check-input" type="checkbox" id="setting-advanced" onchange="setAdvanced(this.checked)">
                 <label class="form-check-label" for="setting-advanced" data-i18n="setting_advanced_label">Show Advanced (custom SPL / U-Boot) in the main view</label>
+            </div>
+            <div class="form-check form-switch" data-help="help_setting_inject">
+                <input class="form-check-input" type="checkbox" id="setting-inject" onchange="setInject(this.checked)">
+                <label class="form-check-label" for="setting-inject" data-i18n="setting_inject_label">Show Pre-configure (Wi-Fi / SSH / files) in the main view</label>
             </div>
             <hr class="my-2">
             <div class="form-check form-switch">

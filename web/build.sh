@@ -31,6 +31,11 @@ cd "$BUILD_DIR"
 emcmake cmake "$SCRIPT_DIR" -DCMAKE_BUILD_TYPE=Release
 emmake make -j$(nproc) VERBOSE=1
 
+# Build the client-side overlay-injection engines (mkfs.jffs2 / mkfs.ubifs /
+# ubinize) to WebAssembly, into public/wasm/ alongside tdfu.wasm. Uses the
+# Emscripten env sourced above.
+"$SCRIPT_DIR/wasm-inject/build-wasm.sh"
+
 # Bundle the web app with Vite
 cd "$SCRIPT_DIR"
 [ ! -d node_modules ] && npm ci

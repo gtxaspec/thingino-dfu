@@ -6,6 +6,7 @@
  */
 
 import { RemoteClient } from './remote.js';
+import { injectOverlay, overlayFilesFor } from './inject.js';
 
 /* ------------------------------------------------------------------ */
 /*  State                                                              */
@@ -57,6 +58,10 @@ var advancedEnabled = localStorage.getItem('tdfu_advanced') === '1';
 /* Surface the "Flash a prebuilt thingino release" panel in the main view. Opt-in,
  * so the default view stays a plain flash-the-file-I-picked flow. */
 var releasesEnabled = localStorage.getItem('tdfu_releases') === '1';
+
+/* Surface the "Pre-configure" panel (Wi-Fi / SSH / arbitrary overlay files) in the
+ * main view. Opt-in, off by default — it's a power-user step. */
+var injectEnabled = localStorage.getItem('tdfu_inject') === '1';
 
 /**
  * Serialize all WASM async ccalls — Asyncify only supports one at a time.
@@ -646,9 +651,77 @@ function firmwareSelected(input) {
 }
 
 async function doWrite() {
+    if (!(await applyOverlayInjection())) return;   // abort if injection was requested but failed
     if (backendMode === 'remote') { if (firmwareData) return doRemoteWrite(firmwareData); return; }
     if (!tdfuReady || !firmwareData) return;
     return doDfuWrite();
+}
+
+/* If the user entered any pre-configuration (Wi-Fi, SSH key), bake the
+ * corresponding files into the loaded image's overlay (client-side, in the
+ * browser) before flashing. Returns false to abort the flash only when an
+ * injection was requested but failed - so it's never silently dropped. */
+async function applyOverlayInjection() {
+    if (!firmwareData) return true;
+    if (!injectEnabled) return true;   // Pre-configure is disabled in Settings
+    var ssid = ((document.getElementById('wifi-ssid') || {}).value || '').trim();
+    var psk = (document.getElementById('wifi-psk') || {}).value || '';
+    var sshKey = (document.getElementById('ssh-key') || {}).value || '';
+    var files = overlayFilesFor({ ssid: ssid, psk: psk, sshKey: sshKey });
+
+    // generic user-added files: each row is a target path + a local file
+    var rows = document.querySelectorAll('#extra-files .xf-row');
+    for (var i = 0; i < rows.length; i++) {
+        var p = (rows[i].querySelector('.xf-path').value || '').trim();
+        var f = rows[i].querySelector('.xf-file').files[0];
+        if (!p && !f) continue;                       // untouched row - ignore
+        if (!p || !f) {                               // half-filled - don't silently drop
+            log('Overlay injection failed: each added file needs both a target path and a file.');
+            alert(t('wifi_inject_failed') + '\n\n' + t('xf_incomplete'));
+            return false;
+        }
+        files['/' + p.replace(/^\/+/, '')] = new Uint8Array(await f.arrayBuffer());
+    }
+
+    var names = Object.keys(files);
+    if (!names.length) return true;
+    try {
+        log('Baking overlay files into the image (' + names.join(', ') + ')...');
+        firmwareData = await injectOverlay(firmwareData, files);
+        log('Overlay injected - flashing the customised image.');
+        return true;
+    } catch (e) {
+        log('Overlay injection failed: ' + e.message);
+        alert(t('wifi_inject_failed') + '\n\n' + e.message);
+        return false;
+    }
+}
+
+/* Append an empty "add a file" row (target path + file picker + remove button).
+ * Placeholders/labels are set via t() so dynamically-added rows are localized. */
+function addExtraFileRow() {
+    var box = document.getElementById('extra-files');
+    if (!box) return;
+    var row = document.createElement('div');
+    row.className = 'd-flex flex-wrap gap-2 mt-2 xf-row';
+    var path = document.createElement('input');
+    path.className = 'form-control form-control-sm xf-path';
+    path.style.maxWidth = '16rem';
+    path.setAttribute('autocomplete', 'off');
+    path.placeholder = t('xf_path_ph');
+    var file = document.createElement('input');
+    file.type = 'file';
+    file.className = 'form-control form-control-sm xf-file';
+    file.style.maxWidth = '16rem';
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'btn btn-sm btn-outline-danger xf-del';
+    del.textContent = '×';
+    del.title = t('xf_remove');
+    del.onclick = function () { row.remove(); };
+    row.append(path, file, del);
+    box.appendChild(row);
+    path.focus();
 }
 
 /* ------------------------------------------------------------------ */
@@ -986,6 +1059,20 @@ function applyReleases() {
     if (rel) rel.classList.toggle('d-none', !releasesEnabled);
 }
 
+/* Pre-configure (Wi-Fi / SSH / arbitrary overlay files) — Settings toggle, persisted. */
+function setInject(on) {
+    injectEnabled = !!on;
+    localStorage.setItem('tdfu_inject', injectEnabled ? '1' : '0');
+    var s = document.getElementById('setting-inject');
+    if (s) s.checked = injectEnabled;
+    applyInject();
+}
+
+function applyInject() {
+    var el = document.getElementById('wifi-inject');
+    if (el) el.classList.toggle('d-none', !injectEnabled);
+}
+
 function hideHelpBalloon() {
     _helpHover = null;
     if (_helpBalloon) _helpBalloon.classList.remove('show');
@@ -1267,6 +1354,7 @@ function openSettings() {
     var d = document.getElementById('setting-debug'); if (d) d.checked = debugEnabled;
     var a = document.getElementById('setting-advanced'); if (a) a.checked = advancedEnabled;
     var rl = document.getElementById('setting-releases'); if (rl) rl.checked = releasesEnabled;
+    var ij = document.getElementById('setting-inject'); if (ij) ij.checked = injectEnabled;
     toggleRemoteFields();
     document.getElementById('settings-overlay').classList.remove('d-none');
 }
@@ -1570,7 +1658,8 @@ Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSele
                         doDiag, closeDiag, copyDiag, toggleHelp, setHelp, setDebug, setVerify, setAdvanced, setReleases,
                         openSettings, closeSettings, openWindowsHelp, closeWindowsHelp, saveSettings, toggleRemoteFields,
                         toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader,
-                        selectRemoteDevice, toggleReleases, releaseChanged, flashFromRelease });
+                        selectRemoteDevice, toggleReleases, releaseChanged, flashFromRelease, addExtraFileRow,
+                        setInject });
 
 (function() {
     if (!navigator.usb) {
@@ -1595,6 +1684,7 @@ Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSele
     applyBackendMode(backendMode);
     applyAdvanced(); // restore the saved Advanced-panel preference (default off)
     applyReleases(); // restore the saved release-picker preference (default off)
+    applyInject();   // restore the saved Pre-configure preference (default off)
     setState('idle');
     // The Windows-driver prompt only matters on Windows (WinUSB via Zadig);
     // the link is hidden by default and revealed here only on Windows.
