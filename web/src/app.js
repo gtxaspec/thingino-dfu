@@ -50,6 +50,10 @@ window.__tdfu_debug = debugEnabled;
  * flash time). Applies to both the DFU and remote backends. */
 var verifyAfterWrite = localStorage.getItem('tdfu_verify') === '1';
 
+/* Reboot the SoC after a successful write (opt-in). Fires the loader's "reboot"
+ * alt via whichever backend flashed, so the box boots into what was flashed. */
+var rebootAfterWrite = localStorage.getItem('tdfu_reboot') === '1';
+
 /* Surface the Advanced (custom SPL/U-Boot) panel in the main view. Opt-in: the
  * bundled loaders are correct for every supported SoC, so this is an expert
  * escape hatch rather than a normal step. */
@@ -907,6 +911,11 @@ async function doDfuWrite() {
             try { Module.FS.unlink('/tmp/dfu-wr.bin'); } catch (e) { /* ignore */ }
             showProgress(100, 'Write complete');
         }
+        if (rebootAfterWrite) {
+            log('Rebooting the device...');
+            try { await wasmCall('tdfu_web_reboot', 'number', ['number'], [0]); log('Reboot triggered'); }
+            catch (e) { log('Reboot failed: ' + e, 'warn'); }
+        }
         setTimeout(hideProgress, 1500); setState('done');
     } catch (e) {
         try { Module.FS.unlink('/tmp/dfu-wr.bin'); } catch (ue) { /* ignore */ }
@@ -1025,6 +1034,14 @@ function setVerify(on) {
     localStorage.setItem('tdfu_verify', verifyAfterWrite ? '1' : '0');
     var s = document.getElementById('setting-verify');
     if (s) s.checked = verifyAfterWrite;
+}
+
+/* Reboot-after-write — Settings toggle, persisted. */
+function setReboot(on) {
+    rebootAfterWrite = !!on;
+    localStorage.setItem('tdfu_reboot', rebootAfterWrite ? '1' : '0');
+    var s = document.getElementById('setting-reboot');
+    if (s) s.checked = rebootAfterWrite;
 }
 
 /* Advanced (custom SPL/U-Boot) — Settings toggle, persisted. */
@@ -1309,6 +1326,11 @@ async function doRemoteWrite(data) {
         if (!ok) { log('Remote write failed.', 'error'); hideProgress(); setState('error'); return; }
         showProgress(100, verifyAfterWrite ? 'Write + verify complete' : 'Write complete');
         log('Remote write complete.' + (verifyAfterWrite ? ' Verify OK.' : ''));
+        if (rebootAfterWrite) {
+            log('Rebooting the device (remote)...');
+            try { await remoteClient.reboot(selectedRemoteIndex); log('Reboot triggered'); }
+            catch (e) { log('Reboot failed: ' + e.message, 'warn'); }
+        }
         setTimeout(hideProgress, 1500);
         setState('done');
     } catch (e) { log('Remote write error: ' + e.message, 'error'); hideProgress(); setState('error'); }
@@ -1351,6 +1373,7 @@ function openSettings() {
     var t = document.getElementById('remote-token'); if (t) t.value = remoteToken;
     var h = document.getElementById('setting-help'); if (h) h.checked = helpMode;
     var v = document.getElementById('setting-verify'); if (v) v.checked = verifyAfterWrite;
+    var rb = document.getElementById('setting-reboot'); if (rb) rb.checked = rebootAfterWrite;
     var d = document.getElementById('setting-debug'); if (d) d.checked = debugEnabled;
     var a = document.getElementById('setting-advanced'); if (a) a.checked = advancedEnabled;
     var rl = document.getElementById('setting-releases'); if (rl) rl.checked = releasesEnabled;
@@ -1655,7 +1678,7 @@ async function flashFromRelease() {
 
 // Expose handlers referenced by HTML onclick/onchange attributes
 Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSelected, doRead,
-                        doDiag, closeDiag, copyDiag, toggleHelp, setHelp, setDebug, setVerify, setAdvanced, setReleases,
+                        doDiag, closeDiag, copyDiag, toggleHelp, setHelp, setDebug, setVerify, setReboot, setAdvanced, setReleases,
                         openSettings, closeSettings, openWindowsHelp, closeWindowsHelp, saveSettings, toggleRemoteFields,
                         toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader,
                         selectRemoteDevice, toggleReleases, releaseChanged, flashFromRelease, addExtraFileRow,

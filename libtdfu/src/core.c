@@ -201,4 +201,10 @@ tdfu_error_t tdfu_web_dfu_verify(int device_index, const char *alt_name, const c
         return TDFU_ERROR_INVALID_PARAMETER;
     return tdfu_dfu_verify(&g_manager, device_index, alt, path, NULL);
 }
+
+/* Reboot the SoC via the loader's "reboot" virt alt. tdfu_dfu_reboot finds the
+ * alt itself and treats the reset disconnect as success. */
+tdfu_error_t tdfu_web_reboot(int device_index) {
+    return tdfu_dfu_reboot(&g_manager, device_index);
+}
 #endif /* __EMSCRIPTEN__ */

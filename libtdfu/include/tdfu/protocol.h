@@ -32,6 +32,7 @@ enum {
     CMD_STATUS = 0x05,    /* query device state */
     CMD_CANCEL = 0x06,    /* abort current operation */
     CMD_DIAG = 0x07,      /* read-only eFuse/secure-boot diagnostics */
+    CMD_REBOOT = 0x08,    /* reset the SoC (e.g. reboot after a flash) */
 };
 
 /* Response status */

@@ -18,6 +18,7 @@ const CMD_BOOTSTRAP = 0x02;
 const CMD_WRITE = 0x03;
 const CMD_READ = 0x04;
 const CMD_DIAG = 0x07;
+const CMD_REBOOT = 0x08;
 
 const RESP_OK = 0x00;
 const RESP_ERROR = 0x01;
@@ -180,6 +181,12 @@ export class RemoteClient {
         const body = await this._command(CMD_DIAG, new Uint8Array([deviceIndex & 0xff]));
         if (!body) return null;
         return new TextDecoder().decode(body);
+    }
+    /* Reset the SoC (used after a flash). The daemon runs tdfu_dfu_reboot, which
+     * tolerates the reset disconnect and replies OK. */
+    async reboot(deviceIndex) {
+        await this._command(CMD_REBOOT, new Uint8Array([deviceIndex & 0xff]));
+        return true;
     }
 
     _variantPayload(deviceIndex, variant) {

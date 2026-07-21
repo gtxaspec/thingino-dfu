@@ -361,6 +361,10 @@
                 <input class="form-check-input" type="checkbox" id="setting-verify" onchange="setVerify(this.checked)">
                 <label class="form-check-label" for="setting-verify" data-i18n="setting_verify_label">Verify after write (read back and compare)</label>
             </div>
+            <div class="form-check form-switch" data-help="help_setting_reboot">
+                <input class="form-check-input" type="checkbox" id="setting-reboot" onchange="setReboot(this.checked)">
+                <label class="form-check-label" for="setting-reboot" data-i18n="setting_reboot_label">Reboot after flashing (boot into the new image)</label>
+            </div>
             <div class="form-check form-switch" data-help="help_setting_releases">
                 <input class="form-check-input" type="checkbox" id="setting-releases" onchange="setReleases(this.checked)">
                 <label class="form-check-label" for="setting-releases" data-i18n="setting_releases_label">Show Flash a prebuilt thingino release in the main view</label>

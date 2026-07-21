@@ -74,6 +74,15 @@ tdfu_error_t tdfu_dfu_verify(usb_manager_t *manager, int device_index, int alt, 
 #define TDFU_DFU_ERASE_TOKEN "XBURST-FLASH-WIPE"
 tdfu_error_t tdfu_dfu_erase(usb_manager_t *manager, int device_index);
 
+/* Reboot the SoC via the "reboot" virt alt: downloading the token makes the
+ * loader reset in the manifest phase. Runs last (after any --erase/-w/-r), so
+ * the box boots straight into what was just flashed. The reset makes the
+ * device vanish, which is treated as success. Fails with a clear error on a
+ * loader that predates the "reboot" alt. */
+#define TDFU_DFU_REBOOT_ALT "reboot"
+#define TDFU_DFU_REBOOT_TOKEN "XBURST-REBOOT"
+tdfu_error_t tdfu_dfu_reboot(usb_manager_t *manager, int device_index);
+
 /* Default alt for a transfer when the user gave none: the alt named "flash"
  * (the boot flash on the u-boot-ingenic loaders), else a single alt if that
  * is all there is. Returns the alt number, or -1 (caller must ask for --alt). */
@@ -105,6 +114,7 @@ tdfu_error_t tdfu_dfu_read_device(usb_device_t *dev, int alt, const char *path, 
 tdfu_error_t tdfu_dfu_write_device(usb_device_t *dev, int alt, const char *path);
 tdfu_error_t tdfu_dfu_verify_device(usb_device_t *dev, int alt, const char *path, uint64_t *mismatch_off);
 tdfu_error_t tdfu_dfu_erase_device(usb_device_t *dev);
+tdfu_error_t tdfu_dfu_reboot_device(usb_device_t *dev);
 tdfu_error_t tdfu_dfu_bootstrap_device(usb_device_t *dev, const uint8_t *spl, size_t spl_len, const uint8_t *uboot,
                                        size_t uboot_len);
 

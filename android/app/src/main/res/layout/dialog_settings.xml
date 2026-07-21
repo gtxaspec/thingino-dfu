@@ -186,6 +186,43 @@
             app:trackDecorationTint="@color/switch_track_decoration_tint" />
     </LinearLayout>
 
+    <!-- Reboot after flashing -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_reboot"
+                android:textColor="@color/on_surface" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_reboot_desc"
+                android:textSize="12sp"
+                android:textColor="@color/on_surface_variant" />
+        </LinearLayout>
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/dlgRebootSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:thumbTint="@color/switch_thumb_tint"
+            app:trackTint="@color/switch_track_tint"
+            app:trackDecorationTint="@color/switch_track_decoration_tint" />
+    </LinearLayout>
+
     <!-- Debug logging -->
     <LinearLayout
         android:layout_width="match_parent"

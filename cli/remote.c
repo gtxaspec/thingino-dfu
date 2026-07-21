@@ -573,6 +573,29 @@ int remote_erase(int device_index) {
                              strlen(TDFU_DFU_ERASE_TOKEN), TDFU_DFU_ERASE_ALT, false, "Erase");
 }
 
+/* Reboot the SoC (daemon runs tdfu_dfu_reboot, which tolerates the reset
+ * disconnect). Its own command, not a token CMD_WRITE like erase, because the
+ * device drops off mid-write and a plain write would report that as failure. */
+int remote_reboot(int device_index) {
+    uint8_t idx = (uint8_t)device_index;
+    if (send_command(CMD_REBOOT, &idx, 1) < 0)
+        return -1;
+
+    uint8_t status;
+    uint8_t *payload = NULL;
+    uint32_t payload_len = 0;
+    if (recv_response(&status, &payload, &payload_len) < 0)
+        return -1;
+    if (status != RESP_OK) {
+        fprintf(stderr, "Error: %s\n", payload ? (char *)payload : "unknown");
+        free(payload);
+        return -1;
+    }
+    free(payload);
+    printf("Reboot triggered (remote)\n");
+    return 0;
+}
+
 /**
  * Read firmware from remote device.
  *

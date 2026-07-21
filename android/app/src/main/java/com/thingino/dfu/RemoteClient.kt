@@ -31,6 +31,7 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
         const val CMD_STATUS: Byte = 0x05
         const val CMD_CANCEL: Byte = 0x06
         const val CMD_DIAG: Byte = 0x07
+        const val CMD_REBOOT: Byte = 0x08
 
         // Response status
         const val RESP_OK: Byte = 0x00
@@ -219,6 +220,13 @@ class RemoteClient(private val callback: TdfuBridge.NativeCallback?) {
         if (verify) buf.put(1.toByte())
 
         sendRequest(CMD_WRITE, buf.array())
+        return drainResponses() != null
+    }
+
+    /** Reset the SoC (used after a flash). The daemon runs tdfu_dfu_reboot,
+     *  which tolerates the reset disconnect and replies OK. */
+    fun reboot(deviceIndex: Int): Boolean {
+        sendRequest(CMD_REBOOT, byteArrayOf(deviceIndex.toByte()))
         return drainResponses() != null
     }
 

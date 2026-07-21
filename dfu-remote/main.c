@@ -718,6 +718,23 @@ static int handle_diag(int client_fd, const uint8_t *payload, uint32_t len) {
     return send_ok(client_fd, report, (uint32_t)strlen(report));
 }
 
+/* Handle CMD_REBOOT - reset the SoC via the loader's "reboot" alt. Payload:
+ * [1:device_idx]. The device drops off the bus as it resets, which
+ * tdfu_dfu_reboot() treats as success (same as the local path). */
+static int handle_reboot(int client_fd, const uint8_t *payload, uint32_t len) {
+    uint8_t device_index = (len >= 1) ? payload[0] : 0;
+
+    usb_manager_t manager = {0};
+    if (usb_manager_init(&manager) != TDFU_SUCCESS)
+        return send_error(client_fd, "USB init failed");
+
+    tdfu_error_t r = tdfu_dfu_reboot(&manager, device_index);
+    usb_manager_cleanup(&manager);
+    if (r != TDFU_SUCCESS)
+        return send_error(client_fd, tdfu_error_to_string(r));
+    return send_ok(client_fd, NULL, 0);
+}
+
 /* ------------------------------------------------------------------ */
 /* Client connection handler                                           */
 /* ------------------------------------------------------------------ */
@@ -740,6 +757,8 @@ static int dispatch_command(int fd, uint8_t command, const uint8_t *payload, uin
         return handle_cancel(fd);
     case CMD_DIAG:
         return handle_diag(fd, payload, payload_len);
+    case CMD_REBOOT:
+        return handle_reboot(fd, payload, payload_len);
     default:
         return send_error(fd, "unknown command");
     }

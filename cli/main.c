@@ -43,6 +43,7 @@ typedef struct {
     bool wait;           // Wait for the required device to appear before proceeding
     bool verify;         // Read back and compare after a write
     bool erase;          // Erase the whole flash (before -w, or on its own)
+    bool reboot;         // Reboot the SoC after the operation (runs last)
 } cli_options_t;
 
 void print_usage(const char *program_name) {
@@ -67,6 +68,7 @@ void print_usage(const char *program_name) {
     printf("      --alt <name|num>      DFU alt-setting to target\n");
     printf("      --verify              After -w, read the flash back and compare (fails on mismatch)\n");
     printf("      --erase               Erase the WHOLE flash first (alone, or before -w).\n");
+    printf("      --reboot              Reboot the SoC after the operation (runs last).\n");
     printf("                            Required when writing a NAND UBI image smaller than the chip.\n");
     printf("      --wait                Wait for the required device to appear, then proceed\n");
     printf("\nExamples:\n");
@@ -75,6 +77,7 @@ void print_usage(const char *program_name) {
     printf("  thingino-dfu -l                                 # List DFU alt-settings\n");
     printf("  thingino-dfu --alt rootfs -w rootfs.bin         # Flash an alt-setting via DFU\n");
     printf("  thingino-dfu --erase -w fw.bin                  # NAND: wipe chip, then write the image\n");
+    printf("  thingino-dfu -w fw.bin --reboot                 # flash, then boot into it\n");
     printf("  thingino-dfu --host 192.168.1.50 -w fw.bin      # Remote: bootstrap (if needed) + write\n");
     printf("  thingino-dfu --diag                             # Dump eFuse/serial/secure-boot (bootrom)\n");
 }
@@ -132,6 +135,8 @@ tdfu_error_t parse_arguments(int argc, char *argv[], cli_options_t *options) {
             options->verify = true;
         } else if (strcmp(argv[i], "--erase") == 0) {
             options->erase = true;
+        } else if (strcmp(argv[i], "--reboot") == 0) {
+            options->reboot = true;
         } else if (strcmp(argv[i], "--diag") == 0) {
             options->diag = true;
         } else if (strcmp(argv[i], "--alt") == 0) {
@@ -330,7 +335,7 @@ int main(int argc, char *argv[]) {
      * (t31-usbboot.py ergonomics): USB-booting them is the only thing a
      * pair of boot blobs on its own can mean. Applies to local and remote. */
     if (!options.list_devices && !options.bootstrap && !options.read_firmware && !options.write_firmware &&
-        !options.diag && !options.erase && options.spl_file && options.uboot_file) {
+        !options.diag && !options.erase && !options.reboot && options.spl_file && options.uboot_file) {
         options.bootstrap = true;
     }
 
@@ -374,12 +379,16 @@ int main(int argc, char *argv[]) {
                 rc = remote_erase(options.device_index);
             if (rc == 0)
                 rc = remote_write_firmware(options.device_index, cpu, options.input_file, options.alt, options.verify);
+            if (rc == 0 && options.reboot)
+                rc = remote_reboot(options.device_index);
             rc = rc < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else if (options.erase) {
             /* Erase-only: needs the DFU gadget just like a write. */
             rc = remote_prepare_transfer(&options, &cpu, dfu_custom_blobs, "erase");
             if (rc == 0)
                 rc = remote_erase(options.device_index);
+            if (rc == 0 && options.reboot)
+                rc = remote_reboot(options.device_index);
             rc = rc < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else if (options.bootstrap) {
             rc = remote_bootstrap(options.device_index, cpu, options.firmware_dir, options.spl_file,
@@ -391,11 +400,19 @@ int main(int argc, char *argv[]) {
             rc = remote_prepare_transfer(&options, &cpu, dfu_custom_blobs, "read");
             if (rc == 0)
                 rc = remote_read_firmware(options.device_index, options.output_file, options.alt);
+            if (rc == 0 && options.reboot)
+                rc = remote_reboot(options.device_index);
             rc = rc < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else if (options.diag) {
             rc = remote_diag(options.device_index) < 0 ? EXIT_DEVICE_ERROR : 0;
+        } else if (options.reboot) {
+            /* Reboot-only: needs the DFU gadget just like a write. */
+            rc = remote_prepare_transfer(&options, &cpu, dfu_custom_blobs, "reboot");
+            if (rc == 0)
+                rc = remote_reboot(options.device_index);
+            rc = rc < 0 ? EXIT_TRANSFER_ERROR : 0;
         } else {
-            printf("Remote mode: specify -l, -b, -w, -r, or --erase\n");
+            printf("Remote mode: specify -l, -b, -w, -r, --erase, or --reboot\n");
             rc = 1;
         }
 
@@ -405,7 +422,7 @@ int main(int argc, char *argv[]) {
 
     // Local mode
     if (!options.list_devices && !options.bootstrap && !options.read_firmware && !options.write_firmware &&
-        !options.diag && !options.erase) {
+        !options.diag && !options.erase && !options.reboot) {
         printf("No action specified. Use -h for help.\n");
         return 1;
     }
@@ -438,7 +455,8 @@ int main(int argc, char *argv[]) {
     /* -b on its own: bootstrap a bootrom device into U-Boot DFU mode and stop.
      * When -w/-r/--erase is also given, fall through so the transfer path below
      * auto-bootstraps and then acts in one shot. */
-    if (options.bootstrap && !options.write_firmware && !options.read_firmware && !options.erase) {
+    if (options.bootstrap && !options.write_firmware && !options.read_firmware && !options.erase &&
+        !options.reboot) {
         result = tdfu_dfu_bootstrap(&manager, options.device_index, options.firmware_dir, options.force_cpu,
                                     options.spl_file, options.uboot_file);
         usb_manager_cleanup(&manager);
@@ -480,7 +498,7 @@ int main(int argc, char *argv[]) {
      * U-Boot DFU gadget and wait for it to re-enumerate, then fall through to
      * the transfer below. Mirrors the remote and cloner backends, where a plain
      * -w/-r bootstraps as needed - so `thingino-dfu -w <img>` works in one shot. */
-    if (options.write_firmware || options.read_firmware || options.erase) {
+    if (options.write_firmware || options.read_firmware || options.erase || options.reboot) {
         tdfu_device_info_t *devs = NULL;
         int n = 0;
         if (usb_manager_find_devices(&manager, &devs, &n) == TDFU_SUCCESS &&
@@ -511,8 +529,10 @@ int main(int argc, char *argv[]) {
             return EXIT_TRANSFER_ERROR;
         }
         if (!options.write_firmware && !options.read_firmware) {
+            if (options.reboot)
+                result = tdfu_dfu_reboot(&manager, options.device_index);
             usb_manager_cleanup(&manager);
-            return 0;
+            return result != TDFU_SUCCESS ? EXIT_TRANSFER_ERROR : 0;
         }
     }
 
@@ -543,10 +563,14 @@ int main(int argc, char *argv[]) {
         }
     } else if (options.read_firmware && options.output_file)
         result = tdfu_dfu_upload(&manager, options.device_index, alt, options.output_file, 0);
+    else if (options.reboot)
+        result = TDFU_SUCCESS; /* reboot-only: nothing to transfer, reboot runs below */
     else {
-        LOG_ERROR("DFU mode needs -l (list alts), -w <file> (download), or -r <file> (upload)\n");
+        LOG_ERROR("DFU mode needs -l (list alts), -w <file> (download), -r <file> (upload), --erase, or --reboot\n");
         result = TDFU_ERROR_INVALID_PARAMETER;
     }
+    if (options.reboot && result == TDFU_SUCCESS)
+        result = tdfu_dfu_reboot(&manager, options.device_index);
     usb_manager_cleanup(&manager);
     return result != TDFU_SUCCESS ? EXIT_TRANSFER_ERROR : 0;
 }

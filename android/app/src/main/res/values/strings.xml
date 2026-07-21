@@ -23,6 +23,8 @@
     <string name="settings_backend">Flashing backend</string>
     <string name="settings_verify">Verify after write</string>
     <string name="settings_verify_desc">Read the flash back and compare (slower)</string>
+    <string name="settings_reboot">Reboot after flashing</string>
+    <string name="settings_reboot_desc">Reset and boot into the new image</string>
     <string name="settings_debug">Debug logging</string>
     <string name="settings_debug_desc">Verbose libtdfu diagnostics in the log</string>
     <string name="btn_save">Save</string>

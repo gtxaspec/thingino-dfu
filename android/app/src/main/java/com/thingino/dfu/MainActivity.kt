@@ -48,6 +48,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         private const val PREF_VERIFY = "verify_after_write"
         private const val PREF_RELEASES = "show_releases"
         private const val PREF_ADVANCED = "show_advanced"
+        private const val PREF_REBOOT = "reboot_after_flash"
     }
 
     private lateinit var usbHelper: UsbHelper
@@ -839,6 +840,11 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                 if (vr != 0) { verifyFailed = true; result = vr }
             }
 
+            if (result == 0 && prefs.getBoolean(PREF_REBOOT, false)) {
+                withContext(Dispatchers.Main) { appendLog("Rebooting the device...\n") }
+                TdfuBridge.nativeReboot(newFd)
+            }
+
             tempFile.delete()
 
             withContext(Dispatchers.Main) {
@@ -893,6 +899,11 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
 
             val verify = prefs.getBoolean(PREF_VERIFY, false)
             val result = client.writeFirmware(selectedDeviceIndex, detectedSoc, firmwareData, verify)
+
+            if (result && prefs.getBoolean(PREF_REBOOT, false)) {
+                withContext(Dispatchers.Main) { appendLog("Rebooting the device (remote)...\n") }
+                client.reboot(selectedDeviceIndex)
+            }
 
             withContext(Dispatchers.Main) {
                 if (result) {
@@ -1444,6 +1455,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         val verifySwitch = view.findViewById<MaterialSwitch>(R.id.dlgVerifySwitch)
         val releasesSwitch = view.findViewById<MaterialSwitch>(R.id.dlgReleasesSwitch)
         val advancedSwitch = view.findViewById<MaterialSwitch>(R.id.dlgAdvancedSwitch)
+        val rebootSwitch = view.findViewById<MaterialSwitch>(R.id.dlgRebootSwitch)
         val modeGroup = view.findViewById<RadioGroup>(R.id.dlgModeRadioGroup)
         val radioLocal = view.findViewById<RadioButton>(R.id.dlgRadioLocal)
         val radioRemote = view.findViewById<RadioButton>(R.id.dlgRadioRemote)
@@ -1456,6 +1468,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
         verifySwitch.isChecked = prefs.getBoolean(PREF_VERIFY, false)
         releasesSwitch.isChecked = prefs.getBoolean(PREF_RELEASES, false)
         advancedSwitch.isChecked = prefs.getBoolean(PREF_ADVANCED, false)
+        rebootSwitch.isChecked = prefs.getBoolean(PREF_REBOOT, false)
 
         // Prefill the backend from the current state / saved prefs.
         val modeWas = isRemoteMode
@@ -1477,6 +1490,7 @@ class MainActivity : AppCompatActivity(), UsbHelper.DeviceListener, TdfuBridge.N
                 prefs.edit().putBoolean(PREF_VERIFY, verifySwitch.isChecked).apply()
                 prefs.edit().putBoolean(PREF_RELEASES, releasesSwitch.isChecked).apply()
                 prefs.edit().putBoolean(PREF_ADVANCED, advancedSwitch.isChecked).apply()
+                prefs.edit().putBoolean(PREF_REBOOT, rebootSwitch.isChecked).apply()
                 applyReleasesVisible()
                 applyAdvancedVisible()
                 val newDebug = debugSwitch.isChecked

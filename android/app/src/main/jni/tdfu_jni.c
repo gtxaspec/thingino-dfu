@@ -648,6 +648,27 @@ Java_com_thingino_dfu_TdfuBridge_nativeVerifyFirmware(
     return (dr == TDFU_SUCCESS) ? 0 : -1;
 }
 
+JNIEXPORT jint JNICALL
+Java_com_thingino_dfu_TdfuBridge_nativeReboot(
+        JNIEnv *env, jclass clazz, jint fd) {
+    (void)env;
+    (void)clazz;
+
+    LOGI("nativeReboot: fd=%d", fd);
+    jni_log("DFU reboot: resetting the device...\n");
+    usb_device_t *ddev = device_from_fd(fd);
+    tdfu_error_t dr = ddev ? tdfu_dfu_reboot_device(ddev) : TDFU_ERROR_OPEN_FAILED;
+    if (ddev) device_close_android(ddev);
+    if (dr == TDFU_SUCCESS) {
+        jni_log("Reboot triggered.\n");
+    } else {
+        char dmsg[256];
+        snprintf(dmsg, sizeof(dmsg), "ERROR: DFU reboot failed: %s\n", tdfu_error_to_string(dr));
+        jni_log(dmsg);
+    }
+    return (dr == TDFU_SUCCESS) ? 0 : -1;
+}
+
 /* ========================================================================== */
 /* JNI: setDebug                                                              */
 /* ========================================================================== */

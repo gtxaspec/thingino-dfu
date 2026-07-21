@@ -607,6 +607,45 @@ tdfu_error_t tdfu_dfu_erase_device(usb_device_t *dev) {
     return r;
 }
 
+tdfu_error_t tdfu_dfu_reboot_device(usb_device_t *dev) {
+    static const char token[] = TDFU_DFU_REBOOT_TOKEN;
+    tdfu_dfu_info_t info;
+    dfu_status_t st;
+
+    tdfu_error_t r = dfu_read_info(dev, &info);
+    if (r != TDFU_SUCCESS)
+        return r;
+    int alt = tdfu_dfu_find_alt(&info, TDFU_DFU_REBOOT_ALT);
+    if (alt < 0) {
+        LOG_ERROR("This loader has no \"%s\" alt - update the DFU loader firmware\n", TDFU_DFU_REBOOT_ALT);
+        return TDFU_ERROR_INVALID_PARAMETER;
+    }
+    r = dfu_claim_alt(dev, info.interface, alt);
+    if (r != TDFU_SUCCESS)
+        return r;
+    if (dfu_make_idle(dev, info.interface) != TDFU_SUCCESS) {
+        LOG_ERROR("Device not in a DFU-idle state\n");
+        return TDFU_ERROR_PROTOCOL;
+    }
+
+    LOG_INFO("Rebooting the device (alt %d)...\n", alt);
+    r = dfu_dnload(dev, info.interface, 0, (const uint8_t *)token, (uint16_t)strlen(token));
+    if (r != TDFU_SUCCESS)
+        return r;
+    r = dfu_poll_until_ready(dev, info.interface, &st);
+    if (r != TDFU_SUCCESS)
+        return r;
+    /* Zero-length DNLOAD ends the transfer and moves the loader to dfuMANIFEST.
+     * Crucially the manifest only advances (-> flush_medium -> do_reset) while
+     * the host polls GETSTATUS: that pump drives f_dfu's manifest state machine,
+     * exactly as erase relies on. So we MUST poll after the ZLP - it then fails
+     * as the device drops off the bus resetting, and that IS the reboot. */
+    dfu_dnload(dev, info.interface, 1, NULL, 0);
+    dfu_poll_until_ready(dev, info.interface, &st);
+    LOG_INFO("Reboot triggered\n");
+    return TDFU_SUCCESS;
+}
+
 tdfu_error_t tdfu_dfu_read_device(usb_device_t *dev, int alt, const char *path, uint32_t size) {
     tdfu_dfu_info_t info;
 
@@ -846,6 +885,26 @@ tdfu_error_t tdfu_dfu_erase(usb_manager_t *manager, int device_index) {
     tdfu_error_t r = dfu_erase_impl(manager, device_index);
     if (r != TDFU_SUCCESS && dfu_err_recoverable(r) && dfu_reset_device(manager, device_index))
         r = dfu_erase_impl(manager, device_index);
+    return r;
+}
+
+static tdfu_error_t dfu_reboot_impl(usb_manager_t *manager, int device_index) {
+    usb_device_t *dev = NULL;
+    tdfu_error_t r = dfu_open_device(manager, device_index, &dev);
+    if (r != TDFU_SUCCESS)
+        return r;
+    r = tdfu_dfu_reboot_device(dev);
+    dfu_close_device(dev, 0);
+    return r;
+}
+
+/* A recoverable comms failure before the reset is armed gets the same
+ * USB-reset-and-retry-once recovery as erase; once the reset fires the device
+ * function returns success, so no retry runs. */
+tdfu_error_t tdfu_dfu_reboot(usb_manager_t *manager, int device_index) {
+    tdfu_error_t r = dfu_reboot_impl(manager, device_index);
+    if (r != TDFU_SUCCESS && dfu_err_recoverable(r) && dfu_reset_device(manager, device_index))
+        r = dfu_reboot_impl(manager, device_index);
     return r;
 }
 

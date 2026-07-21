@@ -12,6 +12,7 @@ int remote_device_stage(int device_index);
 int remote_bootstrap(int device_index, const char *cpu_variant, const char *firmware_dir, const char *spl_file,
                      const char *uboot_file);
 int remote_erase(int device_index);
+int remote_reboot(int device_index);
 int remote_write_firmware(int device_index, const char *cpu_variant, const char *firmware_file, const char *alt,
                           bool verify);
 int remote_read_firmware(int device_index, const char *output_file, const char *alt);

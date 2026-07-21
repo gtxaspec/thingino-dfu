@@ -121,6 +121,9 @@ object TdfuBridge {
      */
     external fun nativeVerifyFirmware(fd: Int, inputFile: String): Int
 
+    /** Reboot the SoC via the loader's "reboot" alt (used after a flash). 0 on success. */
+    external fun nativeReboot(fd: Int): Int
+
     /**
      * Enable or disable verbose debug logging in libtdfu.
      */

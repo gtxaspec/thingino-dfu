@@ -77,6 +77,7 @@ set(EXPORTED_FUNCTIONS
     "_tdfu_web_dfu_download"
     "_tdfu_web_dfu_upload"
     "_tdfu_web_dfu_verify"
+    "_tdfu_web_reboot"
     "_malloc"
     "_free"
 )
