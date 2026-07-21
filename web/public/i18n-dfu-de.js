@@ -83,6 +83,7 @@ I18N.add("de", {
   setting_debug_label: "Debug-Protokollierung (ausführliche Diagnose)",
   setting_advanced_label: "Erweitert (eigenes SPL / U-Boot) in der Hauptansicht anzeigen",
   setting_releases_label: "Auswahl vorgefertigter thingino-Releases in der Hauptansicht anzeigen",
+  setting_inject_label: "Vorkonfiguration (WLAN / SSH / Dateien) in der Hauptansicht anzeigen",
   btn_cancel: "Abbrechen",
   btn_save: "Speichern",
 
@@ -130,6 +131,7 @@ I18N.add("de", {
   help_setting_debug: "Ausführliche Diagnose im Aktivitätsprotokoll, ersetzt das alte URL-Flag ?debug. Lassen Sie es ausgeschaltet, sofern Sie keine Fehler suchen.",
   help_setting_advanced: "Fügt der Hauptansicht den Bereich Erweitert hinzu, in dem Sie für das nächste Initialisieren ein eigenes DFU-fähiges SPL und U-Boot anstelle der mitgelieferten Images angeben können. Standardmäßig aus: Die mitgelieferten Loader sind für jeden unterstützten SoC korrekt. Beim Ausschalten werden geladene Dateien wieder verworfen.",
   help_setting_releases: "Fügt der Hauptansicht einen Bereich hinzu, der die offiziellen thingino-Firmware-Releases von GitHub auflistet. Wählen Sie ein Release und Ihr Kameramodell: Das Image wird heruntergeladen, seine SHA-256-Summe geprüft und anschließend geflasht. Standardmäßig aus.",
+  help_setting_inject: "Fügt der Hauptansicht das Vorkonfigurations-Panel hinzu, in dem du WLAN-Zugangsdaten, einen SSH-Schlüssel oder beliebige Dateien vor dem Flashen in das Overlay des Images einbetten kannst - vollständig im Browser, es wird nichts hochgeladen. Standardmäßig aus.",
   help_rel_toggle: "Flasht ein offizielles, vorgefertigtes thingino-Release direkt von GitHub. Wählen Sie ein Release und Ihr Kameramodell: Das Image wird heruntergeladen, gegen seine veröffentlichte SHA-256-Summe geprüft und in den Flash geschrieben.",
   help_rel_release: "Welches Firmware-Release geflasht wird. Dies sind die offiziellen firmware-<Datum>-Releases aus dem thingino-GitHub-Repository, neueste zuerst.",
   help_rel_device: "Welches Kameramodell geflasht wird. Es werden nur Images passend zum erkannten SoC angezeigt, sofern Sie nicht Alle Geräte anzeigen aktivieren.",

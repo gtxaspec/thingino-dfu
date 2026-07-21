@@ -86,6 +86,7 @@ I18N.add("it", {
   setting_debug_label: "Log di debug (diagnostica dettagliata)",
   setting_advanced_label: "Mostra Avanzate (SPL / U-Boot personalizzati) nella vista principale",
   setting_releases_label: "Mostra il selettore delle release precompilate di thingino nella vista principale",
+  setting_inject_label: "Mostra Preconfigurazione (Wi-Fi / SSH / file) nella vista principale",
   btn_cancel: "Annulla",
   btn_save: "Salva",
 
@@ -133,6 +134,7 @@ I18N.add("it", {
   help_setting_debug: "Diagnostica dettagliata nel log delle attività; sostituisce il vecchio flag URL ?debug. Lascialo disattivato a meno che tu non stia risolvendo un problema.",
   help_setting_advanced: "Aggiunge il pannello Avanzate alla vista principale, dove puoi fornire il tuo SPL e U-Boot compatibili DFU per il prossimo Avvia al posto delle immagini incluse. Disattivato per impostazione predefinita: i loader inclusi sono corretti per ogni SoC supportato. Disattivandolo vengono rimossi i file caricati.",
   help_setting_releases: "Aggiunge alla vista principale un pannello con le release ufficiali del firmware thingino pubblicate su GitHub. Scegli una release e il modello della tua telecamera: l'immagine viene scaricata, ne viene verificato lo SHA-256 e poi viene scritta. Disattivato per impostazione predefinita.",
+  help_setting_inject: "Aggiunge il pannello Preconfigurazione alla vista principale, dove puoi incorporare credenziali Wi-Fi, una chiave SSH o file arbitrari nell'overlay dell'immagine prima della scrittura, interamente nel browser, senza caricare nulla. Disattivato per impostazione predefinita.",
   help_rel_toggle: "Scrive una release ufficiale precompilata di thingino direttamente da GitHub. Scegli una release e il modello della tua telecamera: l'immagine viene scaricata, confrontata con il suo SHA-256 pubblicato e scritta nella flash.",
   help_rel_release: "Quale release del firmware scrivere. Sono le release ufficiali firmware-<data> del repository GitHub di thingino, dalla più recente.",
   help_rel_device: "Quale modello di telecamera scrivere. Sono elencate solo le immagini compatibili con il SoC rilevato sul tuo dispositivo, a meno che non selezioni Mostra tutti i dispositivi.",

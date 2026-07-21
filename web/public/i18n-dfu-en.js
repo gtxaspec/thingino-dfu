@@ -86,6 +86,7 @@ I18N.add("en", {
   setting_debug_label: "Debug logging (verbose diagnostics)",
   setting_advanced_label: "Show Advanced (custom SPL / U-Boot) in the main view",
   setting_releases_label: "Show the prebuilt thingino release picker in the main view",
+  setting_inject_label: "Show Pre-configure (Wi-Fi / SSH / files) in the main view",
   btn_cancel: "Cancel",
   btn_save: "Save",
 
@@ -133,6 +134,7 @@ I18N.add("en", {
   help_setting_debug: "Verbose diagnostics in the activity log, replaces the old ?debug URL flag. Leave off unless you're troubleshooting.",
   help_setting_advanced: "Adds the Advanced panel to the main view, where you can supply your own DFU-capable SPL and U-Boot for the next Bootstrap instead of the bundled images. Off by default: the bundled loaders are correct for every supported SoC. Turning it off again clears any override you loaded.",
   help_setting_releases: "Adds a panel to the main view listing the official thingino firmware releases from GitHub. Pick a release and your camera model: the image is downloaded, its SHA-256 verified, and then flashed. Off by default.",
+  help_setting_inject: "Adds the Pre-configure panel to the main view, where you can bake Wi-Fi credentials, an SSH key, or arbitrary files into the image's overlay before flashing - entirely in your browser, nothing is uploaded. Off by default.",
   help_rel_toggle: "Flash an official prebuilt thingino release straight from GitHub. Pick a release and your camera model: the image is downloaded, checked against its published SHA-256, and written to flash.",
   help_rel_release: "Which firmware release to flash. These are the official firmware-<date> releases from the thingino GitHub repository, newest first.",
   help_rel_device: "Which camera model to flash. Only images matching the SoC detected on your device are listed, unless you tick Show all devices.",

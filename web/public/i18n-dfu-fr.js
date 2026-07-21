@@ -83,6 +83,7 @@ I18N.add("fr", {
   setting_debug_label: "Journalisation de débogage (diagnostics détaillés)",
   setting_advanced_label: "Afficher Avancé (SPL / U-Boot personnalisés) dans la vue principale",
   setting_releases_label: "Afficher le sélecteur de versions précompilées de thingino dans la vue principale",
+  setting_inject_label: "Afficher la Préconfiguration (Wi-Fi / SSH / fichiers) dans la vue principale",
   btn_cancel: "Annuler",
   btn_save: "Enregistrer",
 
@@ -130,6 +131,7 @@ I18N.add("fr", {
   help_setting_debug: "Diagnostics détaillés dans le journal d'activité ; remplace l'ancien paramètre d'URL ?debug. Laissez désactivé sauf en cas de dépannage.",
   help_setting_advanced: "Ajoute le panneau Avancé à la vue principale, où vous pouvez fournir vos propres SPL et U-Boot compatibles DFU pour le prochain Amorcer au lieu des images intégrées. Désactivé par défaut : les chargeurs intégrés conviennent à tous les SoC pris en charge. Le désactiver efface les fichiers que vous aviez chargés.",
   help_setting_releases: "Ajoute à la vue principale un panneau listant les versions officielles du firmware thingino publiées sur GitHub. Choisissez une version et votre modèle de caméra : l'image est téléchargée, son SHA-256 vérifié, puis flashée. Désactivé par défaut.",
+  help_setting_inject: "Ajoute le panneau de Préconfiguration à la vue principale, où vous pouvez intégrer des identifiants Wi-Fi, une clé SSH ou des fichiers quelconques dans l'overlay de l'image avant le flashage, entièrement dans votre navigateur, rien n'est envoyé. Désactivé par défaut.",
   help_rel_toggle: "Flashe une version officielle précompilée de thingino directement depuis GitHub. Choisissez une version et votre modèle de caméra : l'image est téléchargée, vérifiée avec son SHA-256 publié, puis écrite en flash.",
   help_rel_release: "Quelle version du firmware flasher. Ce sont les versions officielles firmware-<date> du dépôt GitHub de thingino, de la plus récente à la plus ancienne.",
   help_rel_device: "Quel modèle de caméra flasher. Seules les images correspondant au SoC détecté sur votre appareil sont listées, sauf si vous cochez Afficher tous les appareils.",

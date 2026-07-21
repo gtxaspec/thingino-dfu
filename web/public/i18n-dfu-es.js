@@ -83,6 +83,7 @@ I18N.add("es", {
   setting_debug_label: "Registro de depuración (diagnóstico detallado)",
   setting_advanced_label: "Mostrar Avanzado (SPL / U-Boot personalizados) en la vista principal",
   setting_releases_label: "Mostrar el selector de versiones precompiladas de thingino en la vista principal",
+  setting_inject_label: "Mostrar Preconfiguración (Wi-Fi / SSH / archivos) en la vista principal",
   btn_cancel: "Cancelar",
   btn_save: "Guardar",
 
@@ -130,6 +131,7 @@ I18N.add("es", {
   help_setting_debug: "Diagnóstico detallado en el registro de actividad; reemplaza el antiguo parámetro ?debug de la URL. Déjelo desactivado salvo que esté solucionando problemas.",
   help_setting_advanced: "Añade el panel Avanzado a la vista principal, donde puede proporcionar su propio SPL y U-Boot compatibles con DFU para el próximo Inicializar en lugar de las imágenes incluidas. Desactivado de forma predeterminada: los cargadores incluidos son correctos para todos los SoC compatibles. Al desactivarlo se borra cualquier archivo que haya cargado.",
   help_setting_releases: "Añade a la vista principal un panel con las versiones oficiales del firmware de thingino publicadas en GitHub. Elija una versión y su modelo de cámara: la imagen se descarga, se verifica su SHA-256 y luego se graba. Desactivado de forma predeterminada.",
+  help_setting_inject: "Añade el panel de Preconfiguración a la vista principal, donde puedes incrustar credenciales Wi-Fi, una clave SSH o archivos arbitrarios en el overlay de la imagen antes de grabar, todo en tu navegador, sin subir nada. Desactivado por defecto.",
   help_rel_toggle: "Graba una versión oficial precompilada de thingino directamente desde GitHub. Elija una versión y su modelo de cámara: la imagen se descarga, se comprueba con su SHA-256 publicado y se graba en la flash.",
   help_rel_release: "Qué versión del firmware grabar. Son las versiones oficiales firmware-<fecha> del repositorio de thingino en GitHub, de la más reciente a la más antigua.",
   help_rel_device: "Qué modelo de cámara grabar. Solo se listan las imágenes que coinciden con el SoC detectado en su dispositivo, salvo que marque Mostrar todos los dispositivos.",

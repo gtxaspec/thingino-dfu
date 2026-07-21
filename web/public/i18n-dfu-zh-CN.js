@@ -83,6 +83,7 @@ I18N.add("zh-CN", {
   setting_debug_label: "调试日志（详细诊断信息）",
   setting_advanced_label: "在主界面显示“高级”（自定义 SPL / U-Boot）",
   setting_releases_label: "在主界面显示预编译 thingino 版本选择器",
+  setting_inject_label: "在主视图中显示预配置（Wi-Fi / SSH / 文件）",
   btn_cancel: "取消",
   btn_save: "保存",
 
@@ -130,6 +131,7 @@ I18N.add("zh-CN", {
   help_setting_debug: "在活动日志中输出详细诊断信息，取代旧的 ?debug URL 参数。除非在排查问题，否则请保持关闭。",
   help_setting_advanced: "在主界面添加“高级”面板，可为下次引导启动提供你自己的支持 DFU 的 SPL 和 U-Boot，替代内置镜像。默认关闭：内置加载器适用于所有受支持的 SoC。关闭该开关会同时清除已加载的文件。",
   help_setting_releases: "在主界面添加一个面板，列出 GitHub 上的官方 thingino 固件版本。选择版本和你的摄像机型号：镜像会被下载、校验 SHA-256，然后烧录。默认关闭。",
+  help_setting_inject: "在主视图中添加预配置面板，可在刷写前将 Wi-Fi 凭据、SSH 密钥或任意文件嵌入镜像的 overlay 中，全部在浏览器内完成，不上传任何内容。默认关闭。",
   help_rel_toggle: "直接从 GitHub 烧录官方预编译的 thingino 版本。选择版本和你的摄像机型号：镜像会被下载、与官方发布的 SHA-256 校验比对，然后写入闪存。",
   help_rel_release: "要烧录的固件版本。这些是 thingino GitHub 仓库中的官方 firmware-<日期> 版本，最新的在前。",
   help_rel_device: "要烧录的摄像机型号。除非勾选“显示所有设备”，否则只列出与检测到的 SoC 匹配的镜像。",

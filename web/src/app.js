@@ -59,6 +59,10 @@ var advancedEnabled = localStorage.getItem('tdfu_advanced') === '1';
  * so the default view stays a plain flash-the-file-I-picked flow. */
 var releasesEnabled = localStorage.getItem('tdfu_releases') === '1';
 
+/* Surface the "Pre-configure" panel (Wi-Fi / SSH / arbitrary overlay files) in the
+ * main view. Opt-in, off by default — it's a power-user step. */
+var injectEnabled = localStorage.getItem('tdfu_inject') === '1';
+
 /**
  * Serialize all WASM async ccalls — Asyncify only supports one at a time.
  */
@@ -659,6 +663,7 @@ async function doWrite() {
  * injection was requested but failed - so it's never silently dropped. */
 async function applyOverlayInjection() {
     if (!firmwareData) return true;
+    if (!injectEnabled) return true;   // Pre-configure is disabled in Settings
     var ssid = ((document.getElementById('wifi-ssid') || {}).value || '').trim();
     var psk = (document.getElementById('wifi-psk') || {}).value || '';
     var sshKey = (document.getElementById('ssh-key') || {}).value || '';
@@ -1054,6 +1059,20 @@ function applyReleases() {
     if (rel) rel.classList.toggle('d-none', !releasesEnabled);
 }
 
+/* Pre-configure (Wi-Fi / SSH / arbitrary overlay files) — Settings toggle, persisted. */
+function setInject(on) {
+    injectEnabled = !!on;
+    localStorage.setItem('tdfu_inject', injectEnabled ? '1' : '0');
+    var s = document.getElementById('setting-inject');
+    if (s) s.checked = injectEnabled;
+    applyInject();
+}
+
+function applyInject() {
+    var el = document.getElementById('wifi-inject');
+    if (el) el.classList.toggle('d-none', !injectEnabled);
+}
+
 function hideHelpBalloon() {
     _helpHover = null;
     if (_helpBalloon) _helpBalloon.classList.remove('show');
@@ -1335,6 +1354,7 @@ function openSettings() {
     var d = document.getElementById('setting-debug'); if (d) d.checked = debugEnabled;
     var a = document.getElementById('setting-advanced'); if (a) a.checked = advancedEnabled;
     var rl = document.getElementById('setting-releases'); if (rl) rl.checked = releasesEnabled;
+    var ij = document.getElementById('setting-inject'); if (ij) ij.checked = injectEnabled;
     toggleRemoteFields();
     document.getElementById('settings-overlay').classList.remove('d-none');
 }
@@ -1638,7 +1658,8 @@ Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSele
                         doDiag, closeDiag, copyDiag, toggleHelp, setHelp, setDebug, setVerify, setAdvanced, setReleases,
                         openSettings, closeSettings, openWindowsHelp, closeWindowsHelp, saveSettings, toggleRemoteFields,
                         toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader,
-                        selectRemoteDevice, toggleReleases, releaseChanged, flashFromRelease, addExtraFileRow });
+                        selectRemoteDevice, toggleReleases, releaseChanged, flashFromRelease, addExtraFileRow,
+                        setInject });
 
 (function() {
     if (!navigator.usb) {
@@ -1663,6 +1684,7 @@ Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSele
     applyBackendMode(backendMode);
     applyAdvanced(); // restore the saved Advanced-panel preference (default off)
     applyReleases(); // restore the saved release-picker preference (default off)
+    applyInject();   // restore the saved Pre-configure preference (default off)
     setState('idle');
     // The Windows-driver prompt only matters on Windows (WinUSB via Zadig);
     // the link is hidden by default and revealed here only on Windows.

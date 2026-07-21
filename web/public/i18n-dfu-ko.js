@@ -86,6 +86,7 @@ I18N.add("ko", {
   setting_debug_label: "디버그 로깅 (상세 진단)",
   setting_advanced_label: "메인 화면에 고급(사용자 지정 SPL / U-Boot) 표시",
   setting_releases_label: "메인 화면에 사전 빌드된 thingino 릴리스 선택기 표시",
+  setting_inject_label: "메인 화면에 사전 구성(Wi-Fi / SSH / 파일) 표시",
   btn_cancel: "취소",
   btn_save: "저장",
 
@@ -133,6 +134,7 @@ I18N.add("ko", {
   help_setting_debug: "활동 로그에 상세 진단을 표시하며, 기존 ?debug URL 플래그를 대체합니다. 문제를 해결하는 경우가 아니면 꺼 두세요.",
   help_setting_advanced: "메인 화면에 고급 패널을 추가합니다. 다음 부트스트랩에서 내장 이미지 대신 DFU를 지원하는 사용자 지정 SPL과 U-Boot를 지정할 수 있습니다. 기본값은 꺼짐이며, 내장 로더는 지원되는 모든 SoC에서 올바르게 동작합니다. 끄면 불러온 파일도 지워집니다.",
   help_setting_releases: "GitHub의 공식 thingino 펌웨어 릴리스를 나열하는 패널을 메인 화면에 추가합니다. 릴리스와 카메라 모델을 선택하면 이미지를 내려받아 SHA-256을 검증한 뒤 기록합니다. 기본값은 꺼짐입니다.",
+  help_setting_inject: "메인 화면에 사전 구성 패널을 추가합니다. 플래싱 전에 Wi-Fi 자격 증명, SSH 키 또는 임의 파일을 이미지 오버레이에 넣을 수 있습니다. 모두 브라우저 안에서 처리되며 아무것도 업로드되지 않습니다. 기본값은 꺼짐입니다.",
   help_rel_toggle: "GitHub에서 공식 사전 빌드 thingino 릴리스를 바로 기록합니다. 릴리스와 카메라 모델을 선택하면 이미지를 내려받아 공개된 SHA-256과 대조한 뒤 플래시에 기록합니다.",
   help_rel_release: "기록할 펌웨어 릴리스입니다. thingino GitHub 저장소의 공식 firmware-<날짜> 릴리스이며 최신순으로 표시됩니다.",
   help_rel_device: "기록할 카메라 모델입니다. 모든 기기 표시를 선택하지 않으면 감지된 SoC와 일치하는 이미지만 표시됩니다.",

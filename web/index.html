@@ -230,7 +230,7 @@
 
             <!-- Optional: bake files (Wi-Fi creds, SSH key, ...) into the image's overlay
                  just before flashing. Repacked in the browser (WASM); nothing is uploaded. NOR + NAND. -->
-            <div class="mt-2" id="wifi-inject">
+            <div class="mt-2 d-none" id="wifi-inject">
                 <label class="small text-secondary d-block mb-1" data-i18n="preconfig_label">Pre-configure before flashing (optional)</label>
                 <div class="d-flex flex-wrap gap-2">
                     <input id="wifi-ssid" class="form-control form-control-sm" style="max-width:14rem" autocomplete="off" data-i18n-ph="wifi_ssid_ph" placeholder="Wi-Fi SSID">
@@ -368,6 +368,10 @@
             <div class="form-check form-switch" data-help="help_setting_advanced">
                 <input class="form-check-input" type="checkbox" id="setting-advanced" onchange="setAdvanced(this.checked)">
                 <label class="form-check-label" for="setting-advanced" data-i18n="setting_advanced_label">Show Advanced (custom SPL / U-Boot) in the main view</label>
+            </div>
+            <div class="form-check form-switch" data-help="help_setting_inject">
+                <input class="form-check-input" type="checkbox" id="setting-inject" onchange="setInject(this.checked)">
+                <label class="form-check-label" for="setting-inject" data-i18n="setting_inject_label">Show Pre-configure (Wi-Fi / SSH / files) in the main view</label>
             </div>
             <hr class="my-2">
             <div class="form-check form-switch">

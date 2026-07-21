@@ -86,6 +86,7 @@ I18N.add("tr", {
   setting_debug_label: "Hata ayıklama günlüğü (ayrıntılı tanılama)",
   setting_advanced_label: "Gelişmiş (özel SPL / U-Boot) bölümünü ana görünümde göster",
   setting_releases_label: "Hazır thingino sürümü seçicisini ana görünümde göster",
+  setting_inject_label: "Ana görünümde Ön yapılandırma'yı (Wi-Fi / SSH / dosyalar) göster",
   btn_cancel: "İptal",
   btn_save: "Kaydet",
 
@@ -133,6 +134,7 @@ I18N.add("tr", {
   help_setting_debug: "Etkinlik günlüğünde ayrıntılı tanılama; eski ?debug URL bayrağının yerini alır. Sorun gidermiyorsanız kapalı bırakın.",
   help_setting_advanced: "Ana görünüme Gelişmiş panelini ekler; burada bir sonraki Önyükle işlemi için gömülü imajlar yerine kendi DFU uyumlu SPL ve U-Boot dosyalarınızı verebilirsiniz. Varsayılan olarak kapalıdır: gömülü yükleyiciler desteklenen her SoC için doğrudur. Kapatmak, yüklediğiniz dosyaları da temizler.",
   help_setting_releases: "Ana görünüme, GitHub'daki resmî thingino ürün yazılımı sürümlerini listeleyen bir panel ekler. Bir sürüm ve kamera modelinizi seçin: imaj indirilir, SHA-256 özeti doğrulanır ve ardından yazılır. Varsayılan olarak kapalıdır.",
+  help_setting_inject: "Ana görünüme Ön yapılandırma panelini ekler; burada Wi-Fi kimlik bilgilerini, bir SSH anahtarını veya rastgele dosyaları yazmadan önce görüntünün overlay'ine yerleştirebilirsiniz - tamamen tarayıcınızda, hiçbir şey yüklenmez. Varsayılan olarak kapalı.",
   help_rel_toggle: "Resmî, hazır bir thingino sürümünü doğrudan GitHub'dan yazar. Bir sürüm ve kamera modelinizi seçin: imaj indirilir, yayımlanan SHA-256 özetiyle karşılaştırılır ve flash belleğe yazılır.",
   help_rel_release: "Hangi ürün yazılımı sürümünün yazılacağı. Bunlar thingino GitHub deposundaki resmî firmware-<tarih> sürümleridir, en yenisi en üstte.",
   help_rel_device: "Hangi kamera modelinin yazılacağı. Tüm cihazları göster seçeneğini işaretlemediğiniz sürece yalnızca cihazınızda algılanan SoC ile eşleşen imajlar listelenir.",

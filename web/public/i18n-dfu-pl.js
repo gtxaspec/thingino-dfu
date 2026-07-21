@@ -86,6 +86,7 @@ I18N.add("pl", {
   setting_debug_label: "Rejestrowanie debugowania (szczegółowa diagnostyka)",
   setting_advanced_label: "Pokaż Zaawansowane (własny SPL / U-Boot) w widoku głównym",
   setting_releases_label: "Pokaż wybór gotowych wydań thingino w widoku głównym",
+  setting_inject_label: "Pokaż Wstępną konfigurację (Wi-Fi / SSH / pliki) w widoku głównym",
   btn_cancel: "Anuluj",
   btn_save: "Zapisz",
 
@@ -133,6 +134,7 @@ I18N.add("pl", {
   help_setting_debug: "Szczegółowa diagnostyka w dzienniku aktywności; zastępuje dawną flagę URL ?debug. Pozostaw wyłączone, chyba że rozwiązujesz problemy.",
   help_setting_advanced: "Dodaje panel Zaawansowane do widoku głównego, w którym możesz wskazać własny SPL i U-Boot obsługujące DFU do następnego Rozruchu zamiast obrazów dołączonych do programu. Domyślnie wyłączone: dołączone loadery są poprawne dla każdego obsługiwanego układu SoC. Wyłączenie usuwa wczytane pliki.",
   help_setting_releases: "Dodaje do widoku głównego panel z oficjalnymi wydaniami firmware'u thingino z GitHuba. Wybierz wydanie i model kamery: obraz zostanie pobrany, jego suma SHA-256 sprawdzona, a następnie zapisany. Domyślnie wyłączone.",
+  help_setting_inject: "Dodaje panel Wstępnej konfiguracji do widoku głównego, w którym możesz osadzić dane Wi-Fi, klucz SSH lub dowolne pliki w nakładce obrazu przed zapisem - w całości w przeglądarce, nic nie jest wysyłane. Domyślnie wyłączone.",
   help_rel_toggle: "Wgrywa oficjalne, gotowe wydanie thingino prosto z GitHuba. Wybierz wydanie i model kamery: obraz zostanie pobrany, sprawdzony z opublikowaną sumą SHA-256 i zapisany w pamięci flash.",
   help_rel_release: "Które wydanie firmware'u wgrać. To oficjalne wydania firmware-<data> z repozytorium thingino na GitHubie, od najnowszego.",
   help_rel_device: "Który model kamery wgrać. Wyświetlane są tylko obrazy zgodne z wykrytym układem SoC, chyba że zaznaczysz Pokaż wszystkie urządzenia.",

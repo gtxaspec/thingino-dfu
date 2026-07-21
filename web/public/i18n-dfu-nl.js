@@ -86,6 +86,7 @@ I18N.add("nl", {
   setting_debug_label: "Foutopsporingslogboek (uitgebreide diagnostiek)",
   setting_advanced_label: "Geavanceerd (aangepaste SPL / U-Boot) in de hoofdweergave tonen",
   setting_releases_label: "De keuzelijst met vooraf gebouwde thingino-releases in de hoofdweergave tonen",
+  setting_inject_label: "Vooraf instellen (Wi-Fi / SSH / bestanden) in de hoofdweergave tonen",
   btn_cancel: "Annuleren",
   btn_save: "Opslaan",
 
@@ -133,6 +134,7 @@ I18N.add("nl", {
   help_setting_debug: "Uitgebreide diagnostiek in het activiteitenlogboek; vervangt de oude ?debug-URL-vlag. Laat uit tenzij je problemen oplost.",
   help_setting_advanced: "Voegt het paneel Geavanceerd toe aan de hoofdweergave, waar u voor het volgende Bootstrappen uw eigen DFU-geschikte SPL en U-Boot kunt opgeven in plaats van de meegeleverde images. Standaard uit: de meegeleverde loaders zijn juist voor elke ondersteunde SoC. Bij uitschakelen worden geladen bestanden gewist.",
   help_setting_releases: "Voegt aan de hoofdweergave een paneel toe met de officiële thingino-firmwarereleases van GitHub. Kies een release en uw cameramodel: de image wordt gedownload, de SHA-256 gecontroleerd en vervolgens geflasht. Standaard uit.",
+  help_setting_inject: "Voegt het Vooraf-instellen-paneel toe aan de hoofdweergave, waar je Wi-Fi-gegevens, een SSH-sleutel of willekeurige bestanden vóór het flashen in de overlay van de image kunt inbedden - volledig in je browser, er wordt niets geüpload. Standaard uit.",
   help_rel_toggle: "Flasht een officiële, vooraf gebouwde thingino-release rechtstreeks vanaf GitHub. Kies een release en uw cameramodel: de image wordt gedownload, gecontroleerd tegen de gepubliceerde SHA-256 en naar de flash geschreven.",
   help_rel_release: "Welke firmwarerelease wordt geflasht. Dit zijn de officiële firmware-<datum>-releases uit de thingino-repository op GitHub, nieuwste eerst.",
   help_rel_device: "Welk cameramodel wordt geflasht. Alleen images die passen bij de gedetecteerde SoC worden getoond, tenzij u Alle apparaten tonen aanvinkt.",
