@@ -83,7 +83,9 @@ android {
 
     externalNativeBuild {
         cmake {
-            path = file("src/main/jni/CMakeLists.txt")
+            // Lives at the repo root now, so it can also be driven directly by
+            // the NDK toolchain to emit a standalone libtdfu_jni.so.
+            path = file("../../android-jni/CMakeLists.txt")
             version = "3.22.1"
         }
     }

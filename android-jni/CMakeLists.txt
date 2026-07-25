@@ -1,11 +1,23 @@
 cmake_minimum_required(VERSION 3.22.1)
 project(tdfu_jni C)
 
+# Standalone NDK build. Emits libtdfu_jni.so, which carries the JNI bridge,
+# all of libtdfu, and a statically linked libusb, leaving only Android system
+# libraries as external dependencies. Consumers drop it straight into an APK's
+# jniLibs/<abi>/ and need no C toolchain of their own.
+#
+#   cmake -B build/<abi> -S android-jni \
+#     -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+#     -DANDROID_ABI=<abi> -DANDROID_PLATFORM=android-26
+#   cmake --build build/<abi>
+#
+# The exported symbols are named for com.thingino.dfu.TdfuBridge. That Java
+# package is baked into the binary and is independent of any consumer's
+# applicationId, so keep the Kotlin class in that package wherever it is used.
+
 # Path to libtdfu sources (relative to this CMakeLists.txt)
-# CMAKE_CURRENT_SOURCE_DIR = android/app/src/main/jni/
-# libtdfu is at the repo root: thingino-dfu/libtdfu/
-# jni/ -> main/ -> src/ -> app/ -> android/ -> thingino-dfu/
-set(LIBTDFU_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../libtdfu")
+# CMAKE_CURRENT_SOURCE_DIR = android-jni/, libtdfu is its sibling at the repo root.
+set(LIBTDFU_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../libtdfu")
 
 # ---------------------------------------------------------------------------
 # libusb -- fetch source for Android cross-compile

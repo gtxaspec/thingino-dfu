@@ -226,9 +226,27 @@ jobs:
           name: thingino-dfu-android
           path: dist/thingino-dfu-android.apk
 
+  # Prebuilt JNI library for Android consumers. Self-contained: the bridge,
+  # libtdfu, and a statically linked libusb, with only Android system libraries
+  # left external. Lets an app repo ship a native flashing path without an NDK.
+  build-android-jni:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # tags, so the tarball carries a real version
+
+      - name: Build libtdfu_jni.so for all ABIs
+        run: ANDROID_NDK="$ANDROID_NDK_HOME" scripts/build-android-jni.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: libtdfu-jni-android
+          path: dist/libtdfu-jni-android-*.tar.gz
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-linux-x86_64, build-linux-aarch64, build-windows, build-macos, build-android, build-web]
+    needs: [build-linux-x86_64, build-linux-aarch64, build-windows, build-macos, build-android, build-android-jni, build-web]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -249,6 +267,7 @@ jobs:
             artifacts/thingino-dfu-windows-x64/*.zip \
             artifacts/thingino-dfu-macos-universal/*.tar.gz \
             artifacts/thingino-dfu-android/*.apk \
+            artifacts/libtdfu-jni-android/*.tar.gz \
             artifacts/thingino-dfu-web/*.tar.gz \
             --generate-notes
 
