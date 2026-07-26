@@ -106,14 +106,19 @@ Output: `web/dist/`. Serve it with any HTTPS server and open in Chrome/Edge (Web
 
 ### Android
 
-Requires Android SDK, NDK 27, and Java 17.
+The Android app lives in [thingino-app](https://github.com/thingino/thingino-app),
+which also covers camera provisioning. This repo builds the pieces that app
+needs from here:
 
 ```
-cd android
-./gradlew assembleRelease
+ANDROID_NDK=/path/to/ndk scripts/build-android-deps.sh
 ```
 
-APK: `android/app/build/outputs/apk/release/app-release.apk`. The app supports local USB (via USB OTG) and remote mode (connecting to a `dfu-remote` daemon over TCP).
+That produces `dist/thingino-dfu-android-deps-<version>.tar.gz`, containing
+`libtdfu_jni.so` for each ABI (the JNI bridge, libtdfu, and a statically linked
+libusb) plus the `firmware/` bootstrap blobs. It is attached to every release,
+and thingino-app pins a version of it. No Gradle or Android SDK is needed here,
+only the NDK.
 
 ### Install
 
@@ -127,7 +132,7 @@ Output binaries:
 - Linux: `build/cli/thingino-dfu`, `build/dfu-remote/dfu-remote`
 - ARM64: `build-aarch64/cli/thingino-dfu`
 - Windows: `build-win64/cli/thingino-dfu.exe` + `libusb-1.0.dll`
-- Android: `android/app/build/outputs/apk/release/app-release.apk`
+- Android deps: `dist/thingino-dfu-android-deps-<version>.tar.gz`
 - Web: `web/dist/` (serve with any HTTPS server)
 
 ## Remote Mode

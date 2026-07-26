@@ -190,42 +190,6 @@ jobs:
           name: thingino-dfu-web
           path: dist/thingino-dfu-web.tar.gz
 
-  build-android:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0  # full history + tags so `git describe` resolves the version
-
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Decode keystore
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/thingino-release.jks
-
-      - name: Build APK
-        working-directory: android
-        env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          rm -rf app/src/main/assets/firmware
-          mkdir -p app/src/main/assets
-          cp -r ../firmware app/src/main/assets/firmware
-          ./gradlew assembleRelease
-
-      - name: Package
-        run: |
-          mkdir -p dist
-          cp android/app/build/outputs/apk/release/app-release.apk dist/thingino-dfu-android.apk
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: thingino-dfu-android
-          path: dist/thingino-dfu-android.apk
-
   # Everything an Android app needs from this repo: the self-contained JNI
   # library plus the bootstrap blobs. Lets an app repo ship a native flashing
   # path with no NDK, no CMake and no libusb of its own.
@@ -246,7 +210,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build-linux-x86_64, build-linux-aarch64, build-windows, build-macos, build-android, build-android-deps, build-web]
+    needs: [build-linux-x86_64, build-linux-aarch64, build-windows, build-macos, build-android-deps, build-web]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -266,7 +230,6 @@ jobs:
             artifacts/thingino-dfu-linux-aarch64/*.tar.gz \
             artifacts/thingino-dfu-windows-x64/*.zip \
             artifacts/thingino-dfu-macos-universal/*.tar.gz \
-            artifacts/thingino-dfu-android/*.apk \
             artifacts/thingino-dfu-android-deps/*.tar.gz \
             artifacts/thingino-dfu-web/*.tar.gz \
             --generate-notes

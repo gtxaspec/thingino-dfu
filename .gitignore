@@ -4,10 +4,6 @@ firmware.bin
 build*/
 *.bin
 third_party/libusb/windows/
-android/app/.cxx/
-android/.gradle/
-android/local.properties
-android/thingino-release.jks
 web/dist/
 web/public/wasm/
 web/node_modules/
