@@ -52,7 +52,7 @@ uninstall:
 
 # 'clean' removes all generated build output:
 #   - native / cross C build dirs and the web bundle outputs
-#   - the Android JNI build dirs (scripts/build-android-deps.sh)
+#   - the Android JNI build dirs (scripts/build-libtdfu-android.sh)
 #   - the Emscripten SDK (gitignored; web/build.sh re-clones + installs it on
 #     the next 'make web'). ~1 GB, so this re-downloads on the following build.
 clean:

@@ -10,7 +10,7 @@
 #
 # A consumer unpacks these straight into its sourceSets and needs no C toolchain.
 #
-# Usage: scripts/build-android-deps.sh [output-dir]
+# Usage: scripts/build-libtdfu-android.sh [output-dir]
 #   ANDROID_NDK or ANDROID_NDK_HOME must point at an NDK r25 or newer.
 
 set -eu
@@ -93,7 +93,10 @@ BLOBS=$(find "$STAGE/firmware" -name '*.bin' | wc -l)
 echo "    $BLOBS blobs, $(du -sh "$STAGE/firmware" | cut -f1)"
 
 cat >"$STAGE/README" <<EOF
-thingino-dfu Android dependencies $VERSION
+libtdfu for Android $VERSION
+
+Everything an Android app needs from thingino-dfu. Not an app: this is a
+build input. The APK lives at https://github.com/thingino/thingino-app.
 
 jniLibs/<abi>/libtdfu_jni.so
     The JNI bridge, libtdfu, and a statically linked libusb. Only Android
@@ -113,6 +116,6 @@ firmware/
 Minimum supported API level: 26.
 EOF
 
-TARBALL=$OUT/thingino-dfu-android-deps-$VERSION.tar.gz
+TARBALL=$OUT/libtdfu-android-$VERSION.tar.gz
 tar -czf "$TARBALL" -C "$STAGE" .
 echo "==> $TARBALL ($(du -h "$TARBALL" | cut -f1))"

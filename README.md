@@ -111,10 +111,10 @@ which also covers camera provisioning. This repo builds the pieces that app
 needs from here:
 
 ```
-ANDROID_NDK=/path/to/ndk scripts/build-android-deps.sh
+ANDROID_NDK=/path/to/ndk scripts/build-libtdfu-android.sh
 ```
 
-That produces `dist/thingino-dfu-android-deps-<version>.tar.gz`, containing
+That produces `dist/libtdfu-android-<version>.tar.gz`, containing
 `libtdfu_jni.so` for each ABI (the JNI bridge, libtdfu, and a statically linked
 libusb) plus the `firmware/` bootstrap blobs. It is attached to every release,
 and thingino-app pins a version of it. No Gradle or Android SDK is needed here,
@@ -132,7 +132,7 @@ Output binaries:
 - Linux: `build/cli/thingino-dfu`, `build/dfu-remote/dfu-remote`
 - ARM64: `build-aarch64/cli/thingino-dfu`
 - Windows: `build-win64/cli/thingino-dfu.exe` + `libusb-1.0.dll`
-- Android deps: `dist/thingino-dfu-android-deps-<version>.tar.gz`
+- Android deps: `dist/libtdfu-android-<version>.tar.gz`
 - Web: `web/dist/` (serve with any HTTPS server)
 
 ## Remote Mode
