@@ -660,12 +660,18 @@ static tdfu_error_t dfu_erase_blank_check(usb_device_t *dev, const tdfu_dfu_info
         }
     }
     /* The one-block probe leaves U-Boot's read transaction inited with the
-     * sequence counter at 1 - DFU_ABORT resets the f_dfu state machine but
-     * NOT the dfu entity, so the next write's block 0 would trip
-     * "dfu_write: Wrong sequence number! [1] [0]" and burn its stale-
-     * transaction retry. U-Boot cleans the entity on a sequence mismatch in
-     * the READ path (its deliberate self-heal), so trip exactly that: re-ask
-     * for block 0, expect the refusal, and the entity is pristine again. */
+     * sequence counter at 1 - on loaders WITHOUT u-boot 4af4e9d1a3f
+     * ("usb: gadget: f_dfu: clean the entity transaction when the host
+     * abandons it") DFU_ABORT resets the f_dfu state machine but NOT the dfu
+     * entity, so the next write's block 0 would trip "dfu_write: Wrong
+     * sequence number! [1] [0]" and burn its stale-transaction retry. U-Boot
+     * cleans the entity on a sequence mismatch in the READ path (its
+     * deliberate self-heal), so trip exactly that: re-ask for block 0,
+     * expect the refusal, and the entity is pristine again. This prints ONE
+     * benign "dfu_read: Wrong sequence number! [1] [0]" on the loader
+     * console per erase - on fixed loaders it is redundant (the abort below
+     * cleans for real); TODO drop it once pre-4af4e9d1a3f loaders are gone
+     * from the field. */
     if (r == TDFU_SUCCESS) {
         int drop = 0;
         (void)dfu_upload_block(dev, info->interface, 0, buf, len, &drop);
