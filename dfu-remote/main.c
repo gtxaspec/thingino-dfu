@@ -512,6 +512,15 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len) {
         if (usb_manager_init(&emgr) != TDFU_SUCCESS)
             return send_error(client_fd, "USB init failed");
         g_log_client_fd = client_fd;
+        /* Same post-bootstrap re-enumeration wait as a write: a one-shot
+         * "--erase -w" sends this on the heels of the bootstrap, before the
+         * gadget is back on the bus. dfu_pick_alt re-probes for up to ~30s. */
+        if (dfu_pick_alt(&emgr, device_index, NULL) < 0) {
+            g_log_client_fd = -1;
+            usb_manager_cleanup(&emgr);
+            g_state = "idle";
+            return send_error(client_fd, "erase failed: device not found");
+        }
         tdfu_error_t er = tdfu_dfu_erase(&emgr, device_index);
         g_log_client_fd = -1;
         usb_manager_cleanup(&emgr);
