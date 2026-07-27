@@ -659,8 +659,18 @@ static tdfu_error_t dfu_erase_blank_check(usb_device_t *dev, const tdfu_dfu_info
             }
         }
     }
-    /* Leave the probe transaction cleanly so the next operation (usually the
-     * write that follows --erase) starts from dfuIDLE. */
+    /* The one-block probe leaves U-Boot's read transaction inited with the
+     * sequence counter at 1 - DFU_ABORT resets the f_dfu state machine but
+     * NOT the dfu entity, so the next write's block 0 would trip
+     * "dfu_write: Wrong sequence number! [1] [0]" and burn its stale-
+     * transaction retry. U-Boot cleans the entity on a sequence mismatch in
+     * the READ path (its deliberate self-heal), so trip exactly that: re-ask
+     * for block 0, expect the refusal, and the entity is pristine again. */
+    if (r == TDFU_SUCCESS) {
+        int drop = 0;
+        (void)dfu_upload_block(dev, info->interface, 0, buf, len, &drop);
+        dfu_clr_status(dev, info->interface);
+    }
     dfu_abort(dev, info->interface);
     free(buf);
     return r;
