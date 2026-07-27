@@ -369,15 +369,15 @@ tdfu_error_t usb_device_release_interface(usb_device_t *device) {
 }
 
 // Control transfer
-tdfu_error_t usb_device_control_transfer(usb_device_t *device, uint8_t request_type, uint8_t request,
-                                             uint16_t value, uint16_t index, uint8_t *data, uint16_t length,
-                                             int *transferred) {
+tdfu_error_t usb_device_control_transfer_to(usb_device_t *device, uint8_t request_type, uint8_t request,
+                                                uint16_t value, uint16_t index, uint8_t *data, uint16_t length,
+                                                int *transferred, int timeout_ms) {
 
     if (!device || !device->handle || device->closed) {
         return TDFU_ERROR_INVALID_PARAMETER;
     }
 
-    int result = libusb_control_transfer(device->handle, request_type, request, value, index, data, length, 5000);
+    int result = libusb_control_transfer(device->handle, request_type, request, value, index, data, length, timeout_ms);
 
     if (result < 0) {
         DEBUG_PRINT("Control transfer failed: %s\n", libusb_error_name(result));
@@ -389,6 +389,13 @@ tdfu_error_t usb_device_control_transfer(usb_device_t *device, uint8_t request_t
     }
 
     return TDFU_SUCCESS;
+}
+
+tdfu_error_t usb_device_control_transfer(usb_device_t *device, uint8_t request_type, uint8_t request,
+                                             uint16_t value, uint16_t index, uint8_t *data, uint16_t length,
+                                             int *transferred) {
+    return usb_device_control_transfer_to(device, request_type, request, value, index, data, length, transferred,
+                                          5000);
 }
 
 // Helper to get current time in milliseconds

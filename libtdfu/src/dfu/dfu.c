@@ -87,8 +87,18 @@ static tdfu_error_t dfu_abort(usb_device_t *dev, uint16_t iface) {
     return usb_device_control_transfer(dev, DFU_BMREQ_OUT, DFU_ABORT, 0, iface, NULL, 0, NULL);
 }
 
+/* DNLOAD blocks get a long USB timeout: when the block before crossed the
+ * loader's DFU buffer boundary (dfu_bufsiz, 2 MiB), the loader flushes the
+ * whole buffer to flash inside the request context and NAKs the next setup
+ * for the duration. A T40XP NAND flush exceeds the 5s default, so the host
+ * abandoned the transfer mid-data-stage, the device recorded errSTALLEDPKT,
+ * and the write died at exactly 2 MiB ("DFU download stalled"). The timeout
+ * only matters on genuine failure, so long is safe. */
+#define DFU_DNLOAD_TIMEOUT_MS 30000
+
 static tdfu_error_t dfu_dnload(usb_device_t *dev, uint16_t iface, uint16_t block, const uint8_t *data, uint16_t len) {
-    return usb_device_control_transfer(dev, DFU_BMREQ_OUT, DFU_DNLOAD, block, iface, (uint8_t *)data, len, NULL);
+    return usb_device_control_transfer_to(dev, DFU_BMREQ_OUT, DFU_DNLOAD, block, iface, (uint8_t *)data, len, NULL,
+                                          DFU_DNLOAD_TIMEOUT_MS);
 }
 
 static tdfu_error_t dfu_upload_block(usb_device_t *dev, uint16_t iface, uint16_t block, uint8_t *data, uint16_t len,
@@ -163,6 +173,18 @@ static tdfu_error_t dfu_poll_until_ready_grace(usb_device_t *dev, uint16_t iface
 static tdfu_error_t dfu_poll_until_ready(usb_device_t *dev, uint16_t iface, dfu_status_t *st) {
     return dfu_poll_until_ready_grace(dev, iface, st, 0);
 }
+
+/* How many consecutive lost GETSTATUS polls to forgive. Each costs the 5s
+ * control-transfer timeout + 500ms backoff.
+ *
+ * Erase manifest: 36 covers ~3 minutes of EP0 silence - enough for a
+ * whole-chip erase of the largest parts we ship loaders for (a 256 MiB
+ * T40XP NAND takes tens of seconds).
+ *
+ * Write blocks: 12 (~1 minute) rides out the loader's DFU-buffer flush to
+ * flash between blocks. */
+#define DFU_ERASE_GRACE_RETRIES 36
+#define DFU_WRITE_GRACE_RETRIES 12
 
 /* ====================================================================== */
 /* Descriptor parsing + device discovery                                  */
@@ -394,8 +416,10 @@ static tdfu_error_t dfu_set_interface(usb_device_t *dev, uint16_t iface, uint16_
 }
 
 /* Set the device configuration (the driverless DFU gadget often has none set,
- * which makes claim fail), claim the DFU interface, and select the alt. */
-static tdfu_error_t dfu_claim_alt(usb_device_t *dev, int iface, int alt) {
+ * which makes claim fail), claim the DFU interface, and select the alt.
+ * multi_alt: whether the interface exposes more than one alt (info->alt_count
+ * > 1) - decides if SET_INTERFACE is issued for alt 0 too. */
+static tdfu_error_t dfu_claim_alt_ex(usb_device_t *dev, int iface, int alt, bool multi_alt) {
     uint8_t hdr[9];
     int cfgval = 1;
     if (dfu_get_descriptor(dev, 0x02, 0, 0, hdr, sizeof(hdr)) >= 6)
@@ -412,8 +436,16 @@ static tdfu_error_t dfu_claim_alt(usb_device_t *dev, int iface, int alt) {
     /* SET_INTERFACE is only required to switch to a NON-default alt. A single-alt
      * interface (U-Boot's DFU gadget) is allowed by USB 9.4.10 to STALL it, and
      * over WebUSB that STALL wedges EP0 - breaking every following GET_STATUS /
-     * UPLOAD. So never issue it for the default alt 0. */
-    if (alt != 0 && dfu_set_interface(dev, (uint16_t)iface, (uint16_t)alt) != TDFU_SUCCESS) {
+     * UPLOAD. So never issue it for the default alt 0 on those.
+     *
+     * On a MULTI-alt gadget the skip is a bug: after an erase (which selected
+     * the "erase" virt alt), "claiming alt 0" without SET_INTERFACE leaves the
+     * erase alt live, and the following image write's first block lands on it
+     * ("dfu erase: bad token") - only the error-recovery USB reset put the
+     * device back on alt 0. Multi-alt gadgets accept SET_INTERFACE by
+     * definition (switching onto the other alts already relies on it), so
+     * issue it for alt 0 whenever there is more than one alt. */
+    if ((alt != 0 || multi_alt) && dfu_set_interface(dev, (uint16_t)iface, (uint16_t)alt) != TDFU_SUCCESS) {
         LOG_ERROR("Failed to select DFU alt setting %d\n", alt);
         return TDFU_ERROR_PROTOCOL;
     }
@@ -522,7 +554,7 @@ tdfu_error_t tdfu_dfu_write_device(usb_device_t *dev, int alt, const char *path)
         return r;
     if (alt < 0)
         alt = info.alt_count > 0 ? info.alts[0].alt : 0;
-    r = dfu_claim_alt(dev, info.interface, alt);
+    r = dfu_claim_alt_ex(dev, info.interface, alt, info.alt_count > 1);
     if (r != TDFU_SUCCESS)
         return r;
 
@@ -554,7 +586,10 @@ tdfu_error_t tdfu_dfu_write_device(usb_device_t *dev, int alt, const char *path)
             r = dfu_dnload(dev, info.interface, block, data + offset, chunk);
             if (r != TDFU_SUCCESS)
                 break;
-            r = dfu_poll_until_ready(dev, info.interface, &st);
+            /* Grace: a post-block GETSTATUS can be swallowed while the loader
+             * flushes its DFU buffer to flash (EP0 held off past the 5s
+             * transfer timeout). The device is busy, not gone. */
+            r = dfu_poll_until_ready_grace(dev, info.interface, &st, DFU_WRITE_GRACE_RETRIES);
             if (r != TDFU_SUCCESS) {
                 LOG_ERROR("DFU download stalled at %zu/%zu (status %u, state %u)\n", offset, len, st.bStatus,
                           st.bState);
@@ -570,10 +605,14 @@ tdfu_error_t tdfu_dfu_write_device(usb_device_t *dev, int alt, const char *path)
     }
 
     if (r == TDFU_SUCCESS) {
-        /* zero-length DNLOAD signals end-of-transfer, then manifest */
+        /* zero-length DNLOAD signals end-of-transfer, then manifest. The
+         * manifest is where the final buffer flush runs - and where the erase
+         * executes when this download carried the wipe token to the "erase"
+         * alt (the remote path drives erase as a plain token write), so it
+         * gets the full erase-sized grace. */
         r = dfu_dnload(dev, info.interface, block, NULL, 0);
         if (r == TDFU_SUCCESS)
-            r = dfu_poll_until_ready(dev, info.interface, &st);
+            r = dfu_poll_until_ready_grace(dev, info.interface, &st, DFU_ERASE_GRACE_RETRIES);
         LOG_INFO("\n");
         if (r == TDFU_SUCCESS)
             LOG_INFO("DFU download complete\n");
@@ -582,12 +621,6 @@ tdfu_error_t tdfu_dfu_write_device(usb_device_t *dev, int alt, const char *path)
     free(data);
     return r;
 }
-
-/* How many consecutive lost GETSTATUS polls the erase manifest forgives.
- * Each costs the 5s control-transfer timeout + 500ms backoff, so 36 covers
- * ~3 minutes of EP0 silence - enough for a whole-chip erase of the largest
- * parts we ship loaders for (a 256 MiB T40XP NAND takes tens of seconds). */
-#define DFU_ERASE_GRACE_RETRIES 36
 
 /* Read the first flash block back and require it blank (0xFF). An erased NOR
  * or NAND reads blank, so anything else means the erase did not actually run.
@@ -605,7 +638,7 @@ static tdfu_error_t dfu_erase_blank_check(usb_device_t *dev, const tdfu_dfu_info
 
     /* Alt 0 is the boot flash on every loader we ship (the same convention
      * the read/write paths' "alt -1 -> first alt" default relies on). */
-    tdfu_error_t r = dfu_claim_alt(dev, info->interface, 0);
+    tdfu_error_t r = dfu_claim_alt_ex(dev, info->interface, 0, info->alt_count > 1);
     if (r == TDFU_SUCCESS)
         r = dfu_make_idle(dev, info->interface);
     int got = 0;
@@ -650,7 +683,7 @@ tdfu_error_t tdfu_dfu_erase_device(usb_device_t *dev) {
         LOG_ERROR("This loader has no \"%s\" alt - update the DFU loader firmware\n", TDFU_DFU_ERASE_ALT);
         return TDFU_ERROR_INVALID_PARAMETER;
     }
-    r = dfu_claim_alt(dev, info.interface, alt);
+    r = dfu_claim_alt_ex(dev, info.interface, alt, info.alt_count > 1);
     if (r != TDFU_SUCCESS)
         return r;
 
@@ -699,7 +732,7 @@ tdfu_error_t tdfu_dfu_reboot_device(usb_device_t *dev) {
         LOG_ERROR("This loader has no \"%s\" alt - update the DFU loader firmware\n", TDFU_DFU_REBOOT_ALT);
         return TDFU_ERROR_INVALID_PARAMETER;
     }
-    r = dfu_claim_alt(dev, info.interface, alt);
+    r = dfu_claim_alt_ex(dev, info.interface, alt, info.alt_count > 1);
     if (r != TDFU_SUCCESS)
         return r;
     if (dfu_make_idle(dev, info.interface) != TDFU_SUCCESS) {
@@ -736,7 +769,7 @@ tdfu_error_t tdfu_dfu_read_device(usb_device_t *dev, int alt, const char *path, 
         alt = info.alt_count > 0 ? info.alts[0].alt : 0;
     LOG_DEBUG("dfu_read_device: descriptors ok (xfer=%u alts=%d); claiming alt %d...\n", info.transfer_size,
               info.alt_count, alt);
-    r = dfu_claim_alt(dev, info.interface, alt);
+    r = dfu_claim_alt_ex(dev, info.interface, alt, info.alt_count > 1);
     if (r != TDFU_SUCCESS)
         return r;
     LOG_DEBUG("dfu_read_device: interface/alt claimed; beginning upload\n");
@@ -828,7 +861,7 @@ tdfu_error_t tdfu_dfu_verify_device(usb_device_t *dev, int alt, const char *path
         return r;
     if (alt < 0)
         alt = info.alt_count > 0 ? info.alts[0].alt : 0;
-    r = dfu_claim_alt(dev, info.interface, alt);
+    r = dfu_claim_alt_ex(dev, info.interface, alt, info.alt_count > 1);
     if (r != TDFU_SUCCESS)
         return r;
 

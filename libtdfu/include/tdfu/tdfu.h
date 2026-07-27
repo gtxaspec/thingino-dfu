@@ -215,6 +215,12 @@ tdfu_error_t usb_device_get_cpu_info(usb_device_t *device, cpu_info_t *info);
 tdfu_error_t usb_device_control_transfer(usb_device_t *device, uint8_t request_type, uint8_t request,
                                              uint16_t value, uint16_t index, uint8_t *data, uint16_t length,
                                              int *transferred);
+/* Like usb_device_control_transfer, but with an explicit timeout. DNLOAD data
+ * blocks use a long one: the loader flushing its DFU buffer to flash can hold
+ * off EP0 well past the default 5s without being dead. */
+tdfu_error_t usb_device_control_transfer_to(usb_device_t *device, uint8_t request_type, uint8_t request,
+                                                uint16_t value, uint16_t index, uint8_t *data, uint16_t length,
+                                                int *transferred, int timeout_ms);
 tdfu_error_t usb_device_bulk_transfer(usb_device_t *device, uint8_t endpoint, uint8_t *data, int length,
                                           int *transferred, int timeout);
 tdfu_error_t usb_device_interrupt_transfer(usb_device_t *device, uint8_t endpoint, uint8_t *data, int length,

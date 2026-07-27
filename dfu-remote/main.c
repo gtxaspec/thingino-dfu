@@ -496,6 +496,34 @@ static int handle_write(int client_fd, const uint8_t *payload, uint32_t len) {
     if (fw_crc != fw_crc_expected)
         return send_error(client_fd, "firmware CRC32 mismatch");
 
+    /* A wipe-token write to the "erase" alt IS the whole-chip erase (the
+     * remote protocol has no erase command - "any daemon that can write can
+     * erase"). Route it to tdfu_dfu_erase instead of the generic download:
+     * that path polls the long erase manifest with grace and then verifies
+     * the flash actually reads blank, where the generic path could report
+     * success for a token download the loader refused. */
+    if (strcmp(alt_str, TDFU_DFU_ERASE_ALT) == 0 && fw_len == strlen(TDFU_DFU_ERASE_TOKEN) &&
+        memcmp(fw_data, TDFU_DFU_ERASE_TOKEN, fw_len) == 0) {
+        g_state = "erasing";
+        g_cancel = 0;
+        printf("Erase request: device=%d (token write to \"%s\")\n", device_index, alt_str);
+
+        usb_manager_t emgr = {0};
+        if (usb_manager_init(&emgr) != TDFU_SUCCESS)
+            return send_error(client_fd, "USB init failed");
+        g_log_client_fd = client_fd;
+        tdfu_error_t er = tdfu_dfu_erase(&emgr, device_index);
+        g_log_client_fd = -1;
+        usb_manager_cleanup(&emgr);
+        g_state = "idle";
+        if (er != TDFU_SUCCESS) {
+            char msg[128];
+            snprintf(msg, sizeof(msg), "erase failed: %s", tdfu_error_to_string(er));
+            return send_error(client_fd, msg);
+        }
+        return send_ok(client_fd, "OK", 2);
+    }
+
     g_state = "writing";
     g_cancel = 0;
     printf("Write request: device=%d, cpu=%s, firmware=%u bytes (CRC OK)\n", device_index, variant_str, fw_len);
