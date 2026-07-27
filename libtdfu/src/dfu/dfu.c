@@ -123,12 +123,33 @@ static tdfu_error_t dfu_make_idle(usb_device_t *dev, uint16_t iface) {
 }
 
 /* Poll GETSTATUS, honoring bwPollTimeout while the device is busy. Returns
- * the settled status in *st. Critical for slow NAND/NOR erase+write. */
-static tdfu_error_t dfu_poll_until_ready(usb_device_t *dev, uint16_t iface, dfu_status_t *st) {
+ * the settled status in *st. Critical for slow NAND/NOR erase+write.
+ *
+ * grace_retries forgives that many CONSECUTIVE failed GETSTATUS transfers
+ * before giving up. A loader erasing a whole chip can hold off EP0 past the
+ * 5s control-transfer timeout without being dead; failing on the first
+ * swallowed poll aborts the operation into the USB-reset recovery, whose
+ * retry then lands on a device that is still busy (the T40XP whole-chip
+ * erase: reset mid-manifest -> re-sent token refused as "bad token" while
+ * the first erase completes anyway). Pass 0 for the historic fail-fast
+ * behavior - reboot depends on it (its post-ZLP poll failing IS the reset
+ * happening), and the short per-block write/read waits keep it too. */
+static tdfu_error_t dfu_poll_until_ready_grace(usb_device_t *dev, uint16_t iface, dfu_status_t *st,
+                                               int grace_retries) {
+    int failures = 0;
     for (int i = 0; i < 1000; i++) {
         tdfu_error_t r = dfu_get_status(dev, iface, st);
-        if (r != TDFU_SUCCESS)
+        if (r != TDFU_SUCCESS) {
+            if (failures < grace_retries) {
+                failures++;
+                LOG_DEBUG("GETSTATUS lost while device busy (%d/%d) - retrying, not resetting\n", failures,
+                          grace_retries);
+                tdfu_sleep_milliseconds(500);
+                continue;
+            }
             return r;
+        }
+        failures = 0;
         if (st->bStatus != DFU_STATUS_OK)
             return TDFU_ERROR_PROTOCOL;
         if (st->bState != DFU_STATE_dfuDNBUSY && st->bState != DFU_STATE_dfuMANIFEST)
@@ -137,6 +158,10 @@ static tdfu_error_t dfu_poll_until_ready(usb_device_t *dev, uint16_t iface, dfu_
             tdfu_sleep_milliseconds(st->bwPollTimeout);
     }
     return TDFU_ERROR_TIMEOUT;
+}
+
+static tdfu_error_t dfu_poll_until_ready(usb_device_t *dev, uint16_t iface, dfu_status_t *st) {
+    return dfu_poll_until_ready_grace(dev, iface, st, 0);
 }
 
 /* ====================================================================== */
@@ -558,6 +583,56 @@ tdfu_error_t tdfu_dfu_write_device(usb_device_t *dev, int alt, const char *path)
     return r;
 }
 
+/* How many consecutive lost GETSTATUS polls the erase manifest forgives.
+ * Each costs the 5s control-transfer timeout + 500ms backoff, so 36 covers
+ * ~3 minutes of EP0 silence - enough for a whole-chip erase of the largest
+ * parts we ship loaders for (a 256 MiB T40XP NAND takes tens of seconds). */
+#define DFU_ERASE_GRACE_RETRIES 36
+
+/* Read the first flash block back and require it blank (0xFF). An erased NOR
+ * or NAND reads blank, so anything else means the erase did not actually run.
+ * Some erase failure modes are silent on the wire (a garbled token download is
+ * refused by the loader without the manifest status going to dfuERROR), so
+ * status alone must not be trusted before letting a write land on flash that
+ * may not be erased. */
+static tdfu_error_t dfu_erase_blank_check(usb_device_t *dev, const tdfu_dfu_info_t *info) {
+    uint16_t len = info->transfer_size ? info->transfer_size : 4096;
+    if (len > 4096)
+        len = 4096;
+    uint8_t *buf = malloc(len);
+    if (!buf)
+        return TDFU_ERROR_MEMORY;
+
+    /* Alt 0 is the boot flash on every loader we ship (the same convention
+     * the read/write paths' "alt -1 -> first alt" default relies on). */
+    tdfu_error_t r = dfu_claim_alt(dev, info->interface, 0);
+    if (r == TDFU_SUCCESS)
+        r = dfu_make_idle(dev, info->interface);
+    int got = 0;
+    if (r == TDFU_SUCCESS)
+        r = dfu_upload_block(dev, info->interface, 0, buf, len, &got);
+    if (r == TDFU_SUCCESS) {
+        if (got <= 0) {
+            r = TDFU_ERROR_PROTOCOL;
+        } else {
+            for (int i = 0; i < got; i++) {
+                if (buf[i] != 0xFF) {
+                    LOG_ERROR("Erase verification FAILED: flash not blank at offset %d "
+                              "(0x%02X) - the erase did not run\n",
+                              i, buf[i]);
+                    r = TDFU_ERROR_VERIFY;
+                    break;
+                }
+            }
+        }
+    }
+    /* Leave the probe transaction cleanly so the next operation (usually the
+     * write that follows --erase) starts from dfuIDLE. */
+    dfu_abort(dev, info->interface);
+    free(buf);
+    return r;
+}
+
 /* Whole-chip erase: download the wipe token to the loader's "erase" alt.
  * The loader answers GETSTATUS with state dfuMANIFEST + bwPollTimeout 500ms
  * for the seconds the erase takes, so the normal poll loop just waits it
@@ -588,22 +663,26 @@ tdfu_error_t tdfu_dfu_erase_device(usb_device_t *dev) {
     r = dfu_dnload(dev, info.interface, 0, (const uint8_t *)token, (uint16_t)strlen(token));
     if (r != TDFU_SUCCESS)
         return r;
-    r = dfu_poll_until_ready(dev, info.interface, &st);
+    r = dfu_poll_until_ready_grace(dev, info.interface, &st, DFU_ERASE_GRACE_RETRIES);
     if (r != TDFU_SUCCESS)
         return r;
     /* zero-length DNLOAD ends the transfer; the erase runs in the manifest
-     * phase that follows, so this poll is the one that actually waits. */
+     * phase that follows, so this poll is the one that actually waits - and
+     * the one that must survive the loader going EP0-silent mid-erase. */
     r = dfu_dnload(dev, info.interface, 1, NULL, 0);
     if (r != TDFU_SUCCESS)
         return r;
-    r = dfu_poll_until_ready(dev, info.interface, &st);
-    if (r == TDFU_SUCCESS) {
-        if (st.bStatus != DFU_STATUS_OK || st.bState == DFU_STATE_dfuERROR) {
-            LOG_ERROR("Erase failed on the device (status %u, state %u)\n", st.bStatus, st.bState);
-            return TDFU_ERROR_PROTOCOL;
-        }
-        LOG_INFO("Erase complete\n");
+    r = dfu_poll_until_ready_grace(dev, info.interface, &st, DFU_ERASE_GRACE_RETRIES);
+    if (r != TDFU_SUCCESS)
+        return r;
+    if (st.bStatus != DFU_STATUS_OK || st.bState == DFU_STATE_dfuERROR) {
+        LOG_ERROR("Erase failed on the device (status %u, state %u)\n", st.bStatus, st.bState);
+        return TDFU_ERROR_PROTOCOL;
     }
+    /* Manifest OK is necessary but not sufficient - prove the flash is blank. */
+    r = dfu_erase_blank_check(dev, &info);
+    if (r == TDFU_SUCCESS)
+        LOG_INFO("Erase complete (verified blank)\n");
     return r;
 }
 

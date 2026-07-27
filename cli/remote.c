@@ -34,15 +34,20 @@ static int wsa_initialized = 0;
 #define CLOSE_SOCKET close
 #endif
 
-/* Simple CRC32 (avoids zlib dependency on Windows) */
-static uint32_t remote_crc32(const uint8_t *data, size_t len) {
-    uint32_t crc = 0xFFFFFFFF;
+/* Simple CRC32 (avoids zlib dependency on Windows). Resumable form so the
+ * read path can checksum a streamed payload chunk by chunk: seed with
+ * 0xFFFFFFFF, feed chunks, finalize with ~crc. */
+static uint32_t remote_crc32_update(uint32_t crc, const uint8_t *data, size_t len) {
     for (size_t i = 0; i < len; i++) {
         crc ^= data[i];
         for (int j = 0; j < 8; j++)
             crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
     }
-    return ~crc;
+    return crc;
+}
+
+static uint32_t remote_crc32(const uint8_t *data, size_t len) {
+    return ~remote_crc32_update(0xFFFFFFFF, data, len);
 }
 
 static int remote_fd = -1;
@@ -172,6 +177,42 @@ static int send_command(uint8_t cmd, const void *payload, uint32_t len) {
     return 0;
 }
 
+/* Display (or drain) one intermediate RESP_PROGRESS / RESP_LOG frame whose
+ * header has already been read. Returns 0 to keep reading, -1 on a dead
+ * socket. Shared by recv_response and recv_read_to_file. */
+static int handle_intermediate_frame(uint8_t status, uint32_t plen) {
+    if (plen > 0 && plen < 65536) {
+        uint8_t *data = malloc(plen + 1);
+        if (data && net_recv_all(remote_fd, data, plen) == 0) {
+            if (status == RESP_LOG) {
+                /* Raw log output — print directly like local mode */
+                data[plen] = '\0';
+                fprintf(stderr, "%s", (char *)data);
+            } else if (plen >= 4) {
+                /* Legacy progress: [1:percent][1:stage][2:msg_len][msg] */
+                uint8_t percent = data[0];
+                uint16_t msg_len = ((uint16_t)data[2] << 8) | data[3];
+                if (4u + msg_len <= plen) {
+                    data[4 + msg_len] = '\0';
+                    fprintf(stderr, "\r[%3d%%] %s", percent, (char *)(data + 4));
+                }
+            }
+        }
+        free(data);
+    } else if (plen > 0) {
+        /* Drain oversized payload to keep stream in sync */
+        uint8_t drain[1024];
+        uint32_t remaining = plen;
+        while (remaining > 0) {
+            uint32_t chunk = remaining < sizeof(drain) ? remaining : sizeof(drain);
+            if (net_recv_all(remote_fd, drain, chunk) < 0)
+                return -1;
+            remaining -= chunk;
+        }
+    }
+    return 0;
+}
+
 /**
  * Receive response, handling RESP_PROGRESS messages inline.
  * Progress messages are printed to stderr and the function
@@ -188,36 +229,8 @@ static int recv_response(uint8_t *status, uint8_t **payload, uint32_t *payload_l
         uint32_t plen = tdfu_ntohl(hdr.payload_len);
 
         if (hdr.status == RESP_PROGRESS || hdr.status == RESP_LOG) {
-            /* Intermediate message — display and keep reading */
-            if (plen > 0 && plen < 65536) {
-                uint8_t *data = malloc(plen + 1);
-                if (data && net_recv_all(remote_fd, data, plen) == 0) {
-                    if (hdr.status == RESP_LOG) {
-                        /* Raw log output — print directly like local mode */
-                        data[plen] = '\0';
-                        fprintf(stderr, "%s", (char *)data);
-                    } else if (plen >= 4) {
-                        /* Legacy progress: [1:percent][1:stage][2:msg_len][msg] */
-                        uint8_t percent = data[0];
-                        uint16_t msg_len = ((uint16_t)data[2] << 8) | data[3];
-                        if (4u + msg_len <= plen) {
-                            data[4 + msg_len] = '\0';
-                            fprintf(stderr, "\r[%3d%%] %s", percent, (char *)(data + 4));
-                        }
-                    }
-                }
-                free(data);
-            } else if (plen > 0) {
-                /* Drain oversized payload to keep stream in sync */
-                uint8_t drain[1024];
-                uint32_t remaining = plen;
-                while (remaining > 0) {
-                    uint32_t chunk = remaining < sizeof(drain) ? remaining : sizeof(drain);
-                    if (net_recv_all(remote_fd, drain, chunk) < 0)
-                        return -1;
-                    remaining -= chunk;
-                }
-            }
+            if (handle_intermediate_frame(hdr.status, plen) < 0)
+                return -1;
             continue; /* keep reading for final response */
         }
 
@@ -225,7 +238,26 @@ static int recv_response(uint8_t *status, uint8_t **payload, uint32_t *payload_l
         *status = hdr.status;
         *payload_len = plen;
 
-        if (*payload_len > 0 && *payload_len < TDFU_MAX_PAYLOAD) {
+        if (plen >= TDFU_MAX_PAYLOAD) {
+            /* Refusing the payload but returning 0 with *payload NULL used to
+             * look like success to callers, which then dereferenced NULL
+             * (a T40XP remote read: alt 0 is the whole 256MB NAND). Drain to
+             * keep the stream coherent and fail loudly instead; bulk reads go
+             * through recv_read_to_file, which streams instead of buffering. */
+            fprintf(stderr, "Response payload too large (%u bytes)\n", plen);
+            uint8_t drain[4096];
+            uint32_t remaining = plen;
+            while (remaining > 0) {
+                uint32_t chunk = remaining < sizeof(drain) ? remaining : sizeof(drain);
+                if (net_recv_all(remote_fd, drain, chunk) < 0)
+                    break;
+                remaining -= chunk;
+            }
+            *payload = NULL;
+            return -1;
+        }
+
+        if (*payload_len > 0) {
             *payload = malloc(*payload_len + 1);
             if (!*payload)
                 return -1;
@@ -241,6 +273,90 @@ static int recv_response(uint8_t *status, uint8_t **payload, uint32_t *payload_l
 
         return 0;
     } /* for(;;) */
+}
+
+/* Receive a CMD_READ response, streaming the firmware payload straight into
+ * out_path instead of buffering it in RAM. A NAND loader's alt 0 is the whole
+ * chip (256 MiB on a T40XP), far past TDFU_MAX_PAYLOAD - recv_response refuses
+ * that (and before it did, handed the caller a NULL payload that was
+ * dereferenced). The payload's last 4 bytes are the CRC32 of the data before
+ * them; the file is deleted on any failure. Returns 0 with *out_bytes set. */
+static int recv_read_to_file(const char *out_path, uint64_t *out_bytes) {
+    for (;;) {
+        tdfu_resp_header_t hdr;
+        if (net_recv_all(remote_fd, &hdr, sizeof(hdr)) < 0)
+            return -1;
+        if (tdfu_ntohl(hdr.magic) != TDFU_PROTO_MAGIC)
+            return -1;
+
+        uint32_t plen = tdfu_ntohl(hdr.payload_len);
+
+        if (hdr.status == RESP_PROGRESS || hdr.status == RESP_LOG) {
+            if (handle_intermediate_frame(hdr.status, plen) < 0)
+                return -1;
+            continue;
+        }
+
+        if (hdr.status != RESP_OK) {
+            /* RESP_ERROR carries a short message */
+            char msg[512] = "unknown";
+            uint32_t mlen = plen < sizeof(msg) - 1 ? plen : sizeof(msg) - 1;
+            if (mlen > 0 && net_recv_all(remote_fd, msg, mlen) == 0)
+                msg[mlen] = '\0';
+            fprintf(stderr, "Read failed: %s\n", msg);
+            return -1;
+        }
+
+        if (plen < 4) {
+            fprintf(stderr, "Read response too short\n");
+            return -1;
+        }
+
+        uint64_t data_len = (uint64_t)plen - 4;
+        FILE *f = fopen(out_path, "wb");
+        if (!f) {
+            fprintf(stderr, "Failed to open output file: %s\n", out_path);
+            return -1;
+        }
+
+        uint8_t buf[65536];
+        uint32_t crc = 0xFFFFFFFF;
+        uint64_t remaining = data_len;
+        while (remaining > 0) {
+            uint32_t chunk = remaining < sizeof(buf) ? (uint32_t)remaining : (uint32_t)sizeof(buf);
+            if (net_recv_all(remote_fd, buf, chunk) < 0) {
+                fprintf(stderr, "Lost connection during read\n");
+                fclose(f);
+                remove(out_path);
+                return -1;
+            }
+            crc = remote_crc32_update(crc, buf, chunk);
+            if (fwrite(buf, 1, chunk, f) != chunk) {
+                fprintf(stderr, "Short write to %s\n", out_path);
+                fclose(f);
+                remove(out_path);
+                return -1;
+            }
+            remaining -= chunk;
+        }
+        fclose(f);
+
+        uint8_t crc_buf[4];
+        if (net_recv_all(remote_fd, crc_buf, 4) < 0) {
+            remove(out_path);
+            return -1;
+        }
+        uint32_t expected_crc = ((uint32_t)crc_buf[0] << 24) | ((uint32_t)crc_buf[1] << 16) |
+                                ((uint32_t)crc_buf[2] << 8) | crc_buf[3];
+        if (~crc != expected_crc) {
+            fprintf(stderr, "Read data CRC32 mismatch\n");
+            remove(out_path);
+            return -1;
+        }
+
+        *out_bytes = data_len;
+        return 0;
+    }
 }
 
 /* Helper: read a file into a malloc'd buffer */
@@ -623,49 +739,11 @@ int remote_read_firmware(int device_index, const char *output_file, const char *
     if (send_command(CMD_READ, payload, (uint32_t)n) < 0)
         return -1;
 
-    uint8_t resp_status;
-    uint8_t *resp = NULL;
-    uint32_t resp_len = 0;
-    if (recv_response(&resp_status, &resp, &resp_len) < 0) {
-        fprintf(stderr, "Lost connection during read\n");
+    /* Stream to the file: a NAND alt can be the whole 256MB chip. */
+    uint64_t data_len = 0;
+    if (recv_read_to_file(output_file, &data_len) < 0)
         return -1;
-    }
 
-    if (resp_status != RESP_OK) {
-        fprintf(stderr, "Read failed: %s\n", resp ? (char *)resp : "unknown");
-        free(resp);
-        return -1;
-    }
-
-    if (resp_len < 4) {
-        fprintf(stderr, "Read response too short\n");
-        free(resp);
-        return -1;
-    }
-
-    /* Last 4 bytes are CRC32 */
-    uint32_t data_len = resp_len - 4;
-    uint32_t expected_crc = ((uint32_t)resp[data_len] << 24) | ((uint32_t)resp[data_len + 1] << 16) |
-                            ((uint32_t)resp[data_len + 2] << 8) | resp[data_len + 3];
-    uint32_t actual_crc = remote_crc32(resp, data_len);
-
-    if (actual_crc != expected_crc) {
-        fprintf(stderr, "Read data CRC32 mismatch\n");
-        free(resp);
-        return -1;
-    }
-
-    /* Save to file */
-    FILE *f = fopen(output_file, "wb");
-    if (!f) {
-        fprintf(stderr, "Failed to open output file: %s\n", output_file);
-        free(resp);
-        return -1;
-    }
-    fwrite(resp, 1, data_len, f);
-    fclose(f);
-
-    printf("Read complete: %u bytes saved to %s (CRC OK)\n", data_len, output_file);
-    free(resp);
+    printf("Read complete: %llu bytes saved to %s (CRC OK)\n", (unsigned long long)data_len, output_file);
     return 0;
 }
