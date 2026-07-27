@@ -659,25 +659,33 @@ static tdfu_error_t dfu_erase_blank_check(usb_device_t *dev, const tdfu_dfu_info
             }
         }
     }
-    /* The one-block probe leaves U-Boot's read transaction inited with the
-     * sequence counter at 1 - on loaders WITHOUT u-boot 4af4e9d1a3f
-     * ("usb: gadget: f_dfu: clean the entity transaction when the host
-     * abandons it") DFU_ABORT resets the f_dfu state machine but NOT the dfu
-     * entity, so the next write's block 0 would trip "dfu_write: Wrong
-     * sequence number! [1] [0]" and burn its stale-transaction retry. U-Boot
-     * cleans the entity on a sequence mismatch in the READ path (its
-     * deliberate self-heal), so trip exactly that: re-ask for block 0,
-     * expect the refusal, and the entity is pristine again. This prints ONE
-     * benign "dfu_read: Wrong sequence number! [1] [0]" on the loader
-     * console per erase - on fixed loaders it is redundant (the abort below
-     * cleans for real); TODO drop it once pre-4af4e9d1a3f loaders are gone
-     * from the field. */
+    /* Close the probe transaction. The one-block upload leaves U-Boot's read
+     * transaction inited with the sequence counter at 1, and what ABORT does
+     * about that depends on the loader:
+     *
+     * - Loaders with u-boot 3d4848fe0dc ("usb: gadget: f_dfu: clean the
+     *   entity transaction when the host abandons it") clean the entity on
+     *   ABORT. The re-probe below then simply reads block 0 of a fresh
+     *   transaction - silently - and the second ABORT closes that too.
+     *
+     * - Older loaders keep the entity's counter across ABORT, so the next
+     *   transfer's block 0 would be refused ("Wrong sequence number! [1]
+     *   [0]") and cost the caller its stale-transaction retry. For them the
+     *   re-probe trips the read path's deliberate mismatch self-heal: one
+     *   benign wrong-sequence line on the loader console, a cleared status,
+     *   and a pristine entity.
+     *
+     * Either way the entity is clean when this returns. */
     if (r == TDFU_SUCCESS) {
         int drop = 0;
-        (void)dfu_upload_block(dev, info->interface, 0, buf, len, &drop);
-        dfu_clr_status(dev, info->interface);
+        dfu_abort(dev, info->interface);
+        if (dfu_upload_block(dev, info->interface, 0, buf, len, &drop) == TDFU_SUCCESS)
+            dfu_abort(dev, info->interface); /* fixed loader: close the re-probe */
+        else
+            dfu_clr_status(dev, info->interface); /* old loader: clear the mismatch STALL */
+    } else {
+        dfu_abort(dev, info->interface);
     }
-    dfu_abort(dev, info->interface);
     free(buf);
     return r;
 }
