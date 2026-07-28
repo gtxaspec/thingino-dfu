@@ -1084,7 +1084,9 @@ tdfu_error_t tdfu_dfu_verify(usb_manager_t *manager, int device_index, int alt, 
 const char *tdfu_dfu_variant_dir(tdfu_variant_t v) {
     switch (v) {
     case TDFU_VARIANT_T10:
-        return "t10n";
+        /* T10 has no EFUSE sub-SoC grade to refine the family, and only T10L
+         * silicon has ever been seen - default the family to t10l. */
+        return "t10l";
     case TDFU_VARIANT_T20:
         return "t20n";
     case TDFU_VARIANT_T21:

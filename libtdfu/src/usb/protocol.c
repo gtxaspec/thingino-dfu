@@ -191,6 +191,21 @@ tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant) 
         return TDFU_ERROR_INVALID_PARAMETER;
     }
 
+    /* T10 (bootrom magic "T 5 V 1"): never upload the detect stub. The stub
+     * has no T10 bypass for the bootrom's one-shot VR_PROG_STAGE1 flag, so a
+     * detect run consumes STAGE1 and the real SPL sent afterwards is silently
+     * ignored - stage2 then DMAs into uninitialized DDR and the boot dies
+     * (bench T10L: -b "detected" fine, no SPL banner, dead stage2; the later
+     * "did not execute" WARN was the same session's already-consumed flag).
+     * There is also nothing to refine: T10 EFUSE carries no sub-SoC grade
+     * (`soc -m`: 0x0000). Map the family straight to the t10l loader - only
+     * T10L silicon has ever been seen in the wild; --cpu t10n overrides for
+     * a hypothetical T10N. */
+    if (device->info.variant == TDFU_VARIANT_T10) {
+        *variant = TDFU_VARIANT_T10L;
+        return TDFU_SUCCESS;
+    }
+
     /* Set USB configuration 1 and claim interface — required for bulk transfers.
      * Without this, bulk transfers fail with LIBUSB_ERROR_IO. */
     int current_cfg = -1;
@@ -648,7 +663,9 @@ tdfu_error_t protocol_detect_soc(usb_device_t *device, tdfu_variant_t *variant) 
     /* Match CPU family */
     switch (cpu_id) {
     case 0x0005:
-        *variant = TDFU_VARIANT_T10N; /* `soc -m`: 0x0000 -> t10 (base = t10n) */
+        /* Unreachable in practice - T10 bails out before the stub upload
+         * (see top of function). Kept consistent: t10l, not t10n. */
+        *variant = TDFU_VARIANT_T10L;
         break;
     case 0x2000:
         if (subtype1 == 0x2222)
