@@ -118,6 +118,7 @@ I18N.add("pt", {
   help_write: "Grava um firmware .bin na flash do dispositivo. O dispositivo já tem de estar inicializado em modo DFU.",
   help_read: "Lê toda a flash do dispositivo para um ficheiro .bin que pode guardar. Útil para cópias de segurança antes de gravar.",
   help_diag: "Consulta só de leitura da eFuse do chip: SoC, número de série e estado de secure-boot. Não altera nada. Continua visível (em cache) mesmo depois de inicializar.",
+  help_preconfig: "Insere credenciais Wi-Fi, uma chave SSH ou ficheiros à escolha na overlay da imagem mesmo antes da gravação. Tudo é reempacotado no seu navegador, nada é enviado. Clique para abrir ou fechar o painel.",
   help_advanced: "Avançado. Forneça o seu próprio SPL e U-Boot compatíveis com DFU para arrancar por USB no próximo Inicializar em vez das imagens incluídas. Ambos são necessários e a deteção do SoC é ignorada.",
   help_sel_spl: "Escolha o seu próprio SPL (stage1) .bin. Utilizado com um U-Boot personalizado no próximo Inicializar, em vez do carregador incluído.",
   help_sel_uboot: "Escolha o seu próprio U-Boot .bin. Utilizado em conjunto com o SPL personalizado no próximo Inicializar.",

@@ -1090,6 +1090,17 @@ function applyInject() {
     if (el) el.classList.toggle('d-none', !injectEnabled);
 }
 
+/* Collapse/expand the Pre-configure panel, like Advanced and the release picker.
+ * Purely cosmetic: whatever is typed in still gets injected when collapsed (and
+ * applyOverlayInjection logs every file it bakes in), so nothing is hidden. */
+function toggleInject(e) {
+    if (e) e.preventDefault();
+    var panel = document.getElementById('inject-panel');
+    var chev = document.getElementById('inject-chevron');
+    var hidden = panel.classList.toggle('d-none');
+    if (chev) chev.className = hidden ? 'bi bi-chevron-right' : 'bi bi-chevron-down';
+}
+
 function hideHelpBalloon() {
     _helpHover = null;
     if (_helpBalloon) _helpBalloon.classList.remove('show');
@@ -1682,7 +1693,7 @@ Object.assign(window, { connectDevice, doBootstrap, selectFirmware, firmwareSele
                         openSettings, closeSettings, openWindowsHelp, closeWindowsHelp, saveSettings, toggleRemoteFields,
                         toggleAdvanced, customSplSelected, customUbootSelected, clearCustomBootloader,
                         selectRemoteDevice, toggleReleases, releaseChanged, flashFromRelease, addExtraFileRow,
-                        setInject });
+                        setInject, toggleInject });
 
 (function() {
     if (!navigator.usb) {

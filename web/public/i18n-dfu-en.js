@@ -122,6 +122,7 @@ I18N.add("en", {
   help_write: "Writes a firmware .bin to the device's flash. The device must already be bootstrapped into DFU mode.",
   help_read: "Reads the device's full flash back to a .bin file you can save. Handy for backups before you write.",
   help_diag: "Read-only readout of the chip's eFuse: SoC, serial, and secure-boot state. Changes nothing. Stays viewable (cached) even after you bootstrap.",
+  help_preconfig: "Bake Wi-Fi credentials, an SSH key, or arbitrary files into the image's overlay just before it is written. Everything is repacked in your browser, nothing is uploaded. Click to open or close the panel.",
   help_advanced: "Advanced. Supply your own DFU-capable SPL and U-Boot to USB-boot on the next Bootstrap instead of the bundled images. Both are required, and SoC detection is skipped.",
   help_sel_spl: "Pick your own SPL (stage1) .bin. Used with a custom U-Boot for the next Bootstrap, in place of the bundled loader.",
   help_sel_uboot: "Pick your own U-Boot .bin. Used together with the custom SPL for the next Bootstrap.",

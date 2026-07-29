@@ -121,6 +121,7 @@ I18N.add("tr", {
   help_write: "Cihazın flash belleğine bir firmware .bin dosyası yazar. Cihazın önceden DFU moduna önyüklenmiş olması gerekir.",
   help_read: "Cihazın tüm flash içeriğini kaydedebileceğiniz bir .bin dosyasına geri okur. Yazmadan önce yedek almak için kullanışlıdır.",
   help_diag: "Yonganın eFuse'unun salt okunur dökümü: SoC, seri numarası ve güvenli önyükleme durumu. Hiçbir şeyi değiştirmez. Önyükleme yaptıktan sonra bile görüntülenebilir kalır (önbelleğe alınır).",
+  help_preconfig: "Wi-Fi bilgilerini, bir SSH anahtarını veya istediğiniz dosyaları yazma işleminden hemen önce imajın overlay katmanına gömer. Her şey tarayıcınızda yeniden paketlenir, hiçbir şey yüklenmez. Paneli açmak veya kapatmak için tıklayın.",
   help_advanced: "Gelişmiş. Birlikte gelen imajlar yerine bir sonraki Önyükle işleminde USB-boot için kullanmak üzere kendi DFU uyumlu SPL ve U-Boot dosyalarınızı sağlayın. Her ikisi de gereklidir ve SoC algılama atlanır.",
   help_sel_spl: "Kendi SPL (1. aşama) .bin dosyanızı seçin. Birlikte gelen yükleyici yerine, bir sonraki Önyükle için özel bir U-Boot ile birlikte kullanılır.",
   help_sel_uboot: "Kendi U-Boot .bin dosyanızı seçin. Bir sonraki Önyükle için özel SPL ile birlikte kullanılır.",

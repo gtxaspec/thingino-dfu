@@ -118,6 +118,7 @@ I18N.add("de", {
   help_write: "Schreibt eine Firmware-.bin in den Flash-Speicher des Geräts. Das Gerät muss bereits initialisiert und im DFU-Modus sein.",
   help_read: "Liest den gesamten Flash-Speicher des Geräts in eine .bin-Datei zurück, die Sie speichern können. Praktisch für Backups, bevor Sie schreiben.",
   help_diag: "Schreibgeschütztes Auslesen der eFuse des Chips: SoC, Seriennummer und Secure-Boot-Status. Ändert nichts. Bleibt (zwischengespeichert) sichtbar, auch nach dem Initialisieren.",
+  help_preconfig: "Bettet WLAN-Zugangsdaten, einen SSH-Schlüssel oder beliebige Dateien direkt vor dem Schreiben in das Overlay des Images ein. Alles wird im Browser neu gepackt, nichts wird hochgeladen. Zum Auf- und Zuklappen anklicken.",
   help_advanced: "Erweitert. Stellen Sie Ihr eigenes DFU-fähiges SPL und U-Boot bereit, um sie beim nächsten Initialisieren anstelle der mitgelieferten Images per USB zu booten. Beide sind erforderlich, und die SoC-Erkennung wird übersprungen.",
   help_sel_spl: "Wählen Sie Ihre eigene SPL-.bin-Datei (stage1). Wird zusammen mit einem eigenen U-Boot beim nächsten Initialisieren anstelle des mitgelieferten Loaders verwendet.",
   help_sel_uboot: "Wählen Sie Ihre eigene U-Boot-.bin-Datei. Wird zusammen mit dem eigenen SPL beim nächsten Initialisieren verwendet.",

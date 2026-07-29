@@ -118,6 +118,7 @@ I18N.add("zh-CN", {
   help_write: "将固件 .bin 写入设备的闪存。设备必须已经引导进入 DFU 模式。",
   help_read: "将设备的完整闪存读回为可保存的 .bin 文件。在写入之前做备份很方便。",
   help_diag: "以只读方式读取芯片的 eFuse 信息：SoC、序列号和安全启动状态。不会做任何更改。即使在引导之后仍可查看（已缓存）。",
+  help_preconfig: "在写入前把 Wi-Fi 凭据、SSH 公钥或任意文件烘焙进镜像的 overlay 分区。全部在浏览器中重新打包，不会上传任何内容。点击可展开或收起面板。",
   help_advanced: "高级功能。提供你自己的、支持 DFU 的 SPL 和 U-Boot，在下次引导启动时用于 USB 启动，以替代内置镜像。两者均为必填，并且会跳过 SoC 检测。",
   help_sel_spl: "选择你自己的 SPL（stage1）.bin 文件。在下次引导启动时与自定义 U-Boot 一起使用，以替代内置加载器。",
   help_sel_uboot: "选择你自己的 U-Boot .bin 文件。在下次引导启动时与自定义 SPL 一起使用。",

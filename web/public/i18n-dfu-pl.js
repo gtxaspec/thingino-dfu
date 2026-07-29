@@ -121,6 +121,7 @@ I18N.add("pl", {
   help_write: "Zapisuje plik firmware .bin do pamięci flash urządzenia. Urządzenie musi być już wprowadzone w tryb DFU za pomocą Rozruchu.",
   help_read: "Odczytuje całą zawartość pamięci flash urządzenia do pliku .bin, który możesz zapisać. Przydatne do wykonania kopii zapasowej przed zapisem.",
   help_diag: "Odczyt zawartości eFuse układu (tylko do odczytu): SoC, numer seryjny i stan secure-boot. Niczego nie zmienia. Pozostaje dostępny (z pamięci podręcznej) nawet po Rozruchu.",
+  help_preconfig: "Wstawia dane Wi-Fi, klucz SSH lub dowolne pliki do warstwy overlay obrazu tuż przed zapisem. Wszystko jest przepakowywane w przeglądarce, nic nie jest wysyłane. Kliknij, aby otworzyć lub zamknąć panel.",
   help_advanced: "Zaawansowane. Dostarcz własny SPL i U-Boot z obsługą DFU do uruchomienia przez USB przy następnym Rozruchu zamiast dołączonych obrazów. Oba są wymagane, a wykrywanie SoC jest pomijane.",
   help_sel_spl: "Wybierz własny plik SPL (stage1) .bin. Używany razem z własnym U-Boot przy następnym Rozruchu, zamiast dołączonego programu ładującego.",
   help_sel_uboot: "Wybierz własny plik U-Boot .bin. Używany razem z własnym SPL przy następnym Rozruchu.",

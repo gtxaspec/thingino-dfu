@@ -121,6 +121,7 @@ I18N.add("nl", {
   help_write: "Schrijft een firmware-.bin naar de flash van het apparaat. Het apparaat moet al met een bootstrap in DFU-modus zijn gezet.",
   help_read: "Leest de volledige flash van het apparaat terug naar een .bin-bestand dat je kunt opslaan. Handig voor back-ups voordat je schrijft.",
   help_diag: "Alleen-lezen uitlezing van de eFuse van de chip: SoC, serienummer en secure-boot-status. Verandert niets. Blijft zichtbaar (in cache), ook nadat je de bootstrap hebt uitgevoerd.",
+  help_preconfig: "Bakt Wi-Fi-gegevens, een SSH-sleutel of willekeurige bestanden in de overlay van het image vlak voor het schrijven. Alles wordt in je browser herverpakt, er wordt niets geüpload. Klik om het paneel te openen of te sluiten.",
   help_advanced: "Geavanceerd. Lever je eigen DFU-geschikte SPL en U-Boot aan om te USB-booten bij de volgende Bootstrap in plaats van de meegeleverde images. Beide zijn vereist en SoC-detectie wordt overgeslagen.",
   help_sel_spl: "Kies je eigen SPL-.bin (stage1). Wordt samen met een aangepaste U-Boot gebruikt bij de volgende Bootstrap, in plaats van de meegeleverde loader.",
   help_sel_uboot: "Kies je eigen U-Boot-.bin. Wordt samen met de aangepaste SPL gebruikt bij de volgende Bootstrap.",

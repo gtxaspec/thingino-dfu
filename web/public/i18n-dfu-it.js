@@ -121,6 +121,7 @@ I18N.add("it", {
   help_write: "Scrive un file firmware .bin nella flash del dispositivo. Il dispositivo deve già essere stato avviato in modalità DFU.",
   help_read: "Legge l'intero contenuto della flash del dispositivo in un file .bin che puoi salvare. Utile per i backup prima di scrivere.",
   help_diag: "Lettura di sola lettura dell'eFuse del chip: SoC, seriale e stato di secure-boot. Non modifica nulla. Rimane consultabile (in cache) anche dopo l'avvio.",
+  help_preconfig: "Inserisce credenziali Wi-Fi, una chiave SSH o file arbitrari nell'overlay dell'immagine appena prima della scrittura. Tutto viene riconfezionato nel browser, non viene caricato nulla. Fai clic per aprire o chiudere il pannello.",
   help_advanced: "Avanzate. Fornisci il tuo SPL e U-Boot compatibili con DFU, da caricare via USB al prossimo Avvia, invece delle immagini incluse. Entrambi sono obbligatori e il rilevamento del SoC viene saltato.",
   help_sel_spl: "Scegli il tuo file SPL (stage1) .bin. Viene usato insieme a un U-Boot personalizzato per il prossimo Avvia, al posto del loader incluso.",
   help_sel_uboot: "Scegli il tuo file U-Boot .bin. Viene usato insieme al file SPL personalizzato per il prossimo Avvia.",

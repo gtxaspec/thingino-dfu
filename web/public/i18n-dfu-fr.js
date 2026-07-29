@@ -118,6 +118,7 @@ I18N.add("fr", {
   help_write: "Écrit un firmware .bin dans la flash de l'appareil. L'appareil doit déjà être amorcé en mode DFU.",
   help_read: "Relit l'intégralité de la flash de l'appareil dans un fichier .bin que vous pouvez enregistrer. Pratique pour faire une sauvegarde avant d'écrire.",
   help_diag: "Lecture seule de l'eFuse de la puce : SoC, numéro de série et état du secure-boot. Ne modifie rien. Reste consultable (en cache) même après l'amorçage.",
+  help_preconfig: "Intègre des identifiants Wi-Fi, une clé SSH ou des fichiers quelconques dans l'overlay de l'image juste avant l'écriture. Tout est reconstruit dans votre navigateur, rien n'est envoyé. Cliquez pour ouvrir ou fermer le panneau.",
   help_advanced: "Avancé. Fournissez vos propres SPL et U-Boot compatibles DFU à démarrer en USB-boot lors du prochain Amorçage, à la place des images intégrées. Les deux sont requis, et la détection du SoC est ignorée.",
   help_sel_spl: "Choisissez votre propre SPL (stage1) .bin. Utilisé avec un U-Boot personnalisé pour le prochain Amorçage, à la place du chargeur intégré.",
   help_sel_uboot: "Choisissez votre propre U-Boot .bin. Utilisé avec le SPL personnalisé pour le prochain Amorçage.",

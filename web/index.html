@@ -229,17 +229,24 @@
             <input type="file" id="firmware-file" accept=".bin" onchange="firmwareSelected(this)">
 
             <!-- Optional: bake files (Wi-Fi creds, SSH key, ...) into the image's overlay
-                 just before flashing. Repacked in the browser (WASM); nothing is uploaded. NOR + NAND. -->
+                 just before flashing. Repacked in the browser (WASM); nothing is uploaded. NOR + NAND.
+                 Hidden unless the user opts in via Settings, and collapsed until the
+                 header is clicked - same shape as the release picker and Advanced below. -->
             <div class="mt-2 d-none" id="wifi-inject">
-                <label class="small text-secondary d-block mb-1" data-i18n="preconfig_label">Pre-configure before flashing (optional)</label>
-                <div class="d-flex flex-wrap gap-2">
-                    <input id="wifi-ssid" class="form-control form-control-sm" style="max-width:14rem" autocomplete="off" data-i18n-ph="wifi_ssid_ph" placeholder="Wi-Fi SSID">
-                    <input id="wifi-psk" type="password" class="form-control form-control-sm" style="max-width:14rem" autocomplete="off" data-i18n-ph="wifi_psk_ph" placeholder="Wi-Fi password">
+                <a href="#" id="inject-toggle" class="small text-secondary text-decoration-none" onclick="toggleInject(event)" data-help="help_preconfig">
+                    <i class="bi bi-chevron-right" id="inject-chevron"></i>
+                    <span data-i18n="preconfig_label">Pre-configure before flashing (optional)</span>
+                </a>
+                <div id="inject-panel" class="d-none mt-2">
+                    <div class="d-flex flex-wrap gap-2">
+                        <input id="wifi-ssid" class="form-control form-control-sm" style="max-width:14rem" autocomplete="off" data-i18n-ph="wifi_ssid_ph" placeholder="Wi-Fi SSID">
+                        <input id="wifi-psk" type="password" class="form-control form-control-sm" style="max-width:14rem" autocomplete="off" data-i18n-ph="wifi_psk_ph" placeholder="Wi-Fi password">
+                    </div>
+                    <input id="ssh-key" class="form-control form-control-sm mt-2" autocomplete="off" data-i18n-ph="ssh_key_ph" placeholder="SSH public key for root login (optional)">
+                    <div id="extra-files" class="mt-1"></div>
+                    <button type="button" id="add-file-btn" class="btn btn-sm btn-outline-secondary mt-2" onclick="addExtraFileRow()" data-i18n="add_file_btn">+ Add a file</button>
+                    <div class="small text-secondary mt-1" data-i18n="wifi_hint">Baked into the overlay before writing, entirely in your browser.</div>
                 </div>
-                <input id="ssh-key" class="form-control form-control-sm mt-2" autocomplete="off" data-i18n-ph="ssh_key_ph" placeholder="SSH public key for root login (optional)">
-                <div id="extra-files" class="mt-1"></div>
-                <button type="button" id="add-file-btn" class="btn btn-sm btn-outline-secondary mt-2" onclick="addExtraFileRow()" data-i18n="add_file_btn">+ Add a file</button>
-                <div class="small text-secondary mt-1" data-i18n="wifi_hint">Baked into the overlay before writing, entirely in your browser.</div>
             </div>
 
             <!-- Flash a prebuilt thingino release straight from GitHub. The list
